@@ -1,0 +1,17 @@
+User creates a file layout01.txt that contains the following layout definition:
+
+# begin layout definition
+
+start: str
+crvl x 2
+switch: left.tol.in
+str
+bump
+
+$switch.out
+str
+bump
+
+# end layout definition
+
+When the user passes this file to the simulator, this will result in a layout that starts with a straight piece which may be referenced below by the token $start (a dollar sign followed by the value of the label). Connected to that straight piece will be two left curve pieces followed by a switch. The second curve piece will be connected to the left connection point of the switch and another straight is connected to the in connection point of the switch. After the straight piece the layout section ends with a bump piece. Then the out connection point on the switch is connected to another straight piece and then to another bump.

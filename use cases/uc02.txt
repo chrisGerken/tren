@@ -1,0 +1,30 @@
+User creates a file layout02.txt that contains the following layout definition:
+
+# begin layout definition
+
+start: str
+str x 3
+crvl x 4
+insw:  out.tor.in
+outsw: tol
+
+crvl x 4
+str6 x 4
+crvl x 4
+
+> in.$start
+
+$outsw.left
+crvl x 6
+
+> right.$insw
+
+# end layout definition
+
+This creates an outer loop that connects to an inner circle at the two switches. Trains can stay on one loop or the other and can switch back and forth.
+
+Layout structure:
+- Outer loop: start → 3 straights → 4 left curves (90°) → right turnout (insw) → left turnout (outsw) → 4 left curves → 4 short straights → 4 left curves → closes back to start
+- Inner circle: branches from outsw.left → 6 left curves (135°) → connects to insw.right
+
+The `>` operator closes the loop by connecting the current piece's output to a labeled piece's input.
