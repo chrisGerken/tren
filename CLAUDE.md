@@ -31,7 +31,7 @@ Track pieces are instances of archetypes (templates). Archetypes define:
 
 **Coordinate System:** X = primary direction (positive = forward), Z = lateral (positive = left), Y = vertical (0 for 2D). Units are inches.
 
-**Key archetype codes:** `str` (straight), `crv`/`crvl`/`crvr` (curves), `x90`/`x45` (crossings), `bump` (buffer), `gen` (generator - train source, click to toggle), `bin` (train sink), `flex`, `ph` (placeholder - zero-length junction point).
+**Key archetype codes:** `str` (straight), `crv`/`crvl`/`crvr` (curves), `x90`/`x45` (crossings), `bump` (buffer), `gen` (generator - train source, click to toggle), `bin` (train sink), `flex`, `ph` (placeholder - zero-length junction point), `tun` (tunnel - visibility toggle).
 
 **Connection point naming:** `in`/`out` for default input/output, `in1`/`out1`/`in2`/`out2` for crossings.
 

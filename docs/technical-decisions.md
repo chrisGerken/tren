@@ -60,6 +60,74 @@ No browser to open, no server to start, no runtime dependencies to install. User
 - For Three.js and standard web APIs, cross-platform differences are minimal
 - More predictable than Electron if consistent behavior is critical, but Tauri is sufficient for this use case
 
+## Layout File Handling
+
+The application manages two categories of layout files: bundled examples and user-provided layouts.
+
+### Bundled Layouts
+
+Example layout files are included as static assets at build time:
+
+- Stored in the Tauri project's assets directory (e.g., `src-tauri/assets/layouts/`)
+- Packaged into the executable during the build process
+- Read-only at runtime—users cannot modify or delete bundled examples
+- Accessed via Tauri's asset resolution or `include_str!()` macro
+
+### User-Provided Layouts
+
+Users can import their own layout files:
+
+1. **Import**: User selects a `.layout` file via the system file picker dialog
+2. **Copy**: The file is copied to the app's persistent data directory
+3. **Persist**: The layout remains available across application restarts
+
+### Storage Location
+
+Tauri provides access to OS-standard application data directories:
+
+| Platform | Path |
+|----------|------|
+| Windows | `%APPDATA%\com.tren.app\layouts\` |
+| macOS | `~/Library/Application Support/com.tren.app/layouts/` |
+| Linux | `~/.local/share/com.tren.app/layouts/` |
+
+The exact app identifier (`com.tren.app`) will be configured in `tauri.conf.json`.
+
+### Tauri APIs
+
+| Purpose | API |
+|---------|-----|
+| Get app data directory | `tauri::api::path::app_data_dir()` |
+| File picker dialog | `tauri::api::dialog::open()` |
+| Read/write files | Standard Rust `std::fs` |
+| Bundle static assets | Tauri asset configuration or `include_str!()` |
+
+### Layout Selection Flow
+
+```
+┌─────────────────────┐     ┌─────────────────────┐
+│  Bundled Layouts    │     │   User Layouts      │
+│  (read-only)        │     │   (app data dir)    │
+└─────────┬───────────┘     └─────────┬───────────┘
+          │                           │
+          └───────────┬───────────────┘
+                      │
+              ┌───────▼───────┐
+              │ Layout Picker │
+              │      UI       │
+              └───────┬───────┘
+                      │
+              ┌───────▼───────┐
+              │   Simulate    │
+              └───────────────┘
+```
+
+The UI presents both bundled and user layouts in a unified list, possibly with visual distinction (e.g., "Examples" vs "My Layouts" sections).
+
+### File Format
+
+Layout files use the [Layout DSL](layout-dsl.md) text format with a `.layout` extension. The parser validates the file on import, rejecting malformed layouts with an error message.
+
 ## User Interaction
 
 ### Input Methods
@@ -107,7 +175,7 @@ A folder of static web files that Tauri packages into the executable.
 ## Open Questions
 
 These will be addressed in user scenario discussions:
-- Save/load file format for layouts and simulation state
+- Save/load format for simulation state (running trains, switch positions)
 - Collision response behavior (stop simulation, automatic braking, or damage modeling)
 - Train speed control (discrete levels vs. continuous)
 - Runtime commands for controlling trains and switches during simulation

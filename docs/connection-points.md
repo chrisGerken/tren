@@ -228,6 +228,24 @@ The bin has only an input—trains enter and are removed. The circle represents 
 
 ---
 
+### Tunnel (`tun`)
+
+| Point | Position | Direction | Section | Description |
+|-------|----------|-----------|---------|-------------|
+| `in` | (0, 0, 0) | (-1, 0, 0) | (none) | Hidden side |
+| `out` | (0, 0, 0) | (1, 0, 0) | (none) | Visible side |
+
+```
+    [in]▓[out]
+```
+
+Both connection points occupy the same position with opposite directions (like placeholder). The tunnel toggles visibility:
+- Track connected to `in` is hidden
+- Each car/cab crossing `out`→`in` becomes invisible as it passes
+- Each car/cab crossing `in`→`out` becomes visible as it passes
+
+---
+
 ## Connection Point Summary Table
 
 | Archetype | Connection Points |
@@ -242,6 +260,7 @@ The bin has only an input—trains enter and are removed. The circle represents 
 | `ph` | `in`, `out` |
 | `gen` | `out` |
 | `bin` | `in` |
+| `tun` | `in`, `out` |
 
 ---
 

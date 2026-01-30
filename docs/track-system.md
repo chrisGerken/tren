@@ -134,8 +134,9 @@ The starter collection is based on standard HO model railroad track pieces, excl
 | `ph` | Placeholder | 0 | `in`, `out` | 0 |
 | `gen` | Generator | 1 (invisible) | `out` | 0 |
 | `bin` | Bin | 0 | `in` | 0 |
+| `tun` | Tunnel | 0 | `in`, `out` | 0 |
 
-**Default aliases**: `str`→`str9`, `crv`→`crvl22`, `crvl`→`crvl22`, `crvr`→`crvr22`, `placeholder`→`ph`
+**Default aliases**: `str`→`str9`, `crv`→`crvl22`, `crvl`→`crvl22`, `crvr`→`crvr22`, `placeholder`→`ph`, `tunnel`→`tun`
 
 See [Track Dimensions](track-dimensions.md) for complete spline point data.
 
@@ -285,6 +286,58 @@ bin
 ```
 
 Trains appear from `source`, travel along the straights, and are removed at the bin.
+
+#### Tunnel (`tun`)
+
+- **Code**: `tun` (alias: `tunnel`)
+- **Sections**: 0 (zero-length)
+- **Connection Points**: `in`, `out` (same position, opposite directions)
+- **Collision Points**: None
+- **Visual**: Small icon indicating tunnel entrance/exit
+
+A tunnel is a zero-length piece that toggles visibility of track and trains. It provides a display simplification that allows tracks to appear to go "underground" without simulating actual elevation changes.
+
+**Track Visibility Behavior:**
+- Track pieces connected to the tunnel's `in` connection point are hidden
+- Hidden track continues until another tunnel piece is encountered
+- This affects the entire chain of indirectly connected pieces between tunnels
+
+**Train Visibility Behavior:**
+- Each car and cab transitions visibility individually as it crosses the tunnel piece
+- A car crossing from `out` to `in` becomes invisible at the moment it passes the tunnel
+- A car crossing from `in` to `out` becomes visible at the moment it passes the tunnel
+- A train partially inside a tunnel will have some cars visible and others invisible
+
+**Use Cases:**
+- Simulating underground passages or tunnels through scenery
+- Hiding staging tracks or fiddle yards
+- Creating visual interest with trains appearing/disappearing at tunnel portals
+
+Example (tunnel loop):
+```
+str x 5
+enter: tun
+str x 10        # This section is hidden
+exit: tun
+str x 5
+```
+
+Trains travel on visible track, disappear at `enter`, travel on hidden track, then reappear at `exit`.
+
+Example (passing siding with hidden track):
+```
+junction: ph
+str x 3
+bump
+
+$junction.out
+tun               # Enter hidden section
+crvl x 8
+tun               # Exit hidden section
+> in.$junction    # Connect back (auto-connect)
+```
+
+The curved passing track is hidden while the main straight track remains visible.
 
 ## Spline Implementation
 

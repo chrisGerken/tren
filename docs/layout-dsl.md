@@ -119,6 +119,7 @@ Use archetype codes to specify track pieces. See [Track Dimensions](track-dimens
 | `ph`, `placeholder` | Zero-length junction point |
 | `gen`, `generator` | Train source (trains appear) |
 | `bin` | Train sink (trains removed) |
+| `tun`, `tunnel` | Visibility toggle (hide track/trains) |
 
 ### Repetition
 
@@ -497,3 +498,6 @@ See [Connection Points](connection-points.md) for complete connection point defi
 | `str*`, `crv*`, `flex` | `in`, `out` | `in` | `out` |
 | `x90`, `x45` | `in1`, `out1`, `in2`, `out2` | `in1` | `out1` |
 | `bump` | `in` | `in` | (none) |
+| `ph`, `tun` | `in`, `out` | `in` | `out` |
+| `gen` | `out` | (none) | `out` |
+| `bin` | `in` | `in` | (none) |

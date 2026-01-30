@@ -38,6 +38,8 @@ All dimensions are in **inches**. In the simulator, 1 unit = 1 inch.
 | `gen` | Generator (train source) | `generator` |
 | **Bin** |
 | `bin` | Bin (train removal) | |
+| **Tunnel** |
+| `tun` | Tunnel (visibility toggle) | `tunnel` |
 
 ### Default Aliases
 
@@ -49,6 +51,7 @@ All dimensions are in **inches**. In the simulator, 1 unit = 1 inch.
 | `crvr` | `crvr22` |
 | `placeholder` | `ph` |
 | `generator` | `gen` |
+| `tunnel` | `tun` |
 
 ---
 
@@ -430,6 +433,33 @@ Connection Points:
 ```
 
 A bin is the opposite of a generator. Trains entering the bin are removed from the simulation. Unlike a bumper which stops trains, a bin removes them entirely.
+
+---
+
+### Tunnel
+
+#### `tun` - Tunnel (Visibility Toggle)
+
+```
+Code: tun
+Aliases: tunnel
+Visual: Small tunnel portal icon
+
+Sections: None (zero-length)
+
+Connection Points:
+  in:  position (0, 0, 0), direction (-1, 0, 0), sections []
+  out: position (0, 0, 0), direction (1, 0, 0), sections []
+
+(Both connection points are at the same position with opposite directions)
+```
+
+A tunnel is a zero-length piece that toggles visibility of track and trains. Track pieces connected to the tunnel's `in` point are hidden from display. Each car and cab transitions visibility individually as it crosses the tunnel.
+
+**Visibility Rules:**
+- Track connected to `in` is hidden until the next tunnel
+- Each car/cab crossing `out`→`in` becomes invisible as it passes
+- Each car/cab crossing `in`→`out` becomes visible as it passes
 
 ---
 
