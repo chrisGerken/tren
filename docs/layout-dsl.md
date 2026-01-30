@@ -38,6 +38,60 @@ str ; crvl   # Comment after multiple statements
 
 ## Basic Syntax
 
+### Starting a New Track Segment
+
+The `new` statement begins a new, unconnected track segment:
+
+```
+new          # Start new segment at 0° (default)
+new 45       # Start new segment rotated 45°
+new 90       # Start new segment rotated 90°
+```
+
+The next track piece placed after `new` will:
+- Start at the specified rotation angle (in degrees)
+- Not be connected to any previous track
+
+An implicit `new 0` is assumed at the beginning of every layout specification, so it's only required when:
+- Starting additional unconnected segments
+- Starting the first piece at a non-zero angle
+
+```
+# These are equivalent
+str ; crvl x 8
+
+new 0
+str ; crvl x 8
+
+# Start a second unconnected segment
+str x 4 ; bump
+new 90              # New segment at 90°
+str x 4 ; bump      # Parallel track, unconnected
+```
+
+### Connecting Independent Segments
+
+When a segment started with `new` is later explicitly connected to another segment, the entire new segment is repositioned and rotated so that:
+- The connected connection points have the same position
+- The connected connection points have opposite angles (facing each other)
+
+```
+crvl x 4              # 90° of curves (to 3 o'clock position)
+junction: ph          # Placeholder at 3 o'clock
+crvl x 12             # Complete the circle (auto-connects)
+
+new                   # Start independent segment
+gen                   # Generator
+str                   # Straight
+$junction.in          # Connect to junction's input
+```
+
+This creates:
+1. A circular main line with a placeholder at 3 o'clock
+2. A generator sidetrack that connects to the placeholder
+
+When `$junction.in` is reached, the entire second segment (gen, str) is repositioned and rotated so that the straight's output aligns with the placeholder's input, creating a virtual switch at 3 o'clock.
+
 ### Placing Track Pieces
 
 The simplest statement places a single track piece:
@@ -245,9 +299,12 @@ This allows connections even when accumulated errors from curves and straights c
 
 When a layout is displayed, connection points have visual indicators:
 
-- **Yellow circle**: Centered on auto-connected connection points, distinguishing them from explicit connections in the layout definition.
+- **Blue circle**: Centered on explicitly defined connection points.
+- **Yellow circle**: Centered on auto-connected connection points.
 - **Green dot**: On the currently selected outbound track at a virtual switch. Positioned where the track has visually separated from other routes, as close as possible to the connection point.
 - **Red dot**: On non-selected outbound tracks at a virtual switch. Positioned similarly to the green dot.
+
+A simulation-wide toggle switches between showing blue/yellow distinction or all connection circles as blue.
 
 These indicators apply to all virtual switches, whether created explicitly or via auto-connect.
 

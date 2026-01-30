@@ -46,9 +46,14 @@ When multiple pieces connect to the same connection point, each branch becomes a
 
 Virtual switches have visual indicators to show their state:
 
+- **Blue circle**: Marks explicitly defined connection points
 - **Yellow circle**: Marks auto-connected connection points (distinguishes them from explicit connections)
 - **Green dot**: Marks the currently selected outbound track. Positioned where the track has visually separated from other possible routes, as close as possible to the connection point.
 - **Red dot**: Marks non-selected outbound tracks. Positioned similarly to the green dot on each unselected route.
+
+A simulation-wide toggle switch alternates between:
+- **Distinguish mode**: Blue circles for explicit connections, yellow circles for auto-connections
+- **Uniform mode**: All connection circles shown as blue
 
 These indicators make it easy to see at a glance which route is active at each virtual switch.
 

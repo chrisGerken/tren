@@ -52,7 +52,7 @@ bump
 
 The placeholder provides a pure junction point. Use `out.piece` syntax to build backwards: `$junction.in ; out.str x 3 ; bump`.
 
-**Visual indicators:** Yellow circle = auto-connected point; Green dot = selected route; Red dot = unselected routes. Click red dot to switch routes.
+**Visual indicators:** Blue circle = explicit connection; Yellow circle = auto-connected (toggle to show all blue); Green dot = selected route; Red dot = unselected routes. Click red dot to switch routes.
 
 ## Train Movement
 
@@ -63,6 +63,7 @@ Trains are ordered car lists (consists). The primary cab (first cab in train) co
 ## Layout DSL
 
 Layouts are defined in text files. Statements can be one per line or multiple per line separated by semicolons:
+- `new` or `new DEGREES` — start new unconnected segment at given rotation (default 0°; implicit at start). When later connected explicitly, the segment is repositioned/rotated to align.
 - `piece` — place a track piece, attaching `piece.in` to previous, continue from `piece.out`
 - `out.piece` — place piece attaching `piece.out` to previous, continue from `piece.in` (build backwards)
 - `piece x N` or `piece * N` — place N consecutive pieces
