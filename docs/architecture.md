@@ -47,7 +47,6 @@ An instantiated piece of track placed in the layout.
 **Properties**:
 - Reference to its archetype (template)
 - World position and rotation
-- Current state (for switches: which route is selected)
 - Connections to other track pieces
 
 ### Track Section
@@ -60,8 +59,8 @@ A single traversable path within a track piece. This is the atomic unit for trai
 - Parent track piece reference
 
 **Notes**:
-- Simple pieces (straight, curve) have one section
-- Complex pieces (switches) have multiple sections sharing endpoints
+- Most pieces (straight, curve, bumper) have one section
+- Crossings have two independent sections (one per track)
 
 ### Spline Points
 
@@ -80,22 +79,88 @@ Two interrelated graphs serve different purposes:
 
 - **Nodes**: Track pieces
 - **Edges**: Connections between pieces (which exit connects to which entry)
-- **State**: Switch positions, signals, occupancy
+- **Multi-connections**: A single connection point can have multiple pieces connected to it (virtual switches)
 - **Purpose**: Layout editing, route planning, user commands, serialization
 
 This is the abstraction users interact with.
 
 ### Track Section Graph (Movement Level)
 
-- **Nodes**: Track sections (a switch contributes multiple sections)
+- **Nodes**: Track sections
 - **Edges**: Which section endpoints connect to which other section endpoints
+- **Multi-edges**: When multiple pieces connect to one point, multiple edges exist from that point
 - **Traversal**: Bidirectional—a train tracks its current section, position, and direction
 - **Purpose**: Continuous train positioning, collision detection
 
-When a train reaches the end of a section, it queries this graph to find the connected section. For switches, the active connection depends on switch state from the piece graph.
+When a train reaches the end of a section, it queries this graph to find connected section(s). If multiple connections exist (a virtual switch), the system determines which branch is active.
 
 ### Cross-References
 
 - Each track piece owns its track section(s)
 - Each track section knows its parent track piece
-- Switch state in the piece graph determines which section edge is active in the section graph
+- Connection points track all pieces connected to them
+
+## Virtual Switches
+
+Instead of dedicated switch archetypes, branching is achieved by connecting multiple track pieces to a single connection point.
+
+### Example
+
+```
+base: str
+str x 3       # Main route
+bump
+
+$base.out     # Return to base's output
+crvl x 3      # Diverging route
+bump
+```
+
+This creates a virtual left turnout at `base.out` where two routes diverge.
+
+### Benefits
+
+- Simpler archetype set (no switch pieces to manage)
+- Flexible branching (any number of routes from any point)
+- No switch state to track (route selection is separate from track topology)
+
+### Route Selection
+
+When a train approaches a branch point, the system must determine which route to take. This is handled separately from the track topology, allowing for:
+- Manual route selection by the user
+- Automatic routing based on destination
+- Signal-based routing
+
+## Auto-Connect
+
+After a layout is fully specified, auto-connect scans all connection points on all track pieces and automatically joins any two that meet the connection criteria.
+
+### Connection Criteria
+
+For any two connection points to auto-connect:
+1. **Approximately same position**: Within a configurable distance tolerance
+2. **Approximately opposite directions**: Direction vectors point toward each other (within ~180° ± angle tolerance)
+
+This applies to all connection points, not just open endpoints. When connection points from different pieces meet the criteria, they are joined—automatically creating virtual switches where multiple tracks converge.
+
+### Graph Updates
+
+When auto-connect joins connection points:
+- The Track Piece Graph gains edges between the pieces
+- The Track Section Graph gains corresponding section-level edges
+- A single connection point may end up with multiple connections (virtual switch)
+
+The tolerances accommodate accumulated geometric errors from sequences of curves and straights. Specific tolerance values are configurable and not yet determined.
+
+Connection points at approximately the same position but with parallel directions (not facing each other) remain unconnected.
+
+See [Layout DSL](layout-dsl.md) for examples and usage details.
+
+### Graph Updates
+
+When auto-connect joins endpoints:
+- The Track Piece Graph gains an edge between the two pieces
+- The Track Section Graph gains corresponding section-level edges
+- Both endpoints are marked as connected
+
+See [Layout DSL](layout-dsl.md) for examples and usage details.

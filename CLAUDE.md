@@ -19,24 +19,40 @@ Layout → Layout Section → Track Piece → Track Section → Spline Points
 ```
 
 **Dual Graph System:**
-- **Track Piece Graph**: Layout editing, route planning, serialization. Nodes are track pieces, edges are connections between pieces.
-- **Track Section Graph**: Train movement, collision detection. Nodes are sections (a switch contributes multiple sections), edges are endpoint connections.
-
-Switch state in the piece graph determines which section edge is active in the section graph.
+- **Track Piece Graph**: Layout editing, route planning, serialization. Nodes are track pieces, edges are connections between pieces. Supports multi-connections (multiple pieces connecting to one point).
+- **Track Section Graph**: Train movement, collision detection. Nodes are sections, edges are endpoint connections.
 
 ## Track System
 
 Track pieces are instances of archetypes (templates). Archetypes define:
 - Spline paths in local coordinates
 - Connection points with name, position, direction, and section references
-- Collision points where sections share physical space
-- Switch states and behavior
+- Collision points where sections share physical space (crossings)
 
 **Coordinate System:** X = primary direction (positive = forward), Z = lateral (positive = left), Y = vertical (0 for 2D). Units are inches.
 
-**Key archetype codes:** `str` (straight), `crv`/`crvl`/`crvr` (curves), `tol`/`tor` (turnouts), `wye`, `t3w` (three-way), `x90`/`x45` (crossings), `dslip`/`sslip` (slips), `bump` (buffer), `flex`.
+**Key archetype codes:** `str` (straight), `crv`/`crvl`/`crvr` (curves), `x90`/`x45` (crossings), `bump` (buffer), `gen` (generator - train source, click to toggle), `bin` (train sink), `flex`, `ph` (placeholder - zero-length junction point).
 
-**Connection point naming:** `in`/`out` for default input/output, `left`/`right` for diverging exits, `inner`/`outer` for curved turnouts, `in1`/`out1`/`in2`/`out2` for crossings/slips. Shorthand: `str9 -> tol` expands to `str9.out -> tol.in`.
+**Connection point naming:** `in`/`out` for default input/output, `in1`/`out1`/`in2`/`out2` for crossings.
+
+## Virtual Switches
+
+Instead of physical switch track pieces, branching is achieved by connecting multiple track pieces to a single connection point. This creates "virtual switches" without dedicated switch archetypes.
+
+Example virtual left turnout using placeholder:
+```
+junction: ph
+str x 3       # Main route
+bump
+
+$junction.out
+crvl x 3      # Diverging route
+bump
+```
+
+The placeholder provides a pure junction point. Use `out.piece` syntax to build backwards: `$junction.in ; out.str x 3 ; bump`.
+
+**Visual indicators:** Yellow circle = auto-connected point; Green dot = selected route; Red dot = unselected routes. Click red dot to switch routes.
 
 ## Train Movement
 
@@ -46,47 +62,48 @@ Trains are ordered car lists (consists). The primary cab (first cab in train) co
 
 ## Layout DSL
 
-Layouts are defined in text files with one statement per line:
-- `piece` — place a track piece, connecting to previous via defaults
+Layouts are defined in text files. Statements can be one per line or multiple per line separated by semicolons:
+- `piece` — place a track piece, attaching `piece.in` to previous, continue from `piece.out`
+- `out.piece` — place piece attaching `piece.out` to previous, continue from `piece.in` (build backwards)
 - `piece x N` or `piece * N` — place N consecutive pieces
 - `label: piece` — place and label a piece for later reference
-- `$label.point` — reference a labeled piece's connection point
-- `point.piece.point` — explicit connection: `previous_point.archetype.this_point`
+- `$label.point` — reference a labeled piece's connection point (creates branch)
 - `> point.$label` — close loop: connect current output to labeled piece's input
 
-Example (passing siding):
+**Auto-connect:** After layout parsing, all connection points are scanned. Any two connection points at approximately the same position with approximately opposite directions are automatically connected (configurable tolerances). This automatically creates virtual switches where tracks meet—e.g., `gen ; str ; crvl x 16 ; str ; bin` creates a circle with generator and bin sidetracks. Auto-connected points are marked with a small yellow circle when displayed.
+
+Example (passing siding with virtual switch):
 ```
-start: str
-switch: tol
+start: str x 3
+junction: ph
 str x 3
 bump
 
-$switch.left
+$junction.out           # Branch from junction
+crvl
 str x 3
 bump
 ```
 
-Example (closed loop with branch):
+Example (closed loop via auto-connect):
 ```
-start: str x 4
-switch: tol
-crvl x 8
-str x 4
-crvl x 8
-> in.$start             # Close main loop
+crvl x 16               # Full circle, auto-connects
+```
 
-$switch.left
-str x 2
-bump
+Example (semicolon-separated statements):
+```
+gen ; str ; crvl x 16 ; str ; bin   # Circle with generator and bin sidetracks
 ```
 
 ## Documentation
 
 Detailed specifications in `docs/`:
 - `architecture.md` - Data model and graph structures
-- `track-system.md` - Archetypes, sections, spline implementation
+- `track-system.md` - Archetypes, sections, spline implementation, virtual switches
 - `track-dimensions.md` - Spline points and dimensions for all archetypes
 - `connection-points.md` - Connection point naming and definitions
 - `layout-dsl.md` - Text-based language for defining layouts
 - `trains.md` - Car types, movement, collision detection
 - `technical-decisions.md` - Technology choices
+
+**Archived:** `ARCHIVED_SWITCHES.md` contains historical documentation for physical switch archetypes that were replaced by the virtual switch approach.

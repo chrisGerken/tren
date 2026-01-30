@@ -4,11 +4,36 @@ This document describes the domain-specific language (DSL) for defining track la
 
 ## File Format
 
-Layout files are plain text with one statement per line. Blank lines are ignored. Comments begin with `#`.
+Layout files are plain text. Blank lines are ignored. Comments begin with `#`.
+
+### Statement Separators
+
+Multiple statements can be placed on one line, separated by semicolons. Semicolons are not required after the last or only statement on a line.
+
+```
+# One statement per line
+str
+crvl
+str
+
+# Multiple statements on one line
+str ; crvl ; str
+
+# Mixed styles
+str ; crvl
+str ; bump
+
+# Semicolon optional at end of line
+str ; crvl ;
+str
+```
+
+### Comments
 
 ```
 # This is a comment
 str          # Inline comments are also supported
+str ; crvl   # Comment after multiple statements
 ```
 
 ## Basic Syntax
@@ -20,7 +45,6 @@ The simplest statement places a single track piece:
 ```
 str          # Place a straight (9" default)
 crvl         # Place a left curve (22" radius default)
-tol          # Place a left turnout
 ```
 
 Each piece connects to the previous piece using default connection points:
@@ -35,14 +59,12 @@ Use archetype codes to specify track pieces. See [Track Dimensions](track-dimens
 | `str`, `str9`, `str6`, `str3`, `str15` | Straight sections |
 | `crv`, `crvl`, `crvl18`, `crvl22`, `crvl24` | Left curves |
 | `crvr`, `crvr18`, `crvr22`, `crvr24` | Right curves |
-| `tol`, `tor` | Left/right turnouts |
-| `wye` | Wye turnout |
-| `t3w` | Three-way turnout |
-| `ctol`, `ctor` | Curved turnouts |
 | `x90`, `x45` | Crossings |
-| `dslip`, `sslip` | Slip switches |
 | `bump` | Buffer stop |
 | `flex` | Flex track |
+| `ph`, `placeholder` | Zero-length junction point |
+| `gen`, `generator` | Train source (trains appear) |
+| `bin` | Train sink (trains removed) |
 
 ### Repetition
 
@@ -64,7 +86,7 @@ Assign a label to a piece for later reference:
 
 ```
 start: str              # Label this straight as "start"
-junction: tol           # Label this turnout as "junction"
+junction: str           # Label this straight as "junction"
 ```
 
 ### Referencing Labels
@@ -73,7 +95,7 @@ Use `$label` to reference a labeled piece:
 
 ```
 $start                  # Reference the piece labeled "start"
-$junction.left          # Reference the "left" connection point of "junction"
+$junction.out           # Reference the "out" connection point of "junction"
 ```
 
 ### Connection Point References
@@ -81,60 +103,107 @@ $junction.left          # Reference the "left" connection point of "junction"
 When referencing a label, you can specify which connection point to use:
 
 ```
-$junction.out           # The straight-through exit
-$junction.left          # The diverging exit (for tol)
+$junction.out           # The output connection point
 $crossing.in2           # Track 2 input on a crossing
 ```
 
-If no connection point is specified, the default `out` is used (or `out1` for crossings/slips).
+If no connection point is specified, the default `out` is used (or `out1` for crossings).
 
-## Specifying Connections
+## Branching (Virtual Switches)
 
-### Default Connections
-
-By default, each piece connects its `in` to the previous piece's `out`:
+To create branches, connect multiple pieces to the same connection point by referencing a labeled piece:
 
 ```
-str                     # First piece (no previous connection)
-str                     # Connects: previous.out → this.in
-crvl                    # Connects: previous.out → this.in
-```
-
-### Explicit Connection Points
-
-Specify which connection points to use when placing a piece:
-
-```
-point.piece.point       # Connect to previous via specified points
-```
-
-The format is: `previous_point.archetype.this_point`
-
-```
-left.tol.in             # Connect previous.out to tol.left, then continue from tol.in
-```
-
-This is useful when:
-- Connecting to a non-default output (like a turnout's diverging route)
-- The current piece should connect via a non-default input
-
-### Branching
-
-To create branches, reference a labeled piece and continue from there:
-
-```
-start: str
-tol
-str
+junction: ph            # Placeholder as pure junction point
+str x 3
 bump
 
-$start                  # Return to "start" piece
-tor                     # Branch off in a different direction
-str
+$junction.out           # Return to junction's output
+crvl x 3                # Branch curves left from the same point
 bump
 ```
 
-### Closing Loops
+This creates a **virtual switch** where both the straight and curved branches connect to `junction.out`.
+
+### Placeholder as Junction
+
+A placeholder (`ph`) is a zero-length piece ideal for junction points. It provides `in` and `out` connection points without any physical track:
+
+```
+junction: ph
+str x 3       # Main route
+bump
+
+$junction.out
+crvl x 3      # Diverging route
+bump
+```
+
+### Virtual Wye
+
+```
+base: ph
+crvl x 3
+bump
+
+$base.out
+crvr x 3
+bump
+```
+
+### Virtual Three-Way
+
+```
+base: ph
+str x 3       # Straight route
+bump
+
+$base.out
+crvl x 3      # Left route
+bump
+
+$base.out
+crvr x 3      # Right route
+bump
+```
+
+## Explicit Connection Syntax
+
+When placing a piece, you can specify which end to attach using the `point.piece` syntax:
+
+```
+out.str       # Place a straight, attaching its OUT to the current point
+in.crvl       # Place a curve, attaching its IN to the current point
+```
+
+This is useful for building track "backwards" from a junction, or for attaching via non-default connection points.
+
+### Building Backwards
+
+Normally, pieces attach via their `in` and continue from their `out`. With explicit syntax, you can reverse this:
+
+```
+junction: ph
+crvl x 16             # Circle from junction.out (normal direction)
+
+$junction.in          # Switch to junction's input side
+out.str x 3           # Build backwards: attach str.out, continue from str.in
+bump
+```
+
+Here the straights are built "backwards"—their `out` connects to the junction, and the layout continues from their `in`.
+
+### Connection Syntax Summary
+
+| Syntax | Meaning |
+|--------|---------|
+| `str` | Attach `str.in` to previous, continue from `str.out` (default) |
+| `out.str` | Attach `str.out` to previous, continue from `str.in` |
+| `in.str` | Same as `str` (explicit default) |
+
+For crossings, use numbered points: `in2.x90`, `out1.x90`, etc.
+
+## Closing Loops
 
 Use the `>` operator to connect the current piece back to a labeled piece, closing a loop:
 
@@ -150,18 +219,115 @@ crvl x 16               # Full circle of curves
 > in.$start             # Close the loop: connect back to start's input
 ```
 
-For more complex loops with multiple connection points:
+## Auto-Connect
 
+After a layout is fully specified, **auto-connect** scans all connection points on all track pieces and automatically joins any two that are close enough with opposite directions.
+
+### How It Works
+
+1. Examine all connection points on all track pieces (not just open endpoints)
+2. For any two connection points:
+   - If they are within the **position tolerance** of each other, AND
+   - If their directions are approximately **opposite** (within the angle tolerance)
+   - Then connect them
+
+This automatically creates virtual switches wherever tracks meet. A single connection point can end up with multiple connections.
+
+### Tolerance
+
+Auto-connect uses configurable tolerances for matching:
+- **Position tolerance**: Connection points within a small distance are considered "at the same position"
+- **Direction tolerance**: Directions within a small angle of 180° are considered "opposite"
+
+This allows connections even when accumulated errors from curves and straights cause slight misalignment. The specific tolerance values are configurable and not yet determined.
+
+### Visual Indicators
+
+When a layout is displayed, connection points have visual indicators:
+
+- **Yellow circle**: Centered on auto-connected connection points, distinguishing them from explicit connections in the layout definition.
+- **Green dot**: On the currently selected outbound track at a virtual switch. Positioned where the track has visually separated from other routes, as close as possible to the connection point.
+- **Red dot**: On non-selected outbound tracks at a virtual switch. Positioned similarly to the green dot.
+
+These indicators apply to all virtual switches, whether created explicitly or via auto-connect.
+
+**Interaction:** Clicking a red dot selects that route—the red dot turns green, the previous green dot turns red, and subsequent trains follow the new route.
+
+### Example: Simple Circle
+
+```
+crvl x 16               # Full circle of curves
+```
+
+The `out` of the last curve and the `in` of the first curve are at the same position with opposite directions. Auto-connect joins them automatically.
+
+### Example: Circle with Generator and Bin Sidetracks
+
+```
+gen
+str
+crvl x 16
+str
+bin
+```
+
+This creates:
+1. A generator feeding into a straight
+2. A full circle of curves
+3. A straight leading to a bin
+
+Auto-connect finds where the straights pass through the circle:
+- The first `str` (after gen) has connection points that meet the circle with opposite directions
+- The last `str` (before bin) also meets the circle with opposite directions
+
+This automatically creates two virtual switches (equivalent to a `tor` and a `tol`), resulting in:
+- A continuous circular main line
+- A spur from the circle to the generator
+- A spur from the circle to the bin
+
+Trains emerge from the generator, can run continuously around the circle, and eventually exit to the bin.
+
+### When Auto-Connect Does NOT Apply
+
+Auto-connect only joins endpoints with **opposite directions**. Endpoints at the same position but with the same direction remain unconnected.
+
+```
+base: str
+one: str                # one.out is at position P, direction D
+bump
+
+$base.out
+two: str                # two.out is also at position P, direction D
+bump
+```
+
+Here, `one.out` and `two.out` are at the same position but point in the **same direction** (both are outputs from `base.out`). They do not auto-connect because trains couldn't transition between them—they're parallel, not head-to-head.
+
+### Auto-Connect vs Explicit Loops
+
+Both approaches work for closing loops:
+
+**With explicit `>` operator:**
 ```
 start: str
-switch: tol
-str x 4
-> in.$start             # Close outer loop
-
-$switch.left
-crvl x 8
-> in.$switch            # Connect inner path back to switch
+crvl x 16
+> in.$start             # Explicitly close the loop
 ```
+
+**With auto-connect:**
+```
+crvl x 16               # Auto-connect closes it
+```
+
+Use explicit connections when:
+- You want to be clear about intent
+- You're connecting to a specific labeled piece
+- The misalignment exceeds the auto-connect tolerance
+
+Use auto-connect when:
+- The geometry naturally closes (like a circle of curves)
+- You want concise layout definitions
+- Small accumulated errors are within tolerance
 
 ## Building Patterns
 
@@ -175,52 +341,69 @@ crvl x 8                # 180° turn
 > in.$start             # Close the loop
 ```
 
-### Double Loop (Figure-8 with Switches)
+### Oval with Passing Siding
 
 ```
-start: str
+# Main oval
+start: str x 4
+crvl x 8                # 180° turn
+str x 4
+crvl x 8                # 180° turn
+> in.$start             # Close main loop
+
+# Passing siding branches from main line
+$start.out              # Branch from first straight
+str x 4
+> in.$start             # Rejoin before the curve
+```
+
+### Figure-8 with Virtual Switches
+
+```
+# Start with straights
+start: str x 4
+
+# First curve section
+junction1: str
+crvl x 4
+
+# Center crossing
+cross: x90
+
+# Continue first loop
+crvl x 4
+junction2: str
 str x 3
-crvl x 4
-insw:  out.tor.in       # Right turnout, enter via out, continue from in
-outsw: tol
+> in.$start             # Close first loop
 
-crvl x 4
-str6 x 4
-crvl x 4
+# Second loop branches from first junction
+$junction1.out
+crvr x 4
 
-> in.$start             # Close outer loop
-
-$outsw.left             # Branch to inner circle
-crvl x 6
-
-> right.$insw           # Connect inner circle to right turnout
+# Connect through crossing's second track
+$cross.in2
+crvr x 4
+> in.$junction2         # Rejoin at second junction
 ```
 
-This creates an outer loop connected to an inner circle at two switches. Trains can stay on either loop or switch between them.
-
-### Passing Siding
+### Yard with Multiple Sidings
 
 ```
-mainline: str x 2
-junction1: tol
+# Main line
+main: str x 2
 str x 4
-junction2: left.tor.in  # Connect to diverging, continue from main
-
-$junction1.left
-str x 4
-$junction2.left         # Close the siding
-```
-
-### Wye Junction
-
-```
-approach: str x 3
-wye
-left_branch: str x 2
 bump
 
-$approach
-wye.right               # Continue from wye's right exit
+# First siding
+$main.out
+crvl
+str x 3
+bump
+
+# Second siding (branches from same point)
+$main.out
+crvl
+crvl                    # Tighter curve
 str x 2
 bump
 ```
@@ -228,25 +411,25 @@ bump
 ## Complete Example
 
 ```
-# Simple layout with passing siding
-# Main line with a turnout leading to a siding
+# Simple layout with passing siding using virtual switch
 
-start: str
-str x 2
-switch: tol
+start: str x 3
+junction: str           # This piece will have two connections
 str x 3
 bump
 
-$switch.left
-siding: str x 3
-bump
+# Siding branches from junction
+$junction.out
+crvl
+str x 3
+crvl
+> in.$start             # Rejoin forming a loop
 ```
 
 This creates:
-1. Three straight pieces (one labeled "start")
-2. A left turnout (labeled "switch")
-3. Main line continues straight with three more straights to a buffer
-4. Siding branches left from the switch with three straights to a buffer
+1. Three straight pieces leading to a junction
+2. Main line continues straight to a buffer
+3. Siding branches left from the junction, curves back to form a loop
 
 ## Connection Point Reference
 
@@ -255,10 +438,5 @@ See [Connection Points](connection-points.md) for complete connection point defi
 | Archetype | Connection Points | Default In | Default Out |
 |-----------|-------------------|------------|-------------|
 | `str*`, `crv*`, `flex` | `in`, `out` | `in` | `out` |
-| `tol` | `in`, `out`, `left` | `in` | `out` |
-| `tor` | `in`, `out`, `right` | `in` | `out` |
-| `wye` | `in`, `left`, `right` | `in` | (must specify) |
-| `t3w` | `in`, `out`, `left`, `right` | `in` | `out` |
-| `ctol`, `ctor` | `in`, `inner`, `outer` | `in` | (must specify) |
-| `x90`, `x45`, `dslip`, `sslip` | `in1`, `out1`, `in2`, `out2` | `in1` | `out1` |
+| `x90`, `x45` | `in1`, `out1`, `in2`, `out2` | `in1` | `out1` |
 | `bump` | `in` | `in` | (none) |

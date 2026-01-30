@@ -10,10 +10,8 @@ Connection points follow a consistent naming pattern based on their role:
 |------|-------------|
 | `in` | Default input / origin end |
 | `out` | Default output / straight-through exit |
-| `left`, `right` | Diverging exits on turnouts |
-| `inner`, `outer` | Curved turnout exits (different radii, same curve direction) |
-| `in1`, `out1` | Track 1 endpoints on crossings/slips |
-| `in2`, `out2` | Track 2 endpoints on crossings/slips |
+| `in1`, `out1` | Track 1 endpoints on crossings |
+| `in2`, `out2` | Track 2 endpoints on crossings |
 
 ## Connection Shorthand
 
@@ -21,19 +19,31 @@ When connecting track pieces, `in` and `out` are the default connection points:
 
 | Written | Expands to |
 |---------|------------|
-| `str9 -> tol` | `str9.out -> tol.in` |
-| `tol -> str9` | `tol.out -> str9.in` |
-| `tol.left -> crvr22` | `tol.left -> crvr22.in` |
-| `str9 -> tol.left` | `str9.out -> tol.left` |
+| `str9 -> str6` | `str9.out -> str6.in` |
+| `crvl -> str9` | `crvl.out -> str9.in` |
 
 **Archetypes without `out` use their natural default:**
 
 | Archetype | Default output |
 |-----------|----------------|
-| `wye` | (must specify `left` or `right`) |
-| `ctol`, `ctor` | (must specify `inner` or `outer`) |
 | `bump` | (no output — terminus) |
-| `x90`, `x45`, `dslip`, `sslip` | `out1` (track 1 is primary) |
+| `x90`, `x45` | `out1` (track 1 is primary) |
+
+## Multi-Connection Branching
+
+A single connection point can have **multiple pieces connected to it**. This creates branching without dedicated switch archetypes.
+
+```
+base: str
+str x 3       # First branch: connects to base.out
+bump
+
+$base.out     # Return to base.out
+crvl x 3      # Second branch: also connects to base.out
+bump
+```
+
+Both the first `str` and `crvl` connect to `base.out`, creating a virtual turnout.
 
 ## Connection Point Properties
 
@@ -96,138 +106,6 @@ Each connection point has:
 
 ---
 
-### Turnout Left (`tol`)
-
-| Point | Position | Direction | Section | Description |
-|-------|----------|-----------|---------|-------------|
-| `in` | (0, 0, 0) | (-1, 0, 0) | 1, 2 | Common entry |
-| `out` | (12, 0, 0) | (1, 0, 0) | 1 | Straight-through exit |
-| `left` | (12, 0, 2.0) | (0.986, 0, 0.165) | 2 | Diverging exit |
-
-```
-                        [left]
-                      ╱
-    [in]━━━━━━━━━━━━━━━━━━[out]
-```
-
-**States:**
-- `normal`: in ↔ out (Section 1)
-- `diverging`: in ↔ left (Section 2)
-
----
-
-### Turnout Right (`tor`)
-
-| Point | Position | Direction | Section | Description |
-|-------|----------|-----------|---------|-------------|
-| `in` | (0, 0, 0) | (-1, 0, 0) | 1, 2 | Common entry |
-| `out` | (12, 0, 0) | (1, 0, 0) | 1 | Straight-through exit |
-| `right` | (12, 0, -2.0) | (0.986, 0, -0.165) | 2 | Diverging exit |
-
-```
-    [in]━━━━━━━━━━━━━━━━━━[out]
-                      ╲
-                        [right]
-```
-
-**States:**
-- `normal`: in ↔ out (Section 1)
-- `diverging`: in ↔ right (Section 2)
-
----
-
-### Wye (`wye`)
-
-| Point | Position | Direction | Section | Description |
-|-------|----------|-----------|---------|-------------|
-| `in` | (0, 0, 0) | (-1, 0, 0) | 1, 2 | Common entry |
-| `left` | (12, 0, 2.0) | (0.986, 0, 0.165) | 1 | Left exit |
-| `right` | (12, 0, -2.0) | (0.986, 0, -0.165) | 2 | Right exit |
-
-```
-                        [left]
-                      ╱
-    [in]━━━━━━━━━━━<
-                      ╲
-                        [right]
-```
-
-**States:**
-- `left`: in ↔ left (Section 1)
-- `right`: in ↔ right (Section 2)
-
----
-
-### Three-Way (`t3w`)
-
-| Point | Position | Direction | Section | Description |
-|-------|----------|-----------|---------|-------------|
-| `in` | (0, 0, 0) | (-1, 0, 0) | 1, 2, 3 | Common entry |
-| `left` | (8.66, 0, 1.84) | (0.978, 0, 0.208) | 1 | Left exit |
-| `out` | (8.66, 0, 0) | (1, 0, 0) | 2 | Straight-through exit |
-| `right` | (8.66, 0, -1.84) | (0.978, 0, -0.208) | 3 | Right exit |
-
-```
-                        [left]
-                      ╱
-    [in]━━━━━━━━━━━━━━━━━[out]
-                      ╲
-                        [right]
-```
-
-**States:**
-- `left`: in ↔ left (Section 1)
-- `main`: in ↔ out (Section 2)
-- `right`: in ↔ right (Section 3)
-
----
-
-### Curved Turnout Left (`ctol`)
-
-| Point | Position | Direction | Section | Description |
-|-------|----------|-----------|---------|-------------|
-| `in` | (0, 0, 0) | (-1, 0, 0) | 1, 2 | Common entry |
-| `inner` | (8.47, 0, 1.71) | (0.924, 0, 0.383) | 1 | Tighter curve (22"R) |
-| `outer` | (11.55, 0, 2.34) | (0.924, 0, 0.383) | 2 | Wider curve (30"R) |
-
-```
-                [outer]
-              ╱
-            ╱   [inner]
-          ╱   ╱
-        ╱   ╱
-    [in]
-```
-
-**States:**
-- `inner`: in ↔ inner (Section 1, 22" radius)
-- `outer`: in ↔ outer (Section 2, 30" radius)
-
----
-
-### Curved Turnout Right (`ctor`)
-
-| Point | Position | Direction | Section | Description |
-|-------|----------|-----------|---------|-------------|
-| `in` | (0, 0, 0) | (-1, 0, 0) | 1, 2 | Common entry |
-| `inner` | (8.47, 0, -1.71) | (0.924, 0, -0.383) | 1 | Tighter curve (22"R) |
-| `outer` | (11.55, 0, -2.34) | (0.924, 0, -0.383) | 2 | Wider curve (30"R) |
-
-```
-    [in]
-        ╲   ╲
-          ╲   ╲
-            ╲   [inner]
-              ╲
-                [outer]
-```
-
-**States:**
-- `inner`: in ↔ inner (Section 1, 22" radius)
-- `outer`: in ↔ outer (Section 2, 30" radius)
-
----
-
 ### 90° Crossing (`x90`)
 
 | Point | Position | Direction | Section | Description |
@@ -282,69 +160,6 @@ Each connection point has:
 
 ---
 
-### Double Slip (`dslip`)
-
-| Point | Position | Direction | Section | Description |
-|-------|----------|-----------|---------|-------------|
-| `in1` | (-4.9, 0, 0) | (-1, 0, 0) | 1, 3 | Track 1 west (→ out1 or out2) |
-| `out1` | (4.9, 0, 0) | (1, 0, 0) | 1, 4 | Track 1 east (← in1 or in2) |
-| `in2` | (-4.8, 0, -1.02) | (-0.978, 0, -0.208) | 2, 4 | Track 2 SW (→ out2 or out1) |
-| `out2` | (4.8, 0, 1.02) | (0.978, 0, 0.208) | 2, 3 | Track 2 NE (← in2 or in1) |
-
-```
-                        [out2]
-                      ╱
-    [in1]━━━━━━━━━━━╳━━━━━━━━━━━[out1]
-                  ╱
-                ╱
-            [in2]
-```
-
-**Sections:**
-- Section 1: in1 → out1 (straight)
-- Section 2: in2 → out2 (straight)
-- Section 3: in1 → out2 (cross)
-- Section 4: in2 → out1 (cross)
-
-**States (two independent switches):**
-- Switch A (at in1): `straight` (in1↔out1) or `cross` (in1↔out2)
-- Switch B (at in2): `straight` (in2↔out2) or `cross` (in2↔out1)
-
-**Collision Point:** Center (0, 0, 0)
-
----
-
-### Single Slip (`sslip`)
-
-| Point | Position | Direction | Section | Description |
-|-------|----------|-----------|---------|-------------|
-| `in1` | (-4.9, 0, 0) | (-1, 0, 0) | 1, 3 | Track 1 west (→ out1 or out2) |
-| `out1` | (4.9, 0, 0) | (1, 0, 0) | 1 | Track 1 east (← in1 only) |
-| `in2` | (-4.8, 0, -1.02) | (-0.978, 0, -0.208) | 2 | Track 2 SW (→ out2 only) |
-| `out2` | (4.8, 0, 1.02) | (0.978, 0, 0.208) | 2, 3 | Track 2 NE (← in2 or in1) |
-
-```
-                        [out2]
-                      ╱
-    [in1]━━━━━━━━━━━╳━━━━━━━━━━━[out1]
-                  ╱
-                ╱
-            [in2]
-```
-
-**Sections:**
-- Section 1: in1 → out1 (straight)
-- Section 2: in2 → out2 (straight)
-- Section 3: in1 → out2 (cross)
-
-**States (one switch):**
-- Switch A (at in1): `straight` (in1↔out1) or `cross` (in1↔out2)
-- Track 2 is fixed: in2↔out2 only
-
-**Collision Point:** Center (0, 0, 0)
-
----
-
 ### Bumper (`bump`)
 
 | Point | Position | Direction | Section | Description |
@@ -370,6 +185,49 @@ Connection points are determined when the flex track is placed to connect two ex
 
 ---
 
+### Placeholder (`ph`)
+
+| Point | Position | Direction | Section | Description |
+|-------|----------|-----------|---------|-------------|
+| `in` | (0, 0, 0) | (-1, 0, 0) | (none) | Junction point |
+| `out` | (0, 0, 0) | (1, 0, 0) | (none) | Junction point |
+
+```
+    [in]•[out]
+```
+
+Both connection points occupy the same position with opposite directions. The placeholder has no traversable track section—it exists purely as a junction point for connecting multiple track pieces.
+
+---
+
+### Generator (`gen`)
+
+| Point | Position | Direction | Section | Description |
+|-------|----------|-----------|---------|-------------|
+| `out` | (0, 0, 0) | (1, 0, 0) | 1 | Train exit point |
+
+```
+    ○━━━[out]
+```
+
+The generator has only an output—trains emerge from it. The circle represents the visual appearance (approximately cab/car sized). An invisible internal track section holds trains before they enter the layout.
+
+---
+
+### Bin (`bin`)
+
+| Point | Position | Direction | Section | Description |
+|-------|----------|-----------|---------|-------------|
+| `in` | (0, 0, 0) | (-1, 0, 0) | (none) | Train entry/removal point |
+
+```
+    [in]━━━○
+```
+
+The bin has only an input—trains enter and are removed. The circle represents the visual appearance (similar to generator). Zero-length with no traversable track section.
+
+---
+
 ## Connection Point Summary Table
 
 | Archetype | Connection Points |
@@ -377,15 +235,16 @@ Connection points are determined when the flex track is placed to connect two ex
 | `str*` | `in`, `out` |
 | `crvl*` | `in`, `out` |
 | `crvr*` | `in`, `out` |
-| `tol` | `in`, `out`, `left` |
-| `tor` | `in`, `out`, `right` |
-| `wye` | `in`, `left`, `right` |
-| `t3w` | `in`, `out`, `left`, `right` |
-| `ctol` | `in`, `inner`, `outer` |
-| `ctor` | `in`, `inner`, `outer` |
 | `x90` | `in1`, `out1`, `in2`, `out2` |
 | `x45` | `in1`, `out1`, `in2`, `out2` |
-| `dslip` | `in1`, `out1`, `in2`, `out2` |
-| `sslip` | `in1`, `out1`, `in2`, `out2` |
 | `bump` | `in` |
 | `flex` | `in`, `out` |
+| `ph` | `in`, `out` |
+| `gen` | `out` |
+| `bin` | `in` |
+
+---
+
+## Archived Content
+
+Physical switch archetypes had additional connection points (`left`, `right`, `inner`, `outer`). These have been removed in favor of virtual switches. See [ARCHIVED_SWITCHES.md](../ARCHIVED_SWITCHES.md) for historical documentation.
