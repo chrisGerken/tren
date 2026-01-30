@@ -94,3 +94,12 @@ For the initial 2D top-down version:
 - Rectangle is positioned at the car's spline position (X, Z)
 - Rectangle is rotated to align with the spline tangent (heading)
 - No elevation or banking—all cars at Y = 0
+
+### Tunnel Visibility
+
+Cars transition visibility individually when crossing tunnel pieces:
+- A car crossing from `out` to `in` becomes invisible as it passes the tunnel
+- A car crossing from `in` to `out` becomes visible as it passes the tunnel
+- A train partially inside a tunnel will have some cars visible and others invisible
+
+See [Track System](track-system.md#tunnel-tun) for tunnel archetype details.

@@ -155,12 +155,3 @@ The tolerances accommodate accumulated geometric errors from sequences of curves
 Connection points at approximately the same position but with parallel directions (not facing each other) remain unconnected.
 
 See [Layout DSL](layout-dsl.md) for examples and usage details.
-
-### Graph Updates
-
-When auto-connect joins endpoints:
-- The Track Piece Graph gains an edge between the two pieces
-- The Track Section Graph gains corresponding section-level edges
-- Both endpoints are marked as connected
-
-See [Layout DSL](layout-dsl.md) for examples and usage details.
