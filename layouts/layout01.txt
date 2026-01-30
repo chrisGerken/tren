@@ -7,8 +7,8 @@ crvl * 11
 
 new
 gen
-crvl
 crvr
+crvl
 
-in.ph1
+> in.$ph1
 

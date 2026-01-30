@@ -4,12 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Tren is a 2D top-down train simulator for building track layouts and operating trains. Currently in design/planning phase with no code implementation yet.
+Tren is a 2D top-down train simulator for building track layouts and operating trains.
 
-**Planned Tech Stack:**
+**Tech Stack:**
 - Three.js for rendering (orthographic 2D view, spline mathematics via `CatmullRomCurve3`)
 - Tauri for cross-platform desktop packaging (Windows, Mac, Linux)
 - TypeScript with Vite bundler
+
+**Current Status:** MVP implementation complete - can import layout files and render track with connection point indicators.
 
 ## Architecture
 
@@ -63,7 +65,8 @@ Trains are ordered car lists (consists). The primary cab (first cab in train) co
 ## Layout DSL
 
 Layouts are defined in text files. Statements can be one per line or multiple per line separated by semicolons:
-- `new` or `new DEGREES` — start new unconnected segment at given rotation (default 0°; implicit at start). When later connected explicitly, the segment is repositioned/rotated to align.
+- `new` or `new DEGREES` — start new unconnected segment at given rotation (default 0°; implicit at start)
+- `new from $label.point` or `new $label.point` — start new segment from a labeled piece's connection point
 - `piece` — place a track piece, attaching `piece.in` to previous, continue from `piece.out`
 - `out.piece` — place piece attaching `piece.out` to previous, continue from `piece.in` (build backwards)
 - `piece x N` or `piece * N` — place N consecutive pieces

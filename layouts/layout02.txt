@@ -1,0 +1,25 @@
+start: ph
+
+crvl x 4
+
+ph1: crvl
+crvl * 11
+
+new
+gen
+crvl
+str
+> in.$ph1
+
+new from out.$ph1
+str
+crv * 4
+str * 2
+crv * 4
+str * 2
+crv * 4
+str * 2
+crv * 4
+str
+
+

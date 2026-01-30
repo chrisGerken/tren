@@ -40,21 +40,25 @@ str ; crvl   # Comment after multiple statements
 
 ### Starting a New Track Segment
 
-The `new` statement begins a new, unconnected track segment:
+The `new` statement begins a new track segment:
 
 ```
-new          # Start new segment at 0° (default)
-new 45       # Start new segment rotated 45°
-new 90       # Start new segment rotated 90°
+new                     # Start new segment at origin, 0° rotation
+new 45                  # Start new segment at origin, rotated 45°
+new from $label         # Start new segment from label's 'out' point
+new from $label.in      # Start new segment from label's 'in' point
+new $label.out          # Same as above ('from' is optional)
+new from out.$label     # Alternative ordering (point.$label)
 ```
 
 The next track piece placed after `new` will:
-- Start at the specified rotation angle (in degrees)
-- Not be connected to any previous track
+- Start at the specified position and rotation
+- Connect to the labeled piece if `from $label` was specified
 
 An implicit `new 0` is assumed at the beginning of every layout specification, so it's only required when:
 - Starting additional unconnected segments
 - Starting the first piece at a non-zero angle
+- Starting a new segment from a labeled piece's connection point
 
 ```
 # These are equivalent
@@ -67,6 +71,14 @@ str ; crvl x 8
 str x 4 ; bump
 new 90              # New segment at 90°
 str x 4 ; bump      # Parallel track, unconnected
+
+# Start a new segment from a labeled piece
+circle: ph
+crvl x 16           # Circle from placeholder
+
+new from $circle.out
+gen                 # Generator connects to circle
+str
 ```
 
 ### Connecting Independent Segments
