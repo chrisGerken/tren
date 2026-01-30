@@ -62,3 +62,10 @@ html, body {
   right: 0;
   bottom: 0;
 }
+
+/* Ensure label renderer overlays correctly */
+#canvas-container > div {
+  position: absolute;
+  top: 0;
+  left: 0;
+}

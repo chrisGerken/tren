@@ -310,10 +310,13 @@ This allows connections even when accumulated errors from curves and straights c
 
 ### Visual Indicators
 
-When a layout is displayed, connection points have visual indicators:
+When a layout is displayed, various visual indicators help identify track elements:
 
-- **Blue circle**: Centered on explicitly defined connection points.
-- **Yellow circle**: Centered on auto-connected connection points.
+- **Blue dot**: Centered on explicitly defined or unconnected connection points.
+- **Yellow dot**: Centered on auto-connected connection points.
+- **Green circle**: Generator (train source).
+- **Red circle**: Bin (train sink).
+- **Text label**: Displayed near the center of labeled pieces (from `label: piece` syntax).
 - **Green dot**: On the currently selected outbound track at a virtual switch. Positioned where the track has visually separated from other routes, as close as possible to the connection point.
 - **Red dot**: On non-selected outbound tracks at a virtual switch. Positioned similarly to the green dot.
 

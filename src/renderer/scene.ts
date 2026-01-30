@@ -3,13 +3,16 @@
  */
 
 import * as THREE from 'three';
+import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 
 export class TrackScene {
   scene: THREE.Scene;
   camera: THREE.OrthographicCamera;
   renderer: THREE.WebGLRenderer;
+  labelRenderer: CSS2DRenderer;
   private container: HTMLElement;
   private trackGroup: THREE.Group;
+  private labelGroup: THREE.Group;
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -32,11 +35,19 @@ export class TrackScene {
     this.camera.position.set(0, 100, 0);
     this.camera.lookAt(0, 0, 0);
 
-    // Create renderer
+    // Create WebGL renderer
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
     this.renderer.setSize(container.clientWidth, container.clientHeight);
     this.renderer.setPixelRatio(window.devicePixelRatio);
     container.appendChild(this.renderer.domElement);
+
+    // Create CSS2D renderer for labels
+    this.labelRenderer = new CSS2DRenderer();
+    this.labelRenderer.setSize(container.clientWidth, container.clientHeight);
+    this.labelRenderer.domElement.style.position = 'absolute';
+    this.labelRenderer.domElement.style.top = '0';
+    this.labelRenderer.domElement.style.pointerEvents = 'none';
+    container.appendChild(this.labelRenderer.domElement);
 
     // Add lighting
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
@@ -49,6 +60,10 @@ export class TrackScene {
     // Create group for track pieces
     this.trackGroup = new THREE.Group();
     this.scene.add(this.trackGroup);
+
+    // Create group for labels
+    this.labelGroup = new THREE.Group();
+    this.scene.add(this.labelGroup);
 
     // Add grid helper for reference
     const gridHelper = new THREE.GridHelper(200, 20, 0xcccccc, 0xe0e0e0);
@@ -70,11 +85,13 @@ export class TrackScene {
     this.camera.updateProjectionMatrix();
 
     this.renderer.setSize(this.container.clientWidth, this.container.clientHeight);
+    this.labelRenderer.setSize(this.container.clientWidth, this.container.clientHeight);
     this.render();
   }
 
   render(): void {
     this.renderer.render(this.scene, this.camera);
+    this.labelRenderer.render(this.scene, this.camera);
   }
 
   clearLayout(): void {
@@ -89,10 +106,38 @@ export class TrackScene {
         }
       }
     }
+
+    // Remove all labels
+    while (this.labelGroup.children.length > 0) {
+      this.labelGroup.remove(this.labelGroup.children[0]);
+    }
   }
 
   addTrackGroup(group: THREE.Group): void {
     this.trackGroup.add(group);
+  }
+
+  /**
+   * Add a text label at the specified world position
+   */
+  addLabel(text: string, x: number, z: number): void {
+    const div = document.createElement('div');
+    div.className = 'track-label';
+    div.textContent = text;
+    div.style.cssText = `
+      background: rgba(255, 255, 255, 0.85);
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: monospace;
+      font-size: 11px;
+      color: #333;
+      border: 1px solid #999;
+      white-space: nowrap;
+    `;
+
+    const label = new CSS2DObject(div);
+    label.position.set(x, 1, z);  // Slightly above ground
+    this.labelGroup.add(label);
   }
 
   /**

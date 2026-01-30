@@ -30,6 +30,17 @@ export function renderLayout(scene: TrackScene, layout: Layout): void {
       ? renderTrackPieceDebug(piece, archetype)
       : renderTrackPiece(piece, archetype);
     scene.addTrackGroup(group);
+
+    // Add label if piece has one
+    if (piece.label) {
+      // Calculate piece center from connection points
+      const center = getPieceCenter(piece, archetype);
+      // Add slight offset perpendicular to track to avoid overlap
+      const labelOffset = 2;
+      const offsetX = Math.cos(piece.rotation + Math.PI / 2) * labelOffset;
+      const offsetZ = Math.sin(piece.rotation + Math.PI / 2) * labelOffset;
+      scene.addLabel(piece.label, center.x + offsetX, center.z + offsetZ);
+    }
   }
 
   scene.fitToLayout();
@@ -221,6 +232,43 @@ function renderBinWorld(worldPos: THREE.Vector3): THREE.Mesh {
   mesh.position.set(worldPos.x, 0.5, worldPos.z);
 
   return mesh;
+}
+
+/**
+ * Calculate the center of a track piece in world coordinates
+ */
+function getPieceCenter(piece: TrackPiece, archetype: TrackArchetype): { x: number; z: number } {
+  const cos = Math.cos(piece.rotation);
+  const sin = Math.sin(piece.rotation);
+
+  // Transform local point to world
+  const toWorld = (local: { x: number; z: number }) => ({
+    x: piece.position.x + (local.x * cos - local.z * sin),
+    z: piece.position.z + (local.x * sin + local.z * cos),
+  });
+
+  // Try to find center from 'in' and 'out' connection points
+  const inPoint = archetype.connectionPoints.find(cp => cp.name === 'in');
+  const outPoint = archetype.connectionPoints.find(cp => cp.name === 'out');
+
+  if (inPoint && outPoint) {
+    const inWorld = toWorld(inPoint.position);
+    const outWorld = toWorld(outPoint.position);
+    return {
+      x: (inWorld.x + outWorld.x) / 2,
+      z: (inWorld.z + outWorld.z) / 2,
+    };
+  }
+
+  // For pieces with sections, use the middle of the first section's spline
+  if (archetype.sections.length > 0 && archetype.sections[0].splinePoints.length > 0) {
+    const points = archetype.sections[0].splinePoints;
+    const midIndex = Math.floor(points.length / 2);
+    return toWorld(points[midIndex]);
+  }
+
+  // Fallback to piece position
+  return { x: piece.position.x, z: piece.position.z };
 }
 
 /**
