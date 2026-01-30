@@ -1,0 +1,14 @@
+start: ph
+
+crvl x 4
+
+ph1: crvl
+crvl * 11
+
+new
+gen
+crvl
+crvr
+
+in.ph1
+

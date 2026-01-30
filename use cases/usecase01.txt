@@ -1,0 +1,7 @@
+User wants to simulate the layout specified in /layouts/layout01.txt
+
+User runs application
+
+User uses Import Layout dialog, pointing to layout01.txt on disk
+
+Application imports the layout01.txt file, reads the specification and displays the layout on the screen
