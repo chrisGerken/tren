@@ -167,18 +167,18 @@ function renderTrackPiece(
     );
   };
 
-  // Render track sections
-  for (const section of archetype.sections) {
-    if (section.splinePoints.length >= 2) {
-      // Transform spline points to world coordinates
-      const worldPoints = section.splinePoints.map(p => toWorld(p));
-      const sectionMesh = renderTrackSectionWorld(worldPoints);
-      group.add(sectionMesh);
+  // Render track sections (skip for gen/bin - they have internal invisible sections)
+  const isGenOrBin = archetype.code === 'gen' || archetype.code === 'bin';
+  if (!isGenOrBin) {
+    for (const section of archetype.sections) {
+      if (section.splinePoints.length >= 2) {
+        // Transform spline points to world coordinates
+        const worldPoints = section.splinePoints.map(p => toWorld(p));
+        const sectionMesh = renderTrackSectionWorld(worldPoints);
+        group.add(sectionMesh);
+      }
     }
   }
-
-  // Render connection points (skip for gen/bin since they have special markers)
-  const isGenOrBin = archetype.code === 'gen' || archetype.code === 'bin';
   if (!isGenOrBin) {
     for (const cp of archetype.connectionPoints) {
       const worldPos = toWorld({ x: cp.position.x, y: 0, z: cp.position.z });
@@ -266,7 +266,7 @@ function renderConnectionPointWorld(worldPos: THREE.Vector3, isAutoConnect: bool
  * Render generator as a green circle at world position
  */
 function renderGeneratorWorld(worldPos: THREE.Vector3): THREE.Mesh {
-  const geometry = new THREE.CircleGeometry(4.5, 32);  // 3x larger for visibility
+  const geometry = new THREE.CircleGeometry(1.5, 32);  // Same size as bin
   const material = new THREE.MeshBasicMaterial({
     color: GENERATOR_COLOR,
     side: THREE.DoubleSide,

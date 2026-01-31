@@ -157,6 +157,7 @@ export class Simulation {
 
   /**
    * Spawn a new train at a generator
+   * Cars spawn inside the generator's internal track section and move forward to exit
    */
   private spawnTrain(generatorPiece: TrackPiece): void {
     if (!generatorPiece.genConfig) return;
@@ -167,79 +168,62 @@ export class Simulation {
       cars: [],
       speed: DEFAULT_SPEED,
       generatorId: generatorPiece.id,
+      routesTaken: new Map(),  // Tracks which route was taken at each switch
     };
 
-    // Find the first connected piece (where trains will emerge)
-    const connections = generatorPiece.connections.get('out');
-    if (!connections || connections.length === 0) {
-      if (DEBUG_LOGGING) console.log(`Generator ${generatorPiece.id} has no output connection`);
+    // Generator has an internal section - cars spawn inside it
+    const genSectionLength = getSectionLength(generatorPiece, 0);
+    if (genSectionLength === 0) {
+      if (DEBUG_LOGGING) console.log(`Generator ${generatorPiece.id} has no internal section`);
       return;
     }
 
-    const firstConnection = connections[0];
-    const startPieceId = firstConnection.pieceId;
-    const startPiece = this.layout.pieces.find(p => p.id === startPieceId);
-    if (!startPiece) return;
+    // Position cars from front to back, starting near the exit (high distance)
+    // First cab is closest to exit, last car is furthest back
+    let currentDistance = genSectionLength; // Start at the exit point
 
-    // Calculate starting position
-    // Cars start behind the generator (negative distance) and emerge as they move forward
-    const sectionLength = getSectionLength(startPiece, 0);
-    let currentDistance = 0;
-
-    // Determine if we enter via 'in' or 'out'
-    const entersViaIn = firstConnection.pointName === 'in';
-
-    // Create cabs
+    // Create cabs (front of train)
+    // Position is car CENTER, so account for half-lengths when spacing
     for (let i = 0; i < config.cabCount; i++) {
-      const car = this.createCar('cab', startPieceId, currentDistance, entersViaIn, sectionLength);
+      currentDistance -= CAB_LENGTH / 2; // Move from front edge to center
+      const car: Car = {
+        id: `car_${this.nextCarId++}`,
+        type: 'cab',
+        length: CAB_LENGTH,
+        currentPieceId: generatorPiece.id,
+        distanceAlongSection: currentDistance,
+        visible: false,
+        worldPosition: vec3(0, 0, 0),
+        rotation: 0,
+      };
       train.cars.push(car);
-      currentDistance -= (CAB_LENGTH + CAR_GAP);
+      currentDistance -= CAB_LENGTH / 2 + CAR_GAP; // Move from center to back edge + gap
     }
 
-    // Create cars
+    // Create cars (behind cabs)
     for (let i = 0; i < config.carCount; i++) {
-      const car = this.createCar('car', startPieceId, currentDistance, entersViaIn, sectionLength);
+      currentDistance -= CAR_LENGTH / 2; // Move from front edge to center
+      const car: Car = {
+        id: `car_${this.nextCarId++}`,
+        type: 'car',
+        length: CAR_LENGTH,
+        currentPieceId: generatorPiece.id,
+        distanceAlongSection: currentDistance,
+        visible: false,
+        worldPosition: vec3(0, 0, 0),
+        rotation: 0,
+      };
       train.cars.push(car);
-      currentDistance -= (CAR_LENGTH + CAR_GAP);
+      currentDistance -= CAR_LENGTH / 2 + CAR_GAP; // Move from center to back edge + gap
     }
 
     // Update world positions
     for (const car of train.cars) {
       updateCarWorldPosition(car, this.layout);
-      // All cars start invisible (inside generator)
-      car.visible = false;
     }
 
     this.trains.push(train);
     if (DEBUG_LOGGING) console.log(`Spawned train ${train.id} with ${train.cars.length} cars`);
-  }
-
-  /**
-   * Create a single car
-   */
-  private createCar(
-    type: 'cab' | 'car',
-    pieceId: string,
-    distance: number,
-    entersViaIn: boolean,
-    sectionLength: number
-  ): Car {
-    // If entering via 'out', we need to flip the starting position
-    let actualDistance = distance;
-    if (!entersViaIn) {
-      actualDistance = sectionLength + distance;
-    }
-
-    return {
-      id: `car_${this.nextCarId++}`,
-      type,
-      length: type === 'cab' ? CAB_LENGTH : CAR_LENGTH,
-      currentPieceId: pieceId,
-      distanceAlongSection: actualDistance,
-      visible: false,
-      worldPosition: vec3(0, 0, 0),
-      rotation: 0,
-    };
   }
 
   /**
@@ -248,7 +232,7 @@ export class Simulation {
   private updateTrains(deltaTime: number): void {
     for (const train of this.trains) {
       const distance = train.speed * deltaTime;
-      moveTrain(train.cars, distance, this.layout, this.selectedRoutes);
+      moveTrain(train.cars, distance, this.layout, this.selectedRoutes, train.routesTaken);
 
       // Update visibility for each car
       for (const car of train.cars) {
@@ -258,7 +242,7 @@ export class Simulation {
   }
 
   /**
-   * Update car visibility based on current piece
+   * Update car visibility based on current piece and position
    */
   private updateCarVisibility(car: Car): void {
     const piece = this.layout.pieces.find(p => p.id === car.currentPieceId);
@@ -268,7 +252,7 @@ export class Simulation {
     if (!archetype) return;
 
     if (archetype.code === 'gen') {
-      // Car is still at generator - keep hidden until it moves to next piece
+      // Car is inside generator's internal track - keep hidden
       car.visible = false;
     } else if (archetype.code === 'bin') {
       // Car entered bin - hide it

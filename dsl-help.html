@@ -141,8 +141,8 @@ crvl         # Place a left curve (22" radius default)</code></pre>
       <tr><td><code>x90</code>, <code>x45</code></td><td>Crossings</td></tr>
       <tr><td><code>bump</code></td><td>Buffer stop</td></tr>
       <tr><td><code>ph</code>, <code>placeholder</code></td><td>Zero-length junction point</td></tr>
-      <tr><td><code>gen</code>, <code>generator</code></td><td>Train source</td></tr>
-      <tr><td><code>bin</code></td><td>Train sink</td></tr>
+      <tr><td><code>gen</code>, <code>generator</code></td><td>Train source (see Generator Syntax below)</td></tr>
+      <tr><td><code>bin</code></td><td>Train sink (removes trains)</td></tr>
       <tr><td><code>tun</code>, <code>tunnel</code></td><td>Visibility toggle</td></tr>
     </table>
 
@@ -151,6 +151,15 @@ crvl         # Place a left curve (22" radius default)</code></pre>
     <pre><code>str x 5      # Five straight pieces
 crvl x 4     # Four left curves (90° total)
 crvr * 8     # Eight right curves (180°)</code></pre>
+
+    <h3>Generator Syntax</h3>
+    <p>Generators spawn trains with configurable car counts:</p>
+    <pre><code>gen                           # One train: 1 cab, 5 cars
+gen cabs 2                    # One train: 2 cabs, 5 cars
+gen cars 3                    # One train: 1 cab, 3 cars
+gen cabs 2 cars 3             # One train: 2 cabs, 3 cars
+gen cabs 2 cars 3 every 15    # New train every 15 seconds</code></pre>
+    <p>Without <code>every</code>, the generator spawns one train and disables. With <code>every N</code>, it spawns a new train every N seconds.</p>
   </div>
 
   <div class="section">
@@ -233,8 +242,14 @@ crvl x 16               # Full circle of curves
       <tr><td>Yellow dot</td><td>Auto-connected point</td></tr>
       <tr><td>Green circle</td><td>Generator (train source)</td></tr>
       <tr><td>Red circle</td><td>Bin (train sink)</td></tr>
+      <tr><td>Green dot (small)</td><td>Selected route at virtual switch</td></tr>
+      <tr><td>Red dot (small)</td><td>Unselected route at virtual switch (click to select)</td></tr>
       <tr><td>Text label</td><td>Labeled piece (from <code>label: piece</code> syntax)</td></tr>
     </table>
+
+    <h3>Switch Interaction</h3>
+    <p>At virtual switches (where multiple tracks connect to one point), click any route indicator to select that route. Trains will follow the selected route (green indicator).</p>
+    <p><strong>Note:</strong> When a train is crossing a switch, the entire train will follow the route taken by the first car, even if you change the switch while the train is crossing.</p>
   </div>
 
   <div class="section">
@@ -245,8 +260,8 @@ crvl x 16               # Full circle of curves
       <tr><td><code>x90</code>, <code>x45</code></td><td><code>in1</code>, <code>out1</code>, <code>in2</code>, <code>out2</code></td><td><code>in1</code></td><td><code>out1</code></td></tr>
       <tr><td><code>bump</code></td><td><code>in</code></td><td><code>in</code></td><td>(none)</td></tr>
       <tr><td><code>ph</code>, <code>tun</code></td><td><code>in</code>, <code>out</code></td><td><code>in</code></td><td><code>out</code></td></tr>
-      <tr><td><code>gen</code></td><td><code>out</code></td><td>(none)</td><td><code>out</code></td></tr>
-      <tr><td><code>bin</code></td><td><code>in</code></td><td><code>in</code></td><td>(none)</td></tr>
+      <tr><td><code>gen</code></td><td><code>in</code>, <code>out</code></td><td><code>in</code></td><td><code>out</code></td></tr>
+      <tr><td><code>bin</code></td><td><code>in</code>, <code>out</code></td><td><code>in</code></td><td><code>out</code></td></tr>
     </table>
   </div>
 

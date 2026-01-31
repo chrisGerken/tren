@@ -209,22 +209,30 @@ const archetypes: TrackArchetype[] = [
   },
 
   // Generator (train source)
+  // Has internal track section (like an invisible tunnel) where trains spawn
+  // This simplifies movement logic - no negative distances needed
   {
     code: 'gen',
     aliases: ['generator'],
-    sections: [],  // Internal section, not rendered as track
+    sections: [
+      { splinePoints: [vec2(-50, 0), vec2(0, 0)] },  // 50" internal track, not rendered
+    ],
     connectionPoints: [
-      { name: 'out', position: vec2(0, 0), direction: vec2(1, 0), sectionIndices: [] },
+      { name: 'in', position: vec2(-50, 0), direction: vec2(-1, 0), sectionIndices: [0] },
+      { name: 'out', position: vec2(0, 0), direction: vec2(1, 0), sectionIndices: [0] },
     ],
   },
 
   // Bin (train sink)
+  // Has both 'in' and 'out' at same position for proper placement alignment
+  // Trains enter via 'in', 'out' is just for attachment
   {
     code: 'bin',
     aliases: [],
     sections: [],
     connectionPoints: [
       { name: 'in', position: vec2(0, 0), direction: vec2(-1, 0), sectionIndices: [] },
+      { name: 'out', position: vec2(0, 0), direction: vec2(1, 0), sectionIndices: [] },
     ],
   },
 

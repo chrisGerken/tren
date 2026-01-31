@@ -60,6 +60,10 @@ The placeholder provides a pure junction point. Use `out.piece` syntax to build 
 
 Trains are ordered car lists (consists). The primary cab (first cab in train) controls speed and direction. Each car maintains its own position along the track section, querying the spline for position and tangent each frame. Cars transition between sections independently when crossing boundaries.
 
+**Generator syntax:** `gen cabs N cars M every S` - N cabs (default 1), M cars (default 5), spawn every S seconds (omit for one-shot).
+
+**Route memory:** Each train remembers which route it took at each switch. All cars in the train follow the same route, even if the switch is changed while the train is crossing.
+
 **Collision types:** rear-end, head-on (same track), intersection (at defined collision points like diamond crossings).
 
 ## Layout DSL

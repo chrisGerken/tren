@@ -80,6 +80,7 @@ export interface Train {
   cars: Car[];                     // First car is the head
   speed: number;                   // Inches per second
   generatorId: string;             // Which generator spawned this train
+  routesTaken: Map<string, number>; // Switch routes taken (pieceId.pointName -> connectionIndex)
 }
 
 /** Generator configuration (from DSL) */

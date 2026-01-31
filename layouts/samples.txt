@@ -28,10 +28,18 @@
 #   x90, x45                        Diamond crossings (90 or 45 degree)
 #   bump                            Buffer stop (end of track)
 #   ph, placeholder                 Zero-length junction point
-#   gen, generator                  Train source (click to spawn trains)
+#   gen, generator                  Train source (see GENERATOR SYNTAX below)
 #   bin                             Train sink (removes trains)
 #   tun, tunnel                     Visibility toggle (hides track/trains)
 #   flex                            Flex track
+#
+# GENERATOR SYNTAX:
+#   gen                             One train: 1 cab, 5 cars (one-shot)
+#   gen cabs N                      One train with N cabs
+#   gen cars M                      One train with M cars
+#   gen cabs N cars M               One train with N cabs and M cars
+#   gen every S                     Spawn new train every S seconds
+#   gen cabs N cars M every S       Full specification
 #
 # SEGMENT CONTROL (new statement with flexible modifiers):
 #   new                             Start at origin, 0 degrees

@@ -309,8 +309,19 @@ Set any of these to `true` to enable the respective logging.
 - The angle is negated when applied to `mesh.rotation.y` because Three.js Y rotation convention (clockwise from above) is opposite to our coordinate system (counter-clockwise)
 
 **Generator/Bin visuals:**
-- Generator: green circle, radius 4.5 inches (visible from distance)
+- Generator: green circle, radius 1.5 inches
 - Bin: red circle, radius 1.5 inches
+
+**Generator internal track:**
+- Generator has a 50" internal track section (invisible, like a tunnel)
+- Cars spawn inside the generator and move forward to exit via 'out'
+- This simplifies movement logic - no special negative-distance handling needed
+- The internal section is not rendered (skipped in track renderer)
+
+**Zero-length pieces:**
+- Bin, tunnel, and placeholder have zero-length sections
+- The movement system handles these specially - cars immediately transition through them
+- This prevents cars from getting "stuck" on zero-length pieces
 
 ## Train Simulation
 
@@ -331,8 +342,8 @@ gen cabs 2 cars 3 every 10    # New train every 10 seconds
 - Trains follow `selectedRoutes` map at virtual switches
 
 **Car types:**
-- Cabs (engines): blue rectangles, 4" long
-- Cars (rolling stock): gray rectangles, 3" long
+- Cabs (engines): yellow rectangles, 4" long
+- Cars (rolling stock): maroon rectangles, 3" long
 - Gap between cars: 0.5"
 
 **Movement:**
@@ -340,6 +351,12 @@ gen cabs 2 cars 3 every 10    # New train every 10 seconds
 - Cars move along track splines using `CatmullRomCurve3`
 - Section transitions use `piece.connections` map
 - Virtual switches use `selectedRoutes` to determine path
+
+**Route memory at switches:**
+- Each train maintains a `routesTaken` map recording which route was taken at each switch
+- When the first car crosses a switch, the current route setting is recorded
+- All subsequent cars in the train use the recorded route, not the current switch setting
+- This ensures the entire train follows the same path even if the switch is changed mid-crossing
 
 **Generator behavior:**
 - One-shot (no `every`): spawns one train, then disables

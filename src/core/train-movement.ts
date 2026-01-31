@@ -111,12 +111,15 @@ export function updateCarWorldPosition(car: Car, layout: Layout): void {
 
 /**
  * Get the next section when exiting a piece at a connection point
+ * If trainRoutes is provided, use/record the route taken by the train
+ * (ensures all cars in a train take the same route at switches)
  */
 export function getNextSection(
   pieceId: string,
   exitPoint: string,
   layout: Layout,
-  selectedRoutes: Map<string, number>
+  selectedRoutes: Map<string, number>,
+  trainRoutes?: Map<string, number>
 ): { pieceId: string; entryPoint: string } | null {
   const piece = layout.pieces.find(p => p.id === pieceId);
   if (!piece) return null;
@@ -136,7 +139,19 @@ export function getNextSection(
 
   // Multiple connections - virtual switch
   const routeKey = `${pieceId}.${exitPoint}`;
-  const selectedIndex = selectedRoutes.get(routeKey) ?? 0;
+
+  let selectedIndex: number;
+  if (trainRoutes?.has(routeKey)) {
+    // Train already crossed this switch - use the same route
+    selectedIndex = trainRoutes.get(routeKey)!;
+  } else {
+    // First car to cross - use current switch setting and record it
+    selectedIndex = selectedRoutes.get(routeKey) ?? 0;
+    if (trainRoutes) {
+      trainRoutes.set(routeKey, selectedIndex);
+    }
+  }
+
   const connection = connections[Math.min(selectedIndex, connections.length - 1)];
 
   return {
@@ -148,19 +163,40 @@ export function getNextSection(
 /**
  * Move a car along the track by a distance
  * Handles section transitions at boundaries
+ * trainRoutes ensures all cars in a train take the same route at switches
  */
 export function moveCar(
   car: Car,
   distance: number,
   layout: Layout,
-  selectedRoutes: Map<string, number>
+  selectedRoutes: Map<string, number>,
+  trainRoutes?: Map<string, number>
 ): void {
   car.distanceAlongSection += distance;
 
-  const piece = layout.pieces.find(p => p.id === car.currentPieceId);
+  let piece = layout.pieces.find(p => p.id === car.currentPieceId);
   if (!piece) return;
 
-  const sectionLength = getSectionLength(piece, 0);
+  let sectionLength = getSectionLength(piece, 0);
+
+  // For zero-length pieces (gen, bin, etc.), immediately transition to next piece
+  let safetyCounter = 0;
+  while (sectionLength === 0 && safetyCounter < 10) {
+    safetyCounter++;
+    const exitPoint = car.distanceAlongSection >= 0 ? 'out' : 'in';
+    const nextSection = getNextSection(car.currentPieceId, exitPoint, layout, selectedRoutes, trainRoutes);
+    if (!nextSection) {
+      // Dead end on zero-length piece
+      car.distanceAlongSection = 0;
+      updateCarWorldPosition(car, layout);
+      return;
+    }
+    car.currentPieceId = nextSection.pieceId;
+    piece = layout.pieces.find(p => p.id === car.currentPieceId);
+    if (!piece) return;
+    sectionLength = getSectionLength(piece, 0);
+    // Distance carries over (could be negative if emerging from generator)
+  }
 
   // Handle overflow (moving past end of section)
   while (car.distanceAlongSection >= sectionLength && sectionLength > 0) {
@@ -169,7 +205,7 @@ export function moveCar(
     // Determine exit point based on direction
     const exitPoint = 'out'; // Simplified: assume forward direction exits via 'out'
 
-    const nextSection = getNextSection(car.currentPieceId, exitPoint, layout, selectedRoutes);
+    const nextSection = getNextSection(car.currentPieceId, exitPoint, layout, selectedRoutes, trainRoutes);
     if (!nextSection) {
       // Dead end - stop at end of section
       car.distanceAlongSection = sectionLength;
@@ -200,22 +236,30 @@ export function moveCar(
   }
 
   // Handle underflow (moving past start of section - reverse)
+  // But DON'T transition into zero-length pieces (like generators) - just keep negative distance
   while (car.distanceAlongSection < 0) {
-    const underflow = -car.distanceAlongSection;
-
     const exitPoint = 'in'; // Exiting backwards via 'in'
 
-    const nextSection = getNextSection(car.currentPieceId, exitPoint, layout, selectedRoutes);
+    const nextSection = getNextSection(car.currentPieceId, exitPoint, layout, selectedRoutes, trainRoutes);
     if (!nextSection) {
-      // Dead end
-      car.distanceAlongSection = 0;
-      return;
+      // Dead end - keep negative distance (car is "emerging")
+      break;
     }
 
+    // Check if next piece is zero-length (generator, bin, etc.)
+    const nextPiece = layout.pieces.find(p => p.id === nextSection.pieceId);
+    if (nextPiece) {
+      const nextSectionLength = getSectionLength(nextPiece, 0);
+      if (nextSectionLength === 0) {
+        // Don't transition into zero-length piece - keep negative distance
+        break;
+      }
+    }
+
+    const underflow = -car.distanceAlongSection;
     car.currentPieceId = nextSection.pieceId;
-    const newPiece = layout.pieces.find(p => p.id === nextSection.pieceId);
-    if (newPiece) {
-      const newSectionLength = getSectionLength(newPiece, 0);
+    if (nextPiece) {
+      const newSectionLength = getSectionLength(nextPiece, 0);
       if (nextSection.entryPoint === 'in') {
         car.distanceAlongSection = underflow;
       } else {
@@ -235,10 +279,11 @@ export function moveTrain(
   cars: Car[],
   distance: number,
   layout: Layout,
-  selectedRoutes: Map<string, number>
+  selectedRoutes: Map<string, number>,
+  trainRoutes?: Map<string, number>
 ): void {
   for (const car of cars) {
-    moveCar(car, distance, layout, selectedRoutes);
+    moveCar(car, distance, layout, selectedRoutes, trainRoutes);
   }
 }
 

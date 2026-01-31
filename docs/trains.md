@@ -87,10 +87,21 @@ Options may include:
 - Trains halt before collision (automatic braking)
 - Damage/derailment modeling
 
+## Route Memory at Switches
+
+When a train crosses a virtual switch (a connection point with multiple routes):
+- The first car to cross records which route was taken in the train's `routesTaken` map
+- All subsequent cars in the same train use the recorded route
+- This ensures the entire train follows the same path, even if the switch is changed while the train is crossing
+- Without this, changing a switch mid-crossing would cause cars to split onto different tracks (derailment)
+
 ## Visual Representation (2D)
 
 For the initial 2D top-down version:
 - Each car is rendered as a rectangle
+- Cabs (engines) are yellow, 4" long × 2" wide
+- Cars (rolling stock) are maroon, 3" long × 2" wide
+- Gap between cars: 0.5"
 - Rectangle is positioned at the car's spline position (X, Z)
 - Rectangle is rotated to align with the spline tangent (heading)
 - No elevation or banking—all cars at Y = 0

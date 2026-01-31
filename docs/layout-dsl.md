@@ -637,5 +637,5 @@ See [Connection Points](connection-points.md) for complete connection point defi
 | `x90`, `x45` | `in1`, `out1`, `in2`, `out2` | `in1` | `out1` |
 | `bump` | `in` | `in` | (none) |
 | `ph`, `tun` | `in`, `out` | `in` | `out` |
-| `gen` | `out` | (none) | `out` |
-| `bin` | `in` | `in` | (none) |
+| `gen` | `in`, `out` | `in` | `out` |
+| `bin` | `in`, `out` | `in` | `out` |

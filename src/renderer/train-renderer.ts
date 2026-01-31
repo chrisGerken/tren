@@ -11,8 +11,8 @@ const CAR_WIDTH = 2;
 const CAR_HEIGHT = 1.5;
 
 // Colors
-const CAB_COLOR = 0x2244aa;   // Blue for cabs (engines)
-const CAR_COLOR = 0x666666;   // Gray for rolling stock
+const CAB_COLOR = 0xd8a60b;   // Yellow for cabs (engines)
+const CAR_COLOR = 0x800020;   // Dark maroon for rolling stock
 
 /**
  * Render all trains as a Three.js group
