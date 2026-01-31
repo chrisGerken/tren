@@ -1,0 +1,21 @@
+
+main: ph
+str x 8
+bump
+
+$main.out
+crvl
+siding1: str x 6
+bump
+
+$main.out
+crvl x 2         # Tighter entry
+siding2: str x 5
+bump
+
+$main.out
+crvl x 3         # Even tighter
+siding3: str x 4
+
+bump
+

@@ -112,14 +112,21 @@
 # Main line with a passing siding using virtual switches.
 # Placeholder (ph) creates a pure junction point.
 
+# str               # incoming straight piece
 # junction: ph
-# str x 5           # Main route
+# str x 10          # Main route
 # bump
 #
 # $junction.out     # Branch from junction
 # crvl              # Diverge left
+# crvr              # Turn to be parallel with main track 
 # str x 4           # Parallel siding
 # crvr              # Curve back
+# crvl              # Come back to the main track
+
+# splice            # create a virtual switch with the current point and the track it touches
+
+# str               # after the passing
 # bump
 
 

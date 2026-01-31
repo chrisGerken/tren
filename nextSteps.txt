@@ -1,0 +1,5 @@
+1) Change the gen statement in the layout DSL to "gen cabs a cars b every c" where "gen", "cabs", "cars" and "every" are constants and a, b and c are integer values representing the number of cabs (default 1), the number of cars (default 5) and the frequency in seconds of a new train. If no frequency is specified then only one train is ever created.
+
+2) Once a train is created, it leaves the generator much as a train would leave a tunnel with cabs and cars becoming visible as they completely pass the generator. the train continues on the track, taking the currently selected track whenever it approaches a swtich.
+
+3) If a train enters a bin the the cabs and cars become invisible as each passes into the bin. When the train has completely entered the bin the train is removed from the track and the simulation. 
