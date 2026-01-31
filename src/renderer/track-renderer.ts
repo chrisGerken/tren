@@ -17,9 +17,6 @@ const BUMPER_COLOR = 0x444444;  // Dark gray
 const SWITCH_SELECTED_COLOR = 0x00ff00;  // Bright green for selected route
 const SWITCH_UNSELECTED_COLOR = 0xff0000;  // Red for unselected routes
 
-// Distance along track to place switch indicators (in inches)
-const SWITCH_INDICATOR_DISTANCE = 3.0;
-
 // Set to true to show simplified debug view
 const DEBUG_MODE = false;
 
@@ -343,9 +340,27 @@ function renderBumperStopWorld(
   return mesh;
 }
 
+// Minimum separation distance between switch indicators (inches)
+const MIN_INDICATOR_SEPARATION = 4.0;
+// Step size when searching for optimal indicator distance (inches)
+const INDICATOR_STEP_SIZE = 0.25;
+// Maximum distance to search along track (inches)
+const MAX_INDICATOR_DISTANCE = 30.0;
+
+/**
+ * Information about a track curve for indicator positioning
+ */
+interface CurveInfo {
+  curve: THREE.CatmullRomCurve3;
+  curveLength: number;
+  isFromIn: boolean;
+}
+
 /**
  * Render switch indicators (green for selected route, red for others)
- * Positioned along the outgoing tracks where they've visually separated
+ * Positioned along the outgoing tracks where they've visually separated.
+ * All indicators are placed at the same distance from the connection point,
+ * at the minimum distance where they are all at least MIN_INDICATOR_SEPARATION apart.
  */
 function renderSwitchIndicators(
   piece: TrackPiece,
@@ -357,35 +372,32 @@ function renderSwitchIndicators(
   const indicators: THREE.Mesh[] = [];
   const selectedIndex = getSelectedRoute(piece.id, pointName);
 
+  // Build curve info for each connection
+  const curveInfos: (CurveInfo | null)[] = [];
+  for (const connection of connections) {
+    const curveInfo = buildCurveInfo(connection, pieceMap);
+    curveInfos.push(curveInfo);
+  }
+
+  // Find minimum distance where all indicators are separated enough
+  const distance = findOptimalIndicatorDistance(curveInfos);
+
+  // Calculate positions at the optimal distance
+  const positions = curveInfos.map(info =>
+    info ? getPositionAtDistance(info, distance) : null
+  );
+
+  // Create indicator meshes
   for (let i = 0; i < connections.length; i++) {
-    const connection = connections[i];
-    const connectedPiece = pieceMap.get(connection.pieceId);
-    if (!connectedPiece) continue;
+    const pos = positions[i];
+    if (!pos) continue;
 
-    const connectedArchetype = getArchetype(connectedPiece.archetypeCode);
-    if (!connectedArchetype || connectedArchetype.sections.length === 0) continue;
-
-    // Find the section connected to this point
-    const section = connectedArchetype.sections[0];
-    if (section.splinePoints.length < 2) continue;
-
-    // Calculate position along the connected track
-    const indicatorPos = calculateIndicatorPosition(
-      connectedPiece,
-      connectedArchetype,
-      connection.pointName,
-      SWITCH_INDICATOR_DISTANCE
-    );
-
-    if (!indicatorPos) continue;
-
-    // Create indicator sphere
     const isSelected = i === selectedIndex;
     const color = isSelected ? SWITCH_SELECTED_COLOR : SWITCH_UNSELECTED_COLOR;
     const geometry = new THREE.SphereGeometry(0.35, 16, 16);
     const material = new THREE.MeshBasicMaterial({ color });
     const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(indicatorPos.x, 0.7, indicatorPos.z);
+    mesh.position.set(pos.x, 0.7, pos.z);
 
     indicators.push(mesh);
   }
@@ -394,26 +406,30 @@ function renderSwitchIndicators(
 }
 
 /**
- * Calculate indicator position along a track piece at a given distance from a connection point
+ * Build curve information for a connection
  */
-function calculateIndicatorPosition(
-  piece: TrackPiece,
-  archetype: TrackArchetype,
-  connectionPointName: string,
-  distance: number
-): { x: number; z: number } | null {
-  const section = archetype.sections[0];
-  if (!section || section.splinePoints.length < 2) return null;
+function buildCurveInfo(
+  connection: Connection,
+  pieceMap: Map<string, TrackPiece>
+): CurveInfo | null {
+  const connectedPiece = pieceMap.get(connection.pieceId);
+  if (!connectedPiece) return null;
+
+  const connectedArchetype = getArchetype(connectedPiece.archetypeCode);
+  if (!connectedArchetype || connectedArchetype.sections.length === 0) return null;
+
+  const section = connectedArchetype.sections[0];
+  if (section.splinePoints.length < 2) return null;
 
   // Build the spline curve in world coordinates
-  const cos = Math.cos(piece.rotation);
-  const sin = Math.sin(piece.rotation);
+  const cos = Math.cos(connectedPiece.rotation);
+  const sin = Math.sin(connectedPiece.rotation);
 
   const toWorld = (local: { x: number; y: number; z: number }): THREE.Vector3 => {
     return new THREE.Vector3(
-      piece.position.x + (local.x * cos - local.z * sin),
+      connectedPiece.position.x + (local.x * cos - local.z * sin),
       local.y,
-      piece.position.z + (local.x * sin + local.z * cos)
+      connectedPiece.position.z + (local.x * sin + local.z * cos)
     );
   };
 
@@ -423,13 +439,67 @@ function calculateIndicatorPosition(
 
   if (curveLength === 0) return null;
 
-  // Determine direction based on connection point
-  // If connecting via 'in', we travel from start; if 'out', we travel from end
-  const isFromIn = connectionPointName === 'in' || connectionPointName === 'in1';
-  const t = isFromIn
-    ? Math.min(distance / curveLength, 1.0)
-    : Math.max(1.0 - distance / curveLength, 0.0);
+  const isFromIn = connection.pointName === 'in' || connection.pointName === 'in1';
 
-  const point = curve.getPointAt(t);
+  return { curve, curveLength, isFromIn };
+}
+
+/**
+ * Get position along a curve at a given distance from the connection point
+ */
+function getPositionAtDistance(
+  info: CurveInfo,
+  distance: number
+): { x: number; z: number } {
+  const t = info.isFromIn
+    ? Math.min(distance / info.curveLength, 1.0)
+    : Math.max(1.0 - distance / info.curveLength, 0.0);
+
+  const point = info.curve.getPointAt(t);
   return { x: point.x, z: point.z };
+}
+
+/**
+ * Find the minimum distance from connection point where all indicators
+ * are at least MIN_INDICATOR_SEPARATION apart from each other
+ */
+function findOptimalIndicatorDistance(curveInfos: (CurveInfo | null)[]): number {
+  const validInfos = curveInfos.filter((info): info is CurveInfo => info !== null);
+
+  // If only one connection, use minimum distance
+  if (validInfos.length < 2) {
+    return INDICATOR_STEP_SIZE;
+  }
+
+  // Search for minimum distance where all pairs are separated enough
+  for (let distance = INDICATOR_STEP_SIZE; distance <= MAX_INDICATOR_DISTANCE; distance += INDICATOR_STEP_SIZE) {
+    const positions = validInfos.map(info => getPositionAtDistance(info, distance));
+
+    if (allPairsSeparated(positions, MIN_INDICATOR_SEPARATION)) {
+      return distance;
+    }
+  }
+
+  // If we couldn't find separation, use max distance
+  return MAX_INDICATOR_DISTANCE;
+}
+
+/**
+ * Check if all pairs of positions are at least minSeparation apart
+ */
+function allPairsSeparated(
+  positions: { x: number; z: number }[],
+  minSeparation: number
+): boolean {
+  for (let i = 0; i < positions.length; i++) {
+    for (let j = i + 1; j < positions.length; j++) {
+      const dx = positions[i].x - positions[j].x;
+      const dz = positions[i].z - positions[j].z;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      if (dist < minSeparation) {
+        return false;
+      }
+    }
+  }
+  return true;
 }

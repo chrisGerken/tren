@@ -264,15 +264,20 @@ splice_N_b  (from split point to original 'out')
 Virtual switches (connection points with multiple connections) are visually indicated with colored dots positioned along the outgoing tracks.
 
 **Design decisions:**
-- Indicators are placed at a fixed distance along each outgoing track (3.0 inches)
+- All indicators at a switch are placed at the same distance from the connection point
+- The distance is the minimum where all indicators are at least 4.0 inches apart
+- Search starts at 0.25 inches and increments by 0.25 inches up to 30 inches max
 - First connection (index 0) is selected by default
 - Green dot indicates selected route, red dots indicate unselected routes
-- Position is calculated by walking along the track's spline from the connection point
+- Position is calculated by walking along each track's spline from the connection point
 - For 'in' connections, position is measured from start of spline; for 'out', from end
 
 **Implementation:**
 - `renderSwitchIndicators()` renders indicators for virtual switches
-- `calculateIndicatorPosition()` computes world position along track spline
+- `buildCurveInfo()` builds spline curve data for each connected track
+- `findOptimalIndicatorDistance()` searches for minimum distance with adequate separation
+- `allPairsSeparated()` checks if all indicator pairs meet separation threshold
+- `getPositionAtDistance()` computes world position along track spline
 - `selectedRoutes` Map tracks which route is selected at each switch point
 - Key format: `${pieceId}.${pointName}`, value: selected connection index
 
