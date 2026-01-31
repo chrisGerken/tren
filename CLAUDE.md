@@ -111,3 +111,19 @@ Detailed specifications in `docs/`:
 - `technical-decisions.md` - Technology choices
 
 **Archived:** `ARCHIVED_SWITCHES.md` contains historical documentation for physical switch archetypes that were replaced by the virtual switch approach.
+
+## Commit Requirements
+
+**Before any commit**, update all relevant documentation files (`.md` and `.html`) with:
+- **Design decisions**: Why a particular approach was chosen, trade-offs considered
+- **Implementation details**: Tolerances, thresholds, algorithms, data structures
+- **Session context**: What problem was being solved, constraints that influenced the solution
+
+Key documentation files to consider updating:
+- `docs/technical-decisions.md` - Design rationale and implementation choices
+- `docs/layout-dsl.md` - DSL syntax and behavior
+- `docs/architecture.md` - Data model changes
+- `layouts/samples.txt` - Grammar reference and examples
+- `dsl-help.html` - User-facing DSL reference
+
+This ensures the codebase remains self-documenting and future developers (human or AI) can understand not just what the code does, but why it was built that way.
