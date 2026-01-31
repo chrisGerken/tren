@@ -427,7 +427,7 @@ A simulation-wide toggle switches between showing blue/yellow distinction or all
 
 These indicators apply to all virtual switches, whether created explicitly or via auto-connect.
 
-**Interaction:** Clicking a red dot selects that route—the red dot turns green, the previous green dot turns red, and subsequent trains follow the new route.
+**Interaction:** Clicking any indicator (green or red) selects that route—the clicked indicator turns green, all other indicators turn red. The status bar shows which switch was toggled. When train simulation is implemented, trains will follow the selected route.
 
 ### Example: Simple Circle
 

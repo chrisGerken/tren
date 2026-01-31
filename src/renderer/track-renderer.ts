@@ -36,6 +36,14 @@ function getSelectedRoute(pieceId: string, pointName: string): number {
 }
 
 /**
+ * Set the selected route for a switch point
+ */
+export function setSelectedRoute(pieceId: string, pointName: string, connectionIndex: number): void {
+  const key = `${pieceId}.${pointName}`;
+  selectedRoutes.set(key, connectionIndex);
+}
+
+/**
  * Render a complete layout
  */
 export function renderLayout(scene: TrackScene, layout: Layout): void {
@@ -322,12 +330,30 @@ function renderBumperStopWorld(
 ): THREE.Mesh {
   const section = archetype.sections[0];
   let worldPos: THREE.Vector3;
+  let tangentAngle = piece.rotation;
 
   if (!section || section.splinePoints.length < 2) {
     worldPos = toWorld({ x: 0, y: 0, z: 0 });
   } else {
+    // Get position at end of track
     const endPoint = section.splinePoints[section.splinePoints.length - 1];
     worldPos = toWorld(endPoint);
+
+    // Calculate tangent direction at end of spline (from second-to-last to last point)
+    const p1 = section.splinePoints[section.splinePoints.length - 2];
+    const p2 = section.splinePoints[section.splinePoints.length - 1];
+    const localTangent = { x: p2.x - p1.x, z: p2.z - p1.z };
+
+    // Transform tangent to world coordinates (rotation only, not translation)
+    const cos = Math.cos(piece.rotation);
+    const sin = Math.sin(piece.rotation);
+    const worldTangent = {
+      x: localTangent.x * cos - localTangent.z * sin,
+      z: localTangent.x * sin + localTangent.z * cos,
+    };
+
+    // Bumper should be perpendicular to tangent
+    tangentAngle = Math.atan2(worldTangent.z, worldTangent.x);
   }
 
   const geometry = new THREE.BoxGeometry(0.5, 1, 2);
@@ -335,7 +361,10 @@ function renderBumperStopWorld(
 
   const mesh = new THREE.Mesh(geometry, material);
   mesh.position.set(worldPos.x, 0.5, worldPos.z);
-  mesh.rotation.y = piece.rotation;
+  // Rotate bumper perpendicular to track direction
+  // The box's long axis (Z) should be perpendicular to the tangent
+  // Negate because Three.js Y rotation is opposite to our coordinate system convention
+  mesh.rotation.y = -tangentAngle;
 
   return mesh;
 }
@@ -398,6 +427,14 @@ function renderSwitchIndicators(
     const material = new THREE.MeshBasicMaterial({ color });
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.set(pos.x, 0.7, pos.z);
+
+    // Store metadata for click handling
+    mesh.userData = {
+      isSwitchIndicator: true,
+      pieceId: piece.id,
+      pointName: pointName,
+      connectionIndex: i,
+    };
 
     indicators.push(mesh);
   }

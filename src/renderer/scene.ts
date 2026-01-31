@@ -5,6 +5,9 @@
 import * as THREE from 'three';
 import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 
+// Callback type for switch indicator clicks
+export type SwitchClickCallback = (pieceId: string, pointName: string, connectionIndex: number) => void;
+
 export class TrackScene {
   scene: THREE.Scene;
   camera: THREE.OrthographicCamera;
@@ -13,6 +16,9 @@ export class TrackScene {
   private container: HTMLElement;
   private trackGroup: THREE.Group;
   private labelGroup: THREE.Group;
+  private raycaster: THREE.Raycaster;
+  private mouse: THREE.Vector2;
+  private onSwitchClick?: SwitchClickCallback;
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -70,8 +76,50 @@ export class TrackScene {
     gridHelper.rotation.x = 0; // Already horizontal
     this.scene.add(gridHelper);
 
+    // Initialize raycaster for click detection
+    this.raycaster = new THREE.Raycaster();
+    this.mouse = new THREE.Vector2();
+
+    // Handle click events for switch indicators
+    this.renderer.domElement.addEventListener('click', (event) => this.onClick(event));
+
     // Handle window resize
     window.addEventListener('resize', () => this.onResize());
+  }
+
+  /**
+   * Set callback for switch indicator clicks
+   */
+  setSwitchClickCallback(callback: SwitchClickCallback): void {
+    this.onSwitchClick = callback;
+  }
+
+  /**
+   * Handle click events
+   */
+  private onClick(event: MouseEvent): void {
+    // Calculate mouse position in normalized device coordinates (-1 to +1)
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+    // Update raycaster
+    this.raycaster.setFromCamera(this.mouse, this.camera);
+
+    // Find intersections with track group
+    const intersects = this.raycaster.intersectObjects(this.trackGroup.children, true);
+
+    // Check if we clicked a switch indicator
+    for (const intersect of intersects) {
+      const userData = intersect.object.userData;
+      if (userData && userData.isSwitchIndicator) {
+        // Only respond to clicks on non-selected (red) indicators
+        if (this.onSwitchClick) {
+          this.onSwitchClick(userData.pieceId, userData.pointName, userData.connectionIndex);
+        }
+        break;
+      }
+    }
   }
 
   private onResize(): void {

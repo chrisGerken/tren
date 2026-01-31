@@ -281,8 +281,14 @@ Virtual switches (connection points with multiple connections) are visually indi
 - `selectedRoutes` Map tracks which route is selected at each switch point
 - Key format: `${pieceId}.${pointName}`, value: selected connection index
 
+**Click interaction:**
+- Click any switch indicator (red or green) to select that route
+- `TrackScene` uses raycasting to detect clicks on indicator meshes
+- Each indicator mesh stores `userData` with `pieceId`, `pointName`, `connectionIndex`
+- Click callback updates `selectedRoutes` and triggers re-render
+- Status bar shows which switch was toggled
+
 **Future work:**
-- Click interaction to toggle selected route (click red to make green)
 - Integration with train routing logic
 
 ## Open Questions

@@ -5,8 +5,9 @@
 import { open } from '@tauri-apps/api/dialog';
 import { readTextFile } from '@tauri-apps/api/fs';
 import { TrackScene } from './renderer/scene';
-import { renderLayout } from './renderer/track-renderer';
+import { renderLayout, setSelectedRoute } from './renderer/track-renderer';
 import { buildLayout } from './parser/builder';
+import { Layout } from './core/types';
 import './style.css';
 
 // Initialize scene
@@ -17,6 +18,18 @@ if (!container) {
 
 const scene = new TrackScene(container);
 const statusEl = document.getElementById('status');
+
+// Track current layout for re-rendering after switch clicks
+let currentLayout: Layout | null = null;
+
+// Set up switch click callback
+scene.setSwitchClickCallback((pieceId, pointName, connectionIndex) => {
+  setSelectedRoute(pieceId, pointName, connectionIndex);
+  if (currentLayout) {
+    renderLayout(scene, currentLayout);
+    setStatus(`Switch toggled: ${pieceId}.${pointName} → route ${connectionIndex + 1}`);
+  }
+});
 
 function setStatus(message: string): void {
   if (statusEl) {
@@ -50,6 +63,7 @@ async function importLayout(): Promise<void> {
 
     setStatus('Parsing layout...');
     const layout = buildLayout(content);
+    currentLayout = layout;
 
     setStatus(`Rendering ${layout.pieces.length} pieces...`);
     renderLayout(scene, layout);
@@ -81,6 +95,7 @@ document.addEventListener('paste', async (e) => {
     try {
       setStatus('Parsing pasted layout...');
       const layout = buildLayout(text);
+      currentLayout = layout;
       renderLayout(scene, layout);
       setStatus(`Layout loaded from clipboard: ${layout.pieces.length} pieces`);
     } catch (error) {
