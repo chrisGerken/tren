@@ -49,6 +49,8 @@ export interface TrackPiece {
 
 /** Layout (root container) */
 export interface Layout {
+  title?: string;        // Layout title for UI (default: "Simulador de Tren")
+  description?: string;  // Layout description (concatenated from all description statements)
   pieces: TrackPiece[];
 }
 

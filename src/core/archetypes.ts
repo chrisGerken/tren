@@ -5,6 +5,9 @@
 
 import { TrackArchetype, vec2, Vec3 } from './types';
 
+// Re-export TrackArchetype for convenience
+export type { TrackArchetype };
+
 /**
  * Generate points along a circular arc for left curves
  * @param radius - curve radius in inches
@@ -280,11 +283,33 @@ for (const archetype of archetypes) {
   }
 }
 
+/** Runtime archetype registry for dynamically created archetypes (e.g., from splice) */
+const runtimeArchetypes = new Map<string, TrackArchetype>();
+
+/**
+ * Register a dynamically created archetype at runtime
+ */
+export function registerRuntimeArchetype(archetype: TrackArchetype): void {
+  runtimeArchetypes.set(archetype.code, archetype);
+}
+
+/**
+ * Clear all runtime archetypes (useful for tests or reloading layouts)
+ */
+export function clearRuntimeArchetypes(): void {
+  runtimeArchetypes.clear();
+}
+
 /**
  * Get an archetype by code or alias
+ * Checks runtime archetypes first, then static archetypes
  * @throws Error if archetype not found
  */
 export function getArchetype(codeOrAlias: string): TrackArchetype {
+  // Check runtime archetypes first (for dynamically created ones like splice results)
+  const runtime = runtimeArchetypes.get(codeOrAlias);
+  if (runtime) return runtime;
+
   const archetype = archetypeByCode.get(codeOrAlias) || archetypeByAlias.get(codeOrAlias);
   if (!archetype) {
     throw new Error(`Unknown track archetype: ${codeOrAlias}`);

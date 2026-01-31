@@ -9,13 +9,17 @@ export type Statement =
   | NewStatement
   | PieceStatement
   | ReferenceStatement
-  | LoopCloseStatement;
+  | LoopCloseStatement
+  | TitleStatement
+  | DescriptionStatement
+  | SpliceStatement;
 
 export interface NewStatement {
   type: 'new';
   degrees: number;
-  fromLabel?: string;   // Optional: start from this labeled piece
-  fromPoint?: string;   // Optional: which connection point (default 'out')
+  offset: number;       // Offset distance along direction (default 0)
+  baseLabel?: string;   // Optional: start from this labeled piece
+  basePoint?: string;   // Optional: which connection point (default 'out')
   line: number;
 }
 
@@ -39,6 +43,25 @@ export interface LoopCloseStatement {
   type: 'loopClose';
   point: string;
   label: string;
+  line: number;
+}
+
+export interface TitleStatement {
+  type: 'title';
+  text: string;
+  line: number;
+}
+
+export interface DescriptionStatement {
+  type: 'description';
+  text: string;
+  line: number;
+}
+
+export interface SpliceStatement {
+  type: 'splice';
+  label?: string;   // Optional: if not provided, use current piece
+  point?: string;   // Connection point, default 'out'
   line: number;
 }
 
@@ -79,6 +102,15 @@ class Parser {
       case TokenType.NEW:
         return this.parseNewStatement();
 
+      case TokenType.TITLE:
+        return this.parseTitleStatement();
+
+      case TokenType.DESCRIPTION:
+        return this.parseDescriptionStatement();
+
+      case TokenType.SPLICE:
+        return this.parseSpliceStatement();
+
       case TokenType.LABEL_DEF:
         return this.parseLabeledPiece();
 
@@ -105,43 +137,128 @@ class Parser {
     const token = this.advance(); // consume 'new'
 
     let degrees = 0;
-    let fromLabel: string | undefined;
-    let fromPoint: string | undefined;
+    let offset = 0;
+    let baseLabel: string | undefined;
+    let basePoint: string | undefined;
 
-    // Check for optional degrees
-    if (this.check(TokenType.NUMBER)) {
-      degrees = parseFloat(this.advance().value);
+    // Parse modifiers in any order
+    while (this.isNewModifier()) {
+      if (this.check(TokenType.DEGREES)) {
+        this.advance(); // consume 'degrees'
+        if (this.check(TokenType.NUMBER)) {
+          degrees = parseFloat(this.advance().value);
+        }
+      } else if (this.check(TokenType.OFFSET)) {
+        this.advance(); // consume 'offset'
+        if (this.check(TokenType.NUMBER)) {
+          offset = parseFloat(this.advance().value);
+        }
+      } else if (this.check(TokenType.BASE)) {
+        this.advance(); // consume 'base'
+        const ref = this.parseConnectionPointRef();
+        if (ref) {
+          baseLabel = ref.label;
+          basePoint = ref.point;
+        }
+      } else if (this.check(TokenType.NUMBER)) {
+        // Legacy: bare number is degrees
+        degrees = parseFloat(this.advance().value);
+      } else if (this.check(TokenType.IDENTIFIER) && this.peek().value === 'from') {
+        // Legacy: 'from $label.point'
+        this.advance(); // consume 'from'
+        const ref = this.parseConnectionPointRef();
+        if (ref) {
+          baseLabel = ref.label;
+          basePoint = ref.point;
+        }
+      } else if (this.check(TokenType.LABEL_REF)) {
+        // Legacy: '$label.point' without 'base'
+        const ref = this.parseConnectionPointRef();
+        if (ref) {
+          baseLabel = ref.label;
+          basePoint = ref.point;
+        }
+      } else {
+        break;
+      }
     }
 
-    // Check for optional 'from' keyword (skip it if present)
-    if (this.check(TokenType.IDENTIFIER) && this.peek().value === 'from') {
-      this.advance(); // consume 'from'
-    }
+    return { type: 'new', degrees, offset, baseLabel, basePoint, line: token.line };
+  }
 
-    // Check for $label.point syntax
+  private isNewModifier(): boolean {
+    const type = this.peek().type;
+    const value = this.peek().value;
+    return (
+      type === TokenType.DEGREES ||
+      type === TokenType.OFFSET ||
+      type === TokenType.BASE ||
+      type === TokenType.NUMBER ||
+      type === TokenType.LABEL_REF ||
+      (type === TokenType.IDENTIFIER && value === 'from') ||
+      (type === TokenType.IDENTIFIER && this.peekNext()?.type === TokenType.DOT)
+    );
+  }
+
+  private parseConnectionPointRef(): { label: string; point?: string } | null {
+    // Handle: $label, $label.point, point.$label
     if (this.check(TokenType.LABEL_REF)) {
-      fromLabel = this.advance().value;
-
-      // Check for .point
+      const label = this.advance().value;
+      let point: string | undefined;
       if (this.check(TokenType.DOT)) {
         this.advance(); // consume dot
         if (this.check(TokenType.IDENTIFIER)) {
-          fromPoint = this.advance().value;
+          point = this.advance().value;
         }
       }
-    }
-    // Check for point.$label syntax (alternative ordering)
-    // Only consume if we see IDENTIFIER followed by DOT followed by LABEL_REF
-    else if (this.check(TokenType.IDENTIFIER) && this.peekNext()?.type === TokenType.DOT) {
-      const firstIdent = this.advance().value;
+      return { label, point };
+    } else if (this.check(TokenType.IDENTIFIER) && this.peekNext()?.type === TokenType.DOT) {
+      // point.$label syntax
+      const point = this.advance().value;
       this.advance(); // consume dot
       if (this.check(TokenType.LABEL_REF)) {
-        fromPoint = firstIdent;  // First identifier was the point
-        fromLabel = this.advance().value;
+        const label = this.advance().value;
+        return { label, point };
       }
     }
+    return null;
+  }
 
-    return { type: 'new', degrees, fromLabel, fromPoint, line: token.line };
+  private parseTitleStatement(): TitleStatement {
+    const token = this.advance(); // consume 'title'
+    let text = '';
+    if (this.check(TokenType.STRING)) {
+      text = this.advance().value;
+    }
+    return { type: 'title', text, line: token.line };
+  }
+
+  private parseDescriptionStatement(): DescriptionStatement {
+    const token = this.advance(); // consume 'description'
+    let text = '';
+    if (this.check(TokenType.STRING)) {
+      text = this.advance().value;
+    }
+    return { type: 'description', text, line: token.line };
+  }
+
+  private parseSpliceStatement(): SpliceStatement {
+    const token = this.advance(); // consume 'splice'
+
+    // Optional 'using' keyword
+    if (this.check(TokenType.USING)) {
+      this.advance();
+    }
+
+    // Parse optional connection point reference
+    const ref = this.parseConnectionPointRef();
+
+    return {
+      type: 'splice',
+      label: ref?.label,
+      point: ref?.point,
+      line: token.line,
+    };
   }
 
   private parseLabeledPiece(): PieceStatement {

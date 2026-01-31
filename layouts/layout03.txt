@@ -1,0 +1,20 @@
+title Sample with Splice Statement
+description An example of how to use the splice statement to create parallel tracks with switches
+
+str
+
+ph1: str
+
+str * 8 
+
+bump; 
+
+$ph1.out
+crvl
+crvr
+str * 2
+crvr
+crvl
+
+splice
+

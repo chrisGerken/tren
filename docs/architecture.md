@@ -16,6 +16,11 @@ Layout
 
 The root container for the entire simulation.
 
+**Properties**:
+- `title`: Display name for the layout (default: "Simulador de Tren")
+- `description`: Optional longer description of the layout
+- `pieces`: Array of all track pieces in the layout
+
 **Responsibilities**:
 - Owns all layout sections
 - Global coordinate system

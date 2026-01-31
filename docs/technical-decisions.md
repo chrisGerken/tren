@@ -172,6 +172,93 @@ bump
 
 A folder of static web files that Tauri packages into the executable.
 
+## DSL Enhancements
+
+### Layout Metadata (Title and Description)
+
+Layouts can include metadata for UI display:
+
+```
+title My Railroad
+description A simple oval with passing siding.
+```
+
+**Design decisions:**
+- Title defaults to "Simulador de Tren" if not specified
+- Only one title statement allowed per layout (error if duplicate)
+- Multiple description statements are concatenated with spaces
+- Metadata is stored in the `Layout` interface and available for UI display
+
+**Implementation:**
+- Lexer captures everything after `title` or `description` keyword as a single STRING token
+- Parser creates `TitleStatement` and `DescriptionStatement` AST nodes
+- Builder collects and validates metadata, returns in final `Layout` object
+
+### Enhanced `new` Statement
+
+The `new` statement supports flexible modifiers in any order:
+
+```
+new degrees 45 offset 10 base $junction.out
+```
+
+**Design decisions:**
+- Modifiers (`degrees`, `offset`, `base`) can appear in any order
+- All modifiers are optional with sensible defaults (0, 0, origin)
+- Legacy syntax (`new 45`, `new from $label`) remains supported for backward compatibility
+- `offset` is measured along the resulting direction (base direction + degrees rotation)
+
+**Implementation:**
+- Parser uses a loop to consume modifiers in any order
+- Each modifier keyword is a distinct token type
+- `parseConnectionPointRef()` helper handles `$label.point` and `point.$label` syntax
+
+### Splice Statement
+
+The `splice` statement enables creating passing sidings without precise length calculations:
+
+```
+crvl ; str x 4 ; crvr ; crvl ; splice
+```
+
+**Design decisions:**
+- Splice finds where a connection point falls on an existing track piece
+- The target track piece is split into two pieces at the intersection point
+- Auto-connect then joins the splice point to the new connection point
+- If no label is provided, uses the current piece's current connection point
+- Non-fatal on failure: logs warning, labels piece "can't splice", continues rendering
+
+**Tolerances:**
+- **Position tolerance**: 2.0 inches (distance from splice point to track spline)
+- **Angle tolerance**: None for splice (auto-connect handles direction matching later)
+
+**Implementation:**
+- Splices are collected during parsing but executed after all pieces are placed
+- Processing order: Parse → Build pieces → Process splices → Auto-connect
+- Uses linear interpolation to find closest point on track splines
+- Creates dynamic "runtime archetypes" for the split pieces
+- Dynamic archetypes are registered in a separate runtime registry
+
+### Runtime Archetypes
+
+When a track piece is split by splice, two new archetypes are created dynamically:
+
+```
+splice_N_a  (from original 'in' to split point)
+splice_N_b  (from split point to original 'out')
+```
+
+**Design decisions:**
+- Runtime archetypes are stored separately from static archetypes
+- `getArchetype()` checks runtime registry first, then static registry
+- Spline points are interpolated from the original piece's spline
+- Connection points are computed at the split location with proper tangent direction
+
+**Implementation:**
+- `registerRuntimeArchetype()` adds to runtime Map
+- `clearRuntimeArchetypes()` clears for tests or layout reload
+- Split pieces maintain the same world position/rotation as original
+
 ## Open Questions
 
 These will be addressed in user scenario discussions:

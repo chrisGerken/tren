@@ -6,6 +6,29 @@ This document describes the domain-specific language (DSL) for defining track la
 
 Layout files are plain text. Blank lines are ignored. Comments begin with `#`.
 
+## Metadata Statements
+
+### Title
+
+The `title` statement provides a short name for the layout, used in the UI for labeling:
+
+```
+title My Railroad Layout
+```
+
+Only one title statement is allowed per layout. If no title is specified, the default is "Simulador de Tren".
+
+### Description
+
+The `description` statement provides additional information about the layout:
+
+```
+description A simple oval with passing siding.
+description Created for testing virtual switches.
+```
+
+Multiple description statements are allowed and will be concatenated with spaces.
+
 ### Statement Separators
 
 Multiple statements can be placed on one line, separated by semicolons. Semicolons are not required after the last or only statement on a line.
@@ -40,20 +63,34 @@ str ; crvl   # Comment after multiple statements
 
 ### Starting a New Track Segment
 
-The `new` statement begins a new track segment:
+The `new` statement begins a new track segment. It supports flexible modifiers that can appear in any order:
 
 ```
-new                     # Start new segment at origin, 0° rotation
-new 45                  # Start new segment at origin, rotated 45°
-new from $label         # Start new segment from label's 'out' point
-new from $label.in      # Start new segment from label's 'in' point
-new $label.out          # Same as above ('from' is optional)
-new from out.$label     # Alternative ordering (point.$label)
+new                              # Start at origin, 0° rotation
+new degrees 45                   # Start at origin, rotated 45°
+new base $label                  # Start from label's 'out' point
+new base $label.in               # Start from label's 'in' point
+new offset 10                    # Start 10 units forward from origin
+new degrees 90 base $junction    # Start from junction, rotated 90° from its direction
+new offset 5 degrees 45 base $start.out   # All modifiers combined
+```
+
+**Modifiers:**
+- `degrees DEG` - Rotation in degrees (relative to base direction, or absolute if no base)
+- `offset DIST` - Distance along the direction to offset the starting point
+- `base REF` - Connection point reference to start from (e.g., `$label` or `$label.point`)
+
+**Legacy syntax** (still supported for backward compatibility):
+```
+new 45                  # Same as: new degrees 45
+new from $label         # Same as: new base $label
+new from $label.in      # Same as: new base $label.in
+new $label.out          # Same as: new base $label.out
 ```
 
 The next track piece placed after `new` will:
 - Start at the specified position and rotation
-- Connect to the labeled piece if `from $label` was specified
+- Connect to the labeled piece if `base $label` was specified
 
 An implicit `new 0` is assumed at the beginning of every layout specification, so it's only required when:
 - Starting additional unconnected segments
@@ -286,6 +323,72 @@ crvl x 16               # Full circle of curves
 > in.$start             # Close the loop: connect back to start's input
 ```
 
+## Splice
+
+The `splice` statement solves a common problem when creating passing tracks or sidings: when a diverging track curves back to rejoin the main line, the merge point often falls between connection points on the main line track pieces.
+
+### Syntax
+
+```
+splice                        # Split track at current connection point
+splice $label.point           # Split track at the labeled point's position
+splice using $label.point     # Same as above ('using' is optional)
+```
+
+### How It Works
+
+1. The splice statement specifies a connection point (e.g., `$merge.out`) that should connect to an existing track
+2. The system finds the track piece that the connection point falls on (even if there's no connection point there)
+3. That track piece is split into two pieces at the splice location
+4. A new connection point is created at the split, enabling auto-connect to create a virtual switch
+
+### Example: Passing Siding
+
+```
+# Main line
+str x 2
+main: str x 8            # This will be spliced
+str x 2
+bump
+
+# Passing track diverges from main
+$main.in
+crvl                     # Diverge left
+str x 4                  # Parallel section
+crvr                     # Curve back toward main
+crvl                     # Rejoin angle
+splice                   # Splice at current position into main line
+```
+
+Or with an explicit label:
+
+```
+$main.in
+crvl ; str x 4 ; crvr
+merge: crvl
+splice $merge.out        # Same effect, using labeled piece
+```
+
+Without splice, you would need to calculate exact piece lengths to ensure the merge point lands precisely on a connection point. With splice, the straight piece is automatically split at the correct location.
+
+### Tolerances and Error Handling
+
+**Position tolerance**: 2.0 inches. The splice point must be within 2 inches of a track spline to be considered "on" that track.
+
+**Angle tolerance**: None. Splice does not check direction—it simply finds where the point falls on a track. The subsequent auto-connect phase handles direction matching.
+
+**Failure behavior**: If no track is found within tolerance:
+- A warning is logged to the console with the splice point coordinates
+- The piece is labeled "can't splice" for visual debugging
+- The layout continues to render (non-fatal error)
+
+### Limitations
+
+- Splice should only be used on track pieces within the same layout section
+- The splice point must fall on a track piece's spline (within tolerance)
+- Works best with straight pieces; curved pieces may have less precise results
+- The target track must have 'in' and 'out' connection points (crossings not supported)
+
 ## Auto-Connect
 
 After a layout is fully specified, **auto-connect** scans all connection points on all track pieces and automatically joins any two that are close enough with opposite directions.
@@ -302,11 +405,11 @@ This automatically creates virtual switches wherever tracks meet. A single conne
 
 ### Tolerance
 
-Auto-connect uses configurable tolerances for matching:
-- **Position tolerance**: Connection points within a small distance are considered "at the same position"
-- **Direction tolerance**: Directions within a small angle of 180° are considered "opposite"
+Auto-connect uses the following tolerances for matching:
+- **Position tolerance**: 0.5 inches. Connection points within 0.5" are considered "at the same position"
+- **Direction tolerance**: 0.1 dot product (~174°). Directions with dot product < -0.9 are considered "opposite"
 
-This allows connections even when accumulated errors from curves and straights cause slight misalignment. The specific tolerance values are configurable and not yet determined.
+This allows connections even when accumulated errors from curves and straights cause slight misalignment.
 
 ### Visual Indicators
 

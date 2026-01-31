@@ -9,6 +9,10 @@
 # DSL GRAMMAR SUMMARY
 # =============================================================================
 #
+# METADATA:
+#   title TEXT             Layout title for UI display (max one, default: "Simulador de Tren")
+#   description TEXT       Layout description (multiple allowed, concatenated)
+#
 # BASIC SYNTAX:
 #   piece                  Place a track piece (connects in->previous, out->next)
 #   piece x N              Place N consecutive pieces (also: piece * N)
@@ -29,12 +33,17 @@
 #   tun, tunnel                     Visibility toggle (hides track/trains)
 #   flex                            Flex track
 #
-# SEGMENT CONTROL:
-#   new                    Start new unconnected segment at 0 degrees
-#   new DEGREES            Start new segment at specified rotation
+# SEGMENT CONTROL (new statement with flexible modifiers):
+#   new                             Start at origin, 0 degrees
+#   new degrees DEG                 Start at origin with rotation
+#   new base $label.point           Start from connection point
+#   new offset DIST                 Offset distance along direction
+#   new degrees DEG offset DIST base $label.point   Full syntax (any order)
+#
+# LEGACY NEW SYNTAX (still supported):
+#   new DEGREES            Start at origin with rotation
 #   new from $label        Start from label's 'out' point
 #   new from $label.point  Start from specific connection point
-#   new $label.point       Same as above ('from' is optional)
 #
 # REFERENCES AND BRANCHING:
 #   $label                 Reference labeled piece (defaults to .out)
@@ -51,9 +60,18 @@
 #   > point.$label         Connect current output to labeled piece's input
 #   > in.$label            Common form: close loop to label's input
 #
+# SPLICE (for creating passing tracks):
+#   splice                 Split track at current connection point
+#   splice $label.point    Split track at labeled point, create virtual switch
+#   splice using $label.point   Same as above ('using' is optional)
+#   - Position tolerance: 2.0 inches (splice point must be within 2" of track)
+#   - On failure: labels piece "can't splice" and continues (non-fatal)
+#
 # AUTO-CONNECT:
 #   Connection points at the same position with opposite directions
 #   are automatically connected after layout parsing.
+#   - Position tolerance: 0.5 inches
+#   - Direction tolerance: ~174 degrees (must be nearly opposite)
 #
 # =============================================================================
 
@@ -281,6 +299,115 @@
 # $j2.out
 # crvr x 3
 # str x 4
+# bump
+
+
+# =============================================================================
+# SAMPLE 15: Layout with Title and Description
+# =============================================================================
+# Demonstrates the title and description metadata statements.
+
+# title My First Layout
+# description This is a simple oval track for testing.
+# description Created to demonstrate the new metadata features.
+#
+# start: str x 6
+# crvl x 8
+# str x 6
+# crvl x 8
+# > in.$start
+
+
+# =============================================================================
+# SAMPLE 16: Enhanced New Statement
+# =============================================================================
+# Demonstrates the new flexible modifiers for the 'new' statement.
+# You can use degrees, offset, and base in any order.
+
+# # Main loop
+# loop: ph
+# crvl x 16
+#
+# # Siding using new with degrees and base
+# new degrees 0 base $loop.out
+# gen
+# str x 3
+#
+# # Another spur using offset to start away from connection point
+# new offset 5 base $loop.in
+# str x 2
+# bump
+
+
+# =============================================================================
+# SAMPLE 17: Passing Track with Splice
+# =============================================================================
+# Demonstrates the splice statement for creating passing sidings.
+# The splice automatically splits a straight piece to create a virtual switch.
+
+# # Main line
+# str x 2
+# main: str x 8            # This will be spliced
+# str x 2
+# bump
+#
+# # Passing track diverges from main
+# $main.in
+# crvl                     # Diverge left
+# str x 4                  # Parallel section
+# crvr                     # Curve back toward main
+# merge: crvl              # Rejoin angle
+#
+# # Splice creates junction where merge.out meets the main line
+# splice $merge.out
+
+
+# =============================================================================
+# SAMPLE 18: Complex Layout with All New Features
+# =============================================================================
+# A comprehensive example using title, description, enhanced new, and splice.
+
+# title Mountain Division
+# description A mountain railroad with passing sidings and a yard.
+# description Features automated train generation and multiple routes.
+#
+# # Main line from generator
+# gen
+# approach: str x 3
+#
+# # Mountain loop
+# loop_start: ph
+# crvl x 4
+# str x 6
+# crvl x 4
+# str x 4
+# crvl x 8
+# str x 6
+# > in.$loop_start
+#
+# # Passing siding using splice
+# $approach.out
+# str x 2
+# siding_start: crvl
+# str x 5
+# siding_end: crvr
+# splice $siding_end.out     # Splice into main line
+#
+# # Yard access from loop using offset
+# new degrees 90 offset 10 base $loop_start.out
+# str x 3
+# yard: ph
+# str x 4
+# bump
+#
+# $yard.out
+# crvl
+# str x 3
+# bump
+#
+# $yard.out
+# crvl x 2
+# str x 2
 # bump
 
 

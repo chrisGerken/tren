@@ -9,8 +9,16 @@ export enum TokenType {
   DOT = 'DOT',                 // .
   REPETITION = 'REPETITION',   // x or *
   NUMBER = 'NUMBER',           // numeric values
+  STRING = 'STRING',           // string content (for title/description)
   NEW = 'NEW',                 // new keyword
   LOOP_CLOSE = 'LOOP_CLOSE',   // >
+  TITLE = 'TITLE',             // title keyword
+  DESCRIPTION = 'DESCRIPTION', // description keyword
+  DEGREES = 'DEGREES',         // degrees keyword (for new statement)
+  OFFSET = 'OFFSET',           // offset keyword (for new statement)
+  BASE = 'BASE',               // base keyword (for new statement)
+  SPLICE = 'SPLICE',           // splice keyword
+  USING = 'USING',             // using keyword (optional for splice)
   EOF = 'EOF',
 }
 
@@ -157,10 +165,100 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
         continue;
       }
 
-      // Check for 'new' keyword
+      // Check for keywords
       if (value === 'new') {
         tokens.push({
           type: TokenType.NEW,
+          value: value,
+          line: lineNum,
+          column: startPos + 1,
+        });
+        continue;
+      }
+
+      if (value === 'title') {
+        tokens.push({
+          type: TokenType.TITLE,
+          value: value,
+          line: lineNum,
+          column: startPos + 1,
+        });
+        // Capture the rest of the statement as a STRING token
+        const rest = statement.substring(pos).trim();
+        if (rest.length > 0) {
+          tokens.push({
+            type: TokenType.STRING,
+            value: rest,
+            line: lineNum,
+            column: pos + 1,
+          });
+        }
+        return tokens; // Done with this statement
+      }
+
+      if (value === 'description') {
+        tokens.push({
+          type: TokenType.DESCRIPTION,
+          value: value,
+          line: lineNum,
+          column: startPos + 1,
+        });
+        // Capture the rest of the statement as a STRING token
+        const rest = statement.substring(pos).trim();
+        if (rest.length > 0) {
+          tokens.push({
+            type: TokenType.STRING,
+            value: rest,
+            line: lineNum,
+            column: pos + 1,
+          });
+        }
+        return tokens; // Done with this statement
+      }
+
+      if (value === 'degrees') {
+        tokens.push({
+          type: TokenType.DEGREES,
+          value: value,
+          line: lineNum,
+          column: startPos + 1,
+        });
+        continue;
+      }
+
+      if (value === 'offset') {
+        tokens.push({
+          type: TokenType.OFFSET,
+          value: value,
+          line: lineNum,
+          column: startPos + 1,
+        });
+        continue;
+      }
+
+      if (value === 'base') {
+        tokens.push({
+          type: TokenType.BASE,
+          value: value,
+          line: lineNum,
+          column: startPos + 1,
+        });
+        continue;
+      }
+
+      if (value === 'splice') {
+        tokens.push({
+          type: TokenType.SPLICE,
+          value: value,
+          line: lineNum,
+          column: startPos + 1,
+        });
+        continue;
+      }
+
+      if (value === 'using') {
+        tokens.push({
+          type: TokenType.USING,
           value: value,
           line: lineNum,
           column: startPos + 1,
