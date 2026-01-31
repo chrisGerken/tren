@@ -291,6 +291,27 @@ Virtual switches (connection points with multiple connections) are visually indi
 **Future work:**
 - Integration with train routing logic
 
+## Debug Logging
+
+Configurable debug logging is available for troubleshooting:
+
+- `DEBUG_LOGGING` constant in `src/renderer/track-renderer.ts` - logs switch route selection
+- `DEBUG_LOGGING` constant in `src/main.ts` - logs switch click callbacks and re-renders
+- `DEBUG_MODE` constant in `src/renderer/track-renderer.ts` - shows simplified debug view with connection points
+
+Set any of these to `true` to enable the respective logging.
+
+## Rendering Details
+
+**Bumper rotation:**
+- Bumper bar must be perpendicular to track direction at the endpoint
+- Rotation is calculated from the tangent of the last two spline points
+- The angle is negated when applied to `mesh.rotation.y` because Three.js Y rotation convention (clockwise from above) is opposite to our coordinate system (counter-clockwise)
+
+**Generator/Bin visuals:**
+- Generator: green circle, radius 4.5 inches (visible from distance)
+- Bin: red circle, radius 1.5 inches
+
 ## Open Questions
 
 These will be addressed in user scenario discussions:
