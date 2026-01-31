@@ -1,0 +1,292 @@
+# =============================================================================
+# TREN LAYOUT DSL - SAMPLES AND REFERENCE
+# =============================================================================
+#
+# This file contains sample layouts demonstrating the Layout DSL grammar.
+# Uncomment any section to try it (remove the leading # from each line).
+#
+# =============================================================================
+# DSL GRAMMAR SUMMARY
+# =============================================================================
+#
+# BASIC SYNTAX:
+#   piece                  Place a track piece (connects in->previous, out->next)
+#   piece x N              Place N consecutive pieces (also: piece * N)
+#   label: piece           Place and label a piece for later reference
+#   # comment              Comments (also inline after statements)
+#   stmt1 ; stmt2          Multiple statements per line (semicolon-separated)
+#
+# TRACK PIECE CODES:
+#   str, str9, str6, str3, str15    Straight sections (various lengths)
+#   crvl, crvl18, crvl22, crvl24    Left curves (various radii)
+#   crvr, crvr18, crvr22, crvr24    Right curves (various radii)
+#   crv                             Alias for crvl (default left curve)
+#   x90, x45                        Diamond crossings (90 or 45 degree)
+#   bump                            Buffer stop (end of track)
+#   ph, placeholder                 Zero-length junction point
+#   gen, generator                  Train source (click to spawn trains)
+#   bin                             Train sink (removes trains)
+#   tun, tunnel                     Visibility toggle (hides track/trains)
+#   flex                            Flex track
+#
+# SEGMENT CONTROL:
+#   new                    Start new unconnected segment at 0 degrees
+#   new DEGREES            Start new segment at specified rotation
+#   new from $label        Start from label's 'out' point
+#   new from $label.point  Start from specific connection point
+#   new $label.point       Same as above ('from' is optional)
+#
+# REFERENCES AND BRANCHING:
+#   $label                 Reference labeled piece (defaults to .out)
+#   $label.point           Reference specific connection point
+#   $label.in / $label.out Default connection points
+#   $label.in1 / $label.out1 / $label.in2 / $label.out2  Crossing points
+#
+# DIRECTION CONTROL:
+#   piece                  Attach piece.in to previous, continue from piece.out
+#   out.piece              Attach piece.out to previous, continue from piece.in
+#   in.piece               Same as just 'piece' (explicit default)
+#
+# LOOP CLOSURE:
+#   > point.$label         Connect current output to labeled piece's input
+#   > in.$label            Common form: close loop to label's input
+#
+# AUTO-CONNECT:
+#   Connection points at the same position with opposite directions
+#   are automatically connected after layout parsing.
+#
+# =============================================================================
+
+
+# =============================================================================
+# SAMPLE 1: Simple Circle
+# =============================================================================
+# The simplest closed loop - 16 left curves form a complete circle.
+# Auto-connect joins the end back to the beginning.
+
+# crvl x 16
+
+
+# =============================================================================
+# SAMPLE 2: Circle with Generator and Bin
+# =============================================================================
+# A circle with entry/exit points. Trains spawn at generator, run the circle,
+# and exit to the bin. Auto-connect creates virtual switches automatically.
+
+# gen ; str ; crvl x 16 ; str ; bin
+
+
+# =============================================================================
+# SAMPLE 3: Oval Track
+# =============================================================================
+# Classic oval: straights on the sides, curves at the ends.
+
+# start: str x 6
+# crvl x 8           # 180-degree turn
+# str x 6
+# crvl x 8           # 180-degree turn
+# > in.$start        # Close the loop
+
+
+# =============================================================================
+# SAMPLE 4: Simple Passing Siding
+# =============================================================================
+# Main line with a passing siding using virtual switches.
+# Placeholder (ph) creates a pure junction point.
+
+# junction: ph
+# str x 5           # Main route
+# bump
+#
+# $junction.out     # Branch from junction
+# crvl              # Diverge left
+# str x 4           # Parallel siding
+# crvr              # Curve back
+# bump
+
+
+# =============================================================================
+# SAMPLE 5: Wye Junction
+# =============================================================================
+# Y-shaped junction - two routes diverge from a single point.
+
+# base: ph
+# crvl x 4          # Left branch
+# str x 3
+# bump
+#
+# $base.out
+# crvr x 4          # Right branch
+# str x 3
+# bump
+
+
+# =============================================================================
+# SAMPLE 6: Three-Way Junction
+# =============================================================================
+# Three routes from a single point: left, straight, and right.
+
+# base: ph
+# str x 5           # Straight ahead
+# bump
+#
+# $base.out
+# crvl x 4          # Left branch
+# str x 3
+# bump
+#
+# $base.out
+# crvr x 4          # Right branch
+# str x 3
+# bump
+
+
+# =============================================================================
+# SAMPLE 7: Double-Track Main Line
+# =============================================================================
+# Two parallel tracks running in opposite directions.
+
+# new 0
+# str x 10
+# bump
+#
+# new 180           # Start facing opposite direction
+# str x 10
+# bump
+
+
+# =============================================================================
+# SAMPLE 8: Figure-8 with Crossing
+# =============================================================================
+# Figure-8 layout using a 90-degree diamond crossing.
+
+# start: str x 2
+# crvl x 4                  # First quarter turn
+# cross: x90                # Diamond crossing
+# crvl x 4                  # Complete first loop
+# str x 2
+# crvl x 8                  # Bottom curve
+# str x 2
+# crvr x 4                  # Approach crossing from other angle
+# $cross.in2                # Enter crossing on second track
+# crvr x 4
+# str x 2
+# crvr x 8                  # Top curve
+# > in.$start
+
+
+# =============================================================================
+# SAMPLE 9: Yard with Multiple Sidings
+# =============================================================================
+# Main line with a yard containing multiple parallel sidings.
+
+# main: ph
+# str x 8
+# bump
+#
+# $main.out
+# crvl
+# siding1: str x 6
+# bump
+#
+# $main.out
+# crvl x 2          # Tighter entry
+# siding2: str x 5
+# bump
+#
+# $main.out
+# crvl x 3          # Even tighter
+# siding3: str x 4
+# bump
+
+
+# =============================================================================
+# SAMPLE 10: Building Backwards
+# =============================================================================
+# Use out.piece syntax to build track backwards from a junction.
+# Useful when you want to extend track from the 'wrong' end.
+
+# junction: ph
+# crvl x 16         # Circle from junction.out
+#
+# $junction.in      # Go to junction's input side
+# out.str x 3       # Build backwards: attach str.out, continue from str.in
+# out.gen           # Generator at the end
+
+
+# =============================================================================
+# SAMPLE 11: Oval with Center Crossover
+# =============================================================================
+# Double-track oval with crossover connections.
+
+# # Outer oval
+# outer_start: str x 6
+# crvl x 8
+# outer_mid: str x 6
+# crvl x 8
+# > in.$outer_start
+#
+# # Inner oval (smaller)
+# new 0
+# inner_start: str x 4
+# crvl18 x 8        # Tighter radius curves
+# inner_mid: str x 4
+# crvl18 x 8
+# > in.$inner_start
+
+
+# =============================================================================
+# SAMPLE 12: Loop with Generator Entry
+# =============================================================================
+# Trains enter from a generator and run continuously on a loop.
+
+# entry: ph
+# crvl x 16         # Main loop
+#
+# new from out.$entry
+# gen               # Generator connects to loop entry
+
+
+# =============================================================================
+# SAMPLE 13: Tunnel Section
+# =============================================================================
+# Track passes through a tunnel (hidden section).
+
+# gen
+# str x 3
+# tun               # Enter tunnel
+# str x 5           # Track inside tunnel (hidden)
+# tun               # Exit tunnel
+# str x 3
+# bin
+
+
+# =============================================================================
+# SAMPLE 14: Complex Junction Network
+# =============================================================================
+# Multiple junctions connected together.
+
+# j1: ph
+# str x 3
+# j2: ph
+# str x 3
+# bump
+#
+# $j1.out
+# crvl x 3
+# str x 2
+# crvr x 3
+# > in.$j2          # Connect back to j2
+#
+# $j2.out
+# crvr x 3
+# str x 4
+# bump
+
+
+# =============================================================================
+# ACTIVE SAMPLE (uncomment to render)
+# =============================================================================
+# Simple test layout - a basic circle with generator and bin
+
+gen ; str x 2 ; crvl x 16 ; str x 2 ; bin
