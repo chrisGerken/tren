@@ -3,7 +3,7 @@
  */
 
 import * as THREE from 'three';
-import { TrackPiece, Layout } from '../core/types';
+import { TrackPiece, Layout, Connection } from '../core/types';
 import { getArchetype, TrackArchetype } from '../core/archetypes';
 import { TrackScene } from './scene';
 
@@ -14,9 +14,29 @@ const AUTO_CONNECT_COLOR = 0xffcc00;  // Yellow for auto-connected points
 const GENERATOR_COLOR = 0x22aa22;  // Green
 const BIN_COLOR = 0xcc2222;  // Red
 const BUMPER_COLOR = 0x444444;  // Dark gray
+const SWITCH_SELECTED_COLOR = 0x00ff00;  // Bright green for selected route
+const SWITCH_UNSELECTED_COLOR = 0xff0000;  // Red for unselected routes
+
+// Distance along track to place switch indicators (in inches)
+const SWITCH_INDICATOR_DISTANCE = 3.0;
 
 // Set to true to show simplified debug view
 const DEBUG_MODE = false;
+
+// Track selected routes for virtual switches
+// Key: "pieceId.pointName", Value: index of selected connection (0-based)
+const selectedRoutes = new Map<string, number>();
+
+/**
+ * Get or initialize the selected route for a switch point
+ */
+function getSelectedRoute(pieceId: string, pointName: string): number {
+  const key = `${pieceId}.${pointName}`;
+  if (!selectedRoutes.has(key)) {
+    selectedRoutes.set(key, 0); // Default to first connection
+  }
+  return selectedRoutes.get(key)!;
+}
 
 /**
  * Render a complete layout
@@ -24,11 +44,17 @@ const DEBUG_MODE = false;
 export function renderLayout(scene: TrackScene, layout: Layout): void {
   scene.clearLayout();
 
+  // Build a map for quick piece lookup
+  const pieceMap = new Map<string, TrackPiece>();
+  for (const piece of layout.pieces) {
+    pieceMap.set(piece.id, piece);
+  }
+
   for (const piece of layout.pieces) {
     const archetype = getArchetype(piece.archetypeCode);
     const group = DEBUG_MODE
       ? renderTrackPieceDebug(piece, archetype)
-      : renderTrackPiece(piece, archetype);
+      : renderTrackPiece(piece, archetype, pieceMap);
     scene.addTrackGroup(group);
 
     // Add label if piece has one
@@ -104,7 +130,11 @@ function renderTrackPieceDebug(piece: TrackPiece, archetype: TrackArchetype): TH
 /**
  * Render a single track piece using explicit world coordinates
  */
-function renderTrackPiece(piece: TrackPiece, archetype: TrackArchetype): THREE.Group {
+function renderTrackPiece(
+  piece: TrackPiece,
+  archetype: TrackArchetype,
+  pieceMap: Map<string, TrackPiece>
+): THREE.Group {
   const group = new THREE.Group();
 
   const cos = Math.cos(piece.rotation);
@@ -139,6 +169,20 @@ function renderTrackPiece(piece: TrackPiece, archetype: TrackArchetype): THREE.G
       const hasAutoConnect = connections.some(c => c.isAutoConnect);
       const cpMesh = renderConnectionPointWorld(worldPos, hasAutoConnect);
       group.add(cpMesh);
+
+      // Render switch indicators if this is a virtual switch (multiple connections)
+      if (connections.length > 1) {
+        const switchIndicators = renderSwitchIndicators(
+          piece,
+          cp.name,
+          worldPos,
+          connections,
+          pieceMap
+        );
+        for (const indicator of switchIndicators) {
+          group.add(indicator);
+        }
+      }
     }
   }
 
@@ -297,4 +341,95 @@ function renderBumperStopWorld(
   mesh.rotation.y = piece.rotation;
 
   return mesh;
+}
+
+/**
+ * Render switch indicators (green for selected route, red for others)
+ * Positioned along the outgoing tracks where they've visually separated
+ */
+function renderSwitchIndicators(
+  piece: TrackPiece,
+  pointName: string,
+  _worldPos: THREE.Vector3,
+  connections: Connection[],
+  pieceMap: Map<string, TrackPiece>
+): THREE.Mesh[] {
+  const indicators: THREE.Mesh[] = [];
+  const selectedIndex = getSelectedRoute(piece.id, pointName);
+
+  for (let i = 0; i < connections.length; i++) {
+    const connection = connections[i];
+    const connectedPiece = pieceMap.get(connection.pieceId);
+    if (!connectedPiece) continue;
+
+    const connectedArchetype = getArchetype(connectedPiece.archetypeCode);
+    if (!connectedArchetype || connectedArchetype.sections.length === 0) continue;
+
+    // Find the section connected to this point
+    const section = connectedArchetype.sections[0];
+    if (section.splinePoints.length < 2) continue;
+
+    // Calculate position along the connected track
+    const indicatorPos = calculateIndicatorPosition(
+      connectedPiece,
+      connectedArchetype,
+      connection.pointName,
+      SWITCH_INDICATOR_DISTANCE
+    );
+
+    if (!indicatorPos) continue;
+
+    // Create indicator sphere
+    const isSelected = i === selectedIndex;
+    const color = isSelected ? SWITCH_SELECTED_COLOR : SWITCH_UNSELECTED_COLOR;
+    const geometry = new THREE.SphereGeometry(0.35, 16, 16);
+    const material = new THREE.MeshBasicMaterial({ color });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.set(indicatorPos.x, 0.7, indicatorPos.z);
+
+    indicators.push(mesh);
+  }
+
+  return indicators;
+}
+
+/**
+ * Calculate indicator position along a track piece at a given distance from a connection point
+ */
+function calculateIndicatorPosition(
+  piece: TrackPiece,
+  archetype: TrackArchetype,
+  connectionPointName: string,
+  distance: number
+): { x: number; z: number } | null {
+  const section = archetype.sections[0];
+  if (!section || section.splinePoints.length < 2) return null;
+
+  // Build the spline curve in world coordinates
+  const cos = Math.cos(piece.rotation);
+  const sin = Math.sin(piece.rotation);
+
+  const toWorld = (local: { x: number; y: number; z: number }): THREE.Vector3 => {
+    return new THREE.Vector3(
+      piece.position.x + (local.x * cos - local.z * sin),
+      local.y,
+      piece.position.z + (local.x * sin + local.z * cos)
+    );
+  };
+
+  const worldPoints = section.splinePoints.map(p => toWorld(p));
+  const curve = new THREE.CatmullRomCurve3(worldPoints);
+  const curveLength = curve.getLength();
+
+  if (curveLength === 0) return null;
+
+  // Determine direction based on connection point
+  // If connecting via 'in', we travel from start; if 'out', we travel from end
+  const isFromIn = connectionPointName === 'in' || connectionPointName === 'in1';
+  const t = isFromIn
+    ? Math.min(distance / curveLength, 1.0)
+    : Math.max(1.0 - distance / curveLength, 0.0);
+
+  const point = curve.getPointAt(t);
+  return { x: point.x, z: point.z };
 }

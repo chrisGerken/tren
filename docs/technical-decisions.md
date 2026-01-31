@@ -259,6 +259,27 @@ splice_N_b  (from split point to original 'out')
 - `clearRuntimeArchetypes()` clears for tests or layout reload
 - Split pieces maintain the same world position/rotation as original
 
+## Switch Indicators
+
+Virtual switches (connection points with multiple connections) are visually indicated with colored dots positioned along the outgoing tracks.
+
+**Design decisions:**
+- Indicators are placed at a fixed distance along each outgoing track (3.0 inches)
+- First connection (index 0) is selected by default
+- Green dot indicates selected route, red dots indicate unselected routes
+- Position is calculated by walking along the track's spline from the connection point
+- For 'in' connections, position is measured from start of spline; for 'out', from end
+
+**Implementation:**
+- `renderSwitchIndicators()` renders indicators for virtual switches
+- `calculateIndicatorPosition()` computes world position along track spline
+- `selectedRoutes` Map tracks which route is selected at each switch point
+- Key format: `${pieceId}.${pointName}`, value: selected connection index
+
+**Future work:**
+- Click interaction to toggle selected route (click red to make green)
+- Integration with train routing logic
+
 ## Open Questions
 
 These will be addressed in user scenario discussions:

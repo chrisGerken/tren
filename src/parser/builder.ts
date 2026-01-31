@@ -304,7 +304,7 @@ class LayoutBuilder {
 
       const continueDir = this.rotatePoint(continuePoint.direction, pieceRotation);
       this.state.currentRotation = Math.atan2(continueDir.z, continueDir.x);
-      this.state.currentPointName = continuePointName;
+      this.state.currentPointName = continuePointName!; // Non-null: continuePoint implies continuePointName is defined
     }
 
     return piece;
