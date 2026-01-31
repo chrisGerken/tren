@@ -10,6 +10,9 @@ import { buildLayout } from './parser/builder';
 import { Layout } from './core/types';
 import './style.css';
 
+// Set to true to enable console logging for debugging
+const DEBUG_LOGGING = false;
+
 // Initialize scene
 const container = document.getElementById('canvas-container');
 if (!container) {
@@ -24,10 +27,14 @@ let currentLayout: Layout | null = null;
 
 // Set up switch click callback
 scene.setSwitchClickCallback((pieceId, pointName, connectionIndex) => {
+  if (DEBUG_LOGGING) console.log(`Switch click callback: ${pieceId}.${pointName} -> ${connectionIndex}`);
   setSelectedRoute(pieceId, pointName, connectionIndex);
   if (currentLayout) {
+    if (DEBUG_LOGGING) console.log(`Calling renderLayout with ${currentLayout.pieces.length} pieces`);
     renderLayout(scene, currentLayout);
     setStatus(`Switch toggled: ${pieceId}.${pointName} → route ${connectionIndex + 1}`);
+  } else {
+    if (DEBUG_LOGGING) console.log('currentLayout is null!');
   }
 });
 

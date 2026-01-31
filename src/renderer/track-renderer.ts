@@ -20,6 +20,9 @@ const SWITCH_UNSELECTED_COLOR = 0xff0000;  // Red for unselected routes
 // Set to true to show simplified debug view
 const DEBUG_MODE = false;
 
+// Set to true to enable console logging for debugging
+const DEBUG_LOGGING = false;
+
 // Track selected routes for virtual switches
 // Key: "pieceId.pointName", Value: index of selected connection (0-based)
 const selectedRoutes = new Map<string, number>();
@@ -32,7 +35,9 @@ function getSelectedRoute(pieceId: string, pointName: string): number {
   if (!selectedRoutes.has(key)) {
     selectedRoutes.set(key, 0); // Default to first connection
   }
-  return selectedRoutes.get(key)!;
+  const value = selectedRoutes.get(key)!;
+  if (DEBUG_LOGGING) console.log(`getSelectedRoute: ${key} = ${value}`);
+  return value;
 }
 
 /**
@@ -40,6 +45,7 @@ function getSelectedRoute(pieceId: string, pointName: string): number {
  */
 export function setSelectedRoute(pieceId: string, pointName: string, connectionIndex: number): void {
   const key = `${pieceId}.${pointName}`;
+  if (DEBUG_LOGGING) console.log(`setSelectedRoute: ${key} = ${connectionIndex}`);
   selectedRoutes.set(key, connectionIndex);
 }
 
