@@ -5,8 +5,10 @@
 import { open } from '@tauri-apps/api/dialog';
 import { readTextFile } from '@tauri-apps/api/fs';
 import { TrackScene } from './renderer/scene';
-import { renderLayout, setSelectedRoute } from './renderer/track-renderer';
+import { renderLayout, setSelectedRoute, getSelectedRoutes } from './renderer/track-renderer';
+import { renderTrains } from './renderer/train-renderer';
 import { buildLayout } from './parser/builder';
+import { Simulation } from './core/simulation';
 import { Layout } from './core/types';
 import './style.css';
 
@@ -25,6 +27,9 @@ const statusEl = document.getElementById('status');
 // Track current layout for re-rendering after switch clicks
 let currentLayout: Layout | null = null;
 
+// Track simulation
+let simulation: Simulation | null = null;
+
 // Set up switch click callback
 scene.setSwitchClickCallback((pieceId, pointName, connectionIndex) => {
   if (DEBUG_LOGGING) console.log(`Switch click callback: ${pieceId}.${pointName} -> ${connectionIndex}`);
@@ -42,6 +47,31 @@ function setStatus(message: string): void {
   if (statusEl) {
     statusEl.textContent = message;
   }
+}
+
+/**
+ * Start the simulation for a layout
+ */
+function startSimulation(layout: Layout): void {
+  // Stop any existing simulation
+  if (simulation) {
+    simulation.stop();
+  }
+
+  // Create new simulation
+  simulation = new Simulation(layout, getSelectedRoutes(), () => {
+    // Update callback - render trains
+    if (simulation) {
+      const trainGroup = renderTrains(simulation.getTrains());
+      scene.updateTrains(trainGroup);
+      scene.render();
+    }
+  });
+
+  // Start the simulation
+  simulation.start();
+
+  if (DEBUG_LOGGING) console.log('Simulation started');
 }
 
 /**
@@ -75,7 +105,10 @@ async function importLayout(): Promise<void> {
     setStatus(`Rendering ${layout.pieces.length} pieces...`);
     renderLayout(scene, layout);
 
-    setStatus(`Layout loaded: ${layout.pieces.length} pieces`);
+    // Start simulation
+    startSimulation(layout);
+
+    setStatus(`Layout loaded: ${layout.pieces.length} pieces - simulation running`);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     setStatus(`Error: ${message}`);
@@ -104,7 +137,11 @@ document.addEventListener('paste', async (e) => {
       const layout = buildLayout(text);
       currentLayout = layout;
       renderLayout(scene, layout);
-      setStatus(`Layout loaded from clipboard: ${layout.pieces.length} pieces`);
+
+      // Start simulation
+      startSimulation(layout);
+
+      setStatus(`Layout loaded from clipboard: ${layout.pieces.length} pieces - simulation running`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setStatus(`Parse error: ${message}`);

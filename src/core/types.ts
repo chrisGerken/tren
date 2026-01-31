@@ -45,6 +45,7 @@ export interface TrackPiece {
   rotation: number;       // Rotation in radians around Y axis
   label?: string;         // Optional label for references
   connections: Map<string, Connection[]>;  // Connection point name -> connected pieces
+  genConfig?: GeneratorConfig;  // Generator configuration (only for 'gen' pieces)
 }
 
 /** Layout (root container) */
@@ -52,6 +53,42 @@ export interface Layout {
   title?: string;        // Layout title for UI (default: "Simulador de Tren")
   description?: string;  // Layout description (concatenated from all description statements)
   pieces: TrackPiece[];
+}
+
+// =============================================================================
+// Train Simulation Types
+// =============================================================================
+
+/** Car type - cab (engine) or car (rolling stock) */
+export type CarType = 'cab' | 'car';
+
+/** Individual car in a train */
+export interface Car {
+  id: string;
+  type: CarType;
+  length: number;                  // Length in inches
+  currentPieceId: string;          // Which track piece the car is on
+  distanceAlongSection: number;    // Distance from section start in inches
+  visible: boolean;                // For gen/bin/tunnel transitions
+  worldPosition: Vec3;             // Cached world position
+  rotation: number;                // Rotation in radians (heading)
+}
+
+/** Train consist (ordered list of cars) */
+export interface Train {
+  id: string;
+  cars: Car[];                     // First car is the head
+  speed: number;                   // Inches per second
+  generatorId: string;             // Which generator spawned this train
+}
+
+/** Generator configuration (from DSL) */
+export interface GeneratorConfig {
+  cabCount: number;                // Number of cabs (default 1)
+  carCount: number;                // Number of cars (default 5)
+  frequency?: number;              // Seconds between trains (undefined = one-shot)
+  lastSpawnTime: number;           // Simulation time of last spawn
+  enabled: boolean;                // Whether generator is active
 }
 
 /** Helper to create a Vec3 */

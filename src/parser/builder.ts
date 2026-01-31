@@ -238,6 +238,17 @@ class LayoutBuilder {
         this.state.labeledPieces.set(stmt.label, piece);
       }
 
+      // Apply generator config for 'gen' pieces
+      if (archetype.code === 'gen' && i === 0) {
+        piece.genConfig = {
+          cabCount: stmt.genCabs ?? 1,
+          carCount: stmt.genCars ?? 5,
+          frequency: stmt.genEvery,
+          lastSpawnTime: -Infinity,  // Never spawned yet
+          enabled: true,
+        };
+      }
+
       this.state.pieces.push(piece);
       this.state.currentSegment.pieces.push(piece);
       this.state.currentPiece = piece;

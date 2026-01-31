@@ -30,6 +30,10 @@ export interface PieceStatement {
   archetypeCode: string;
   count: number;
   line: number;
+  // Generator-specific parameters (only for 'gen' archetype)
+  genCabs?: number;      // Number of cabs (default 1)
+  genCars?: number;      // Number of cars (default 5)
+  genEvery?: number;     // Spawn frequency in seconds (undefined = one-shot)
 }
 
 export interface ReferenceStatement {
@@ -332,6 +336,34 @@ class Parser {
       archetypeCode = firstToken.value;
     }
 
+    // Parse gen-specific parameters: gen [cabs N] [cars M] [every S]
+    let genCabs: number | undefined;
+    let genCars: number | undefined;
+    let genEvery: number | undefined;
+
+    if (archetypeCode === 'gen' || archetypeCode === 'generator') {
+      while (this.isGenModifier()) {
+        if (this.check(TokenType.CABS)) {
+          this.advance(); // consume 'cabs'
+          if (this.check(TokenType.NUMBER)) {
+            genCabs = parseInt(this.advance().value, 10);
+          }
+        } else if (this.check(TokenType.CARS)) {
+          this.advance(); // consume 'cars'
+          if (this.check(TokenType.NUMBER)) {
+            genCars = parseInt(this.advance().value, 10);
+          }
+        } else if (this.check(TokenType.EVERY)) {
+          this.advance(); // consume 'every'
+          if (this.check(TokenType.NUMBER)) {
+            genEvery = parseInt(this.advance().value, 10);
+          }
+        } else {
+          break;
+        }
+      }
+    }
+
     // Check for repetition: x N or * N
     let count = 1;
     if (this.check(TokenType.REPETITION)) {
@@ -347,7 +379,15 @@ class Parser {
       archetypeCode,
       count,
       line: firstToken.line,
+      genCabs,
+      genCars,
+      genEvery,
     };
+  }
+
+  private isGenModifier(): boolean {
+    const type = this.peek().type;
+    return type === TokenType.CABS || type === TokenType.CARS || type === TokenType.EVERY;
   }
 
   private peek(): Token {

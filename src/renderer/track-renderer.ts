@@ -50,6 +50,13 @@ export function setSelectedRoute(pieceId: string, pointName: string, connectionI
 }
 
 /**
+ * Get the selected routes map for use by simulation
+ */
+export function getSelectedRoutes(): Map<string, number> {
+  return selectedRoutes;
+}
+
+/**
  * Render a complete layout
  */
 export function renderLayout(scene: TrackScene, layout: Layout): void {

@@ -421,6 +421,6 @@
 # =============================================================================
 # ACTIVE SAMPLE (uncomment to render)
 # =============================================================================
-# Simple test layout - a basic circle with generator and bin
+# Train simulation test - trains spawn every 15 seconds and circle around
 
-gen ; str x 2 ; crvl x 16 ; str x 2 ; bin
+gen cabs 1 cars 3 every 15 ; str x 2 ; crvl x 16 ; str x 2 ; bin

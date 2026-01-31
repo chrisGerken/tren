@@ -15,6 +15,7 @@ export class TrackScene {
   labelRenderer: CSS2DRenderer;
   private container: HTMLElement;
   private trackGroup: THREE.Group;
+  private trainGroup: THREE.Group;
   private labelGroup: THREE.Group;
   private raycaster: THREE.Raycaster;
   private mouse: THREE.Vector2;
@@ -66,6 +67,10 @@ export class TrackScene {
     // Create group for track pieces
     this.trackGroup = new THREE.Group();
     this.scene.add(this.trackGroup);
+
+    // Create group for trains
+    this.trainGroup = new THREE.Group();
+    this.scene.add(this.trainGroup);
 
     // Create group for labels
     this.labelGroup = new THREE.Group();
@@ -163,6 +168,28 @@ export class TrackScene {
 
   addTrackGroup(group: THREE.Group): void {
     this.trackGroup.add(group);
+  }
+
+  /**
+   * Update train visuals - replaces all train meshes
+   */
+  updateTrains(trainGroup: THREE.Group): void {
+    // Clear existing trains
+    while (this.trainGroup.children.length > 0) {
+      const child = this.trainGroup.children[0];
+      this.trainGroup.remove(child);
+      if (child instanceof THREE.Mesh) {
+        child.geometry.dispose();
+        if (child.material instanceof THREE.Material) {
+          child.material.dispose();
+        }
+      }
+    }
+
+    // Add new train meshes
+    for (const child of trainGroup.children) {
+      this.trainGroup.add(child.clone());
+    }
   }
 
   /**

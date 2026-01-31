@@ -166,9 +166,29 @@ Use archetype codes to specify track pieces. See [Track Dimensions](track-dimens
 | `bump` | Buffer stop |
 | `flex` | Flex track |
 | `ph`, `placeholder` | Zero-length junction point |
-| `gen`, `generator` | Train source (trains appear) |
+| `gen`, `generator` | Train source (see Generator Syntax below) |
 | `bin` | Train sink (trains removed) |
 | `tun`, `tunnel` | Visibility toggle (hide track/trains) |
+
+### Generator Syntax
+
+Generators spawn trains. The basic syntax is just `gen`, but you can configure the train composition and spawn frequency:
+
+```
+gen                           # One train: 1 cab, 5 cars (default)
+gen cabs 2                    # One train: 2 cabs, 5 cars
+gen cars 3                    # One train: 1 cab, 3 cars
+gen cabs 2 cars 3             # One train: 2 cabs, 3 cars
+gen every 10                  # New train every 10 seconds: 1 cab, 5 cars
+gen cabs 2 cars 3 every 10    # Full specification
+```
+
+**Parameters:**
+- `cabs N` - Number of cab cars (engines) at front of train. Default: 1
+- `cars M` - Number of regular cars (rolling stock). Default: 5
+- `every S` - Spawn frequency in seconds. If omitted, only one train is spawned.
+
+Parameters can appear in any order after `gen`.
 
 ### Repetition
 

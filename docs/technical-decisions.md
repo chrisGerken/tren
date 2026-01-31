@@ -312,6 +312,44 @@ Set any of these to `true` to enable the respective logging.
 - Generator: green circle, radius 4.5 inches (visible from distance)
 - Bin: red circle, radius 1.5 inches
 
+## Train Simulation
+
+Trains are implemented with a simulation engine that runs via `requestAnimationFrame`.
+
+**DSL syntax:**
+```
+gen                           # One train: 1 cab, 5 cars
+gen cabs 2                    # One train: 2 cabs, 5 cars
+gen cars 3                    # One train: 1 cab, 3 cars
+gen cabs 2 cars 3 every 10    # New train every 10 seconds
+```
+
+**Architecture:**
+- `Simulation` class manages animation loop, spawning, movement, and removal
+- `train-movement.ts` handles spline traversal and section transitions
+- `train-renderer.ts` creates Three.js geometry for trains
+- Trains follow `selectedRoutes` map at virtual switches
+
+**Car types:**
+- Cabs (engines): blue rectangles, 4" long
+- Cars (rolling stock): gray rectangles, 3" long
+- Gap between cars: 0.5"
+
+**Movement:**
+- Default speed: 12 inches/second
+- Cars move along track splines using `CatmullRomCurve3`
+- Section transitions use `piece.connections` map
+- Virtual switches use `selectedRoutes` to determine path
+
+**Generator behavior:**
+- One-shot (no `every`): spawns one train, then disables
+- Repeating (`every N`): spawns train every N seconds
+- Cars start invisible and become visible as they leave generator
+
+**Bin behavior:**
+- Cars become invisible when entering bin
+- Train removed when all cars are in bin
+
 ## Open Questions
 
 These will be addressed in user scenario discussions:
