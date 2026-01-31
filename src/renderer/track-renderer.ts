@@ -245,7 +245,7 @@ function renderConnectionPointWorld(worldPos: THREE.Vector3, isAutoConnect: bool
  * Render generator as a green circle at world position
  */
 function renderGeneratorWorld(worldPos: THREE.Vector3): THREE.Mesh {
-  const geometry = new THREE.CircleGeometry(1.5, 32);
+  const geometry = new THREE.CircleGeometry(4.5, 32);  // 3x larger for visibility
   const material = new THREE.MeshBasicMaterial({
     color: GENERATOR_COLOR,
     side: THREE.DoubleSide,
