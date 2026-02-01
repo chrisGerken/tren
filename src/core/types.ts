@@ -76,6 +76,7 @@ export interface Car {
   visible: boolean;                // For gen/bin/tunnel transitions
   worldPosition: Vec3;             // Cached world position
   rotation: number;                // Rotation in radians (heading)
+  color?: number;                  // Car color (hex, assigned at creation for non-cabs)
 }
 
 /** Train consist (ordered list of cars) */

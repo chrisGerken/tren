@@ -13,6 +13,7 @@ import {
   CAR_GAP,
   getSectionLength,
 } from './train-movement';
+import { getRandomCarColor, resetCarColorTracking } from '../renderer/train-renderer';
 
 // Default train speed in inches per second
 const DEFAULT_SPEED = 12;
@@ -239,6 +240,9 @@ export class Simulation {
     // First cab is closest to exit, last car is furthest back
     let currentDistance = genSectionLength; // Start at the exit point
 
+    // Reset color tracking for this train (so colors can group within trains)
+    resetCarColorTracking();
+
     // Create cabs (front of train)
     // Position is car CENTER, so account for half-lengths when spacing
     for (let i = 0; i < cabCount; i++) {
@@ -257,7 +261,7 @@ export class Simulation {
       currentDistance -= CAB_LENGTH / 2 + CAR_GAP; // Move from center to back edge + gap
     }
 
-    // Create cars (behind cabs)
+    // Create cars (behind cabs) with randomly assigned colors
     for (let i = 0; i < carCount; i++) {
       currentDistance -= CAR_LENGTH / 2; // Move from front edge to center
       const car: Car = {
@@ -269,6 +273,7 @@ export class Simulation {
         visible: false,
         worldPosition: vec3(0, 0, 0),
         rotation: 0,
+        color: getRandomCarColor(),  // Assign color once at creation
       };
       train.cars.push(car);
       currentDistance -= CAR_LENGTH / 2 + CAR_GAP; // Move from center to back edge + gap

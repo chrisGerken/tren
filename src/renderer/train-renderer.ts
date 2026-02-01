@@ -22,14 +22,15 @@ const CAR_COLORS = [
   0xff8c00,   // Dark orange
 ];
 
-// Track the last car color for weighted random selection
+// Track the last car color index for weighted random selection during spawning
 let lastCarColorIndex: number | null = null;
 
 /**
  * Get a random car color with weighted probability
  * Previous color has 2x probability of being chosen
+ * Called once when a car is created, not every frame
  */
-function getRandomCarColor(): number {
+export function getRandomCarColor(): number {
   const weights: number[] = CAR_COLORS.map((_, index) => {
     // Previous color gets weight 2, others get weight 1
     return (lastCarColorIndex !== null && index === lastCarColorIndex) ? 2 : 1;
@@ -54,7 +55,7 @@ function getRandomCarColor(): number {
 /**
  * Reset color tracking (call when starting a new train)
  */
-function resetCarColorTracking(): void {
+export function resetCarColorTracking(): void {
   lastCarColorIndex = null;
 }
 
@@ -207,7 +208,6 @@ export function renderTrains(trains: Train[]): THREE.Group {
   const group = new THREE.Group();
 
   for (const train of trains) {
-    resetCarColorTracking();  // Reset for each train
     const trainGroup = renderTrain(train);
     group.add(trainGroup);
   }
@@ -237,7 +237,8 @@ function renderTrain(train: Train): THREE.Group {
 function renderCar(car: Car): THREE.Mesh {
   const isCab = car.type === 'cab';
   const geometry = isCab ? getCabGeometry() : getCarGeometry();
-  const color = isCab ? CAB_COLOR : getRandomCarColor();
+  // Cabs are always yellow; cars use their stored color (assigned at spawn time)
+  const color = isCab ? CAB_COLOR : (car.color ?? CAR_COLORS[0]);
 
   const material = new THREE.MeshStandardMaterial({
     color,
