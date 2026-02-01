@@ -60,7 +60,7 @@ The placeholder provides a pure junction point. Use `out.piece` syntax to build 
 
 Trains are ordered car lists (consists). The primary cab (first cab in train) controls speed and direction. Each car maintains its own position along the track section, querying the spline for position and tangent each frame. Cars transition between sections independently when crossing boundaries.
 
-**Generator syntax:** `gen cabs N cars M speed S every T` - N cabs (default 1), M cars (default 5), speed S inches/sec (default 12), spawn every T seconds (omit for one-shot). Parameters can appear in any order.
+**Generator syntax:** `gen cabs N cars M speed S every T` - N cabs (default 1), M cars (default 5), speed S inches/sec (default 12), spawn every T seconds (omit for one-shot). Parameters can appear in any order. Any parameter can use range syntax `LOW-HIGH` for randomization (e.g., `cabs 1-2 cars 3-8 speed 6-24`).
 
 **Route memory:** Each train remembers which route it took at each switch. All cars in the train follow the same route, even if the switch is changed while the train is crossing.
 

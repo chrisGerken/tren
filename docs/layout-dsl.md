@@ -192,6 +192,24 @@ gen cabs 2 cars 3 speed 6 every 10    # Full specification
 
 Parameters can appear in any order after `gen`.
 
+### Range Values
+
+Any generator parameter can specify a range instead of a fixed value using the syntax `LOW-HIGH`:
+
+```
+gen cabs 1-2                  # Random: 1 or 2 cabs
+gen cars 3-8                  # Random: 3 to 8 cars (integer)
+gen speed 6-24                # Random: 6.0 to 24.0 inches/sec (real number)
+gen every 10-30               # Random: 10 to 30 seconds between spawns
+gen cabs 1-2 cars 3-6 speed 8-16 every 15-45   # All parameters randomized
+```
+
+When a range is specified:
+- For `cabs`, `cars`, and `every`: a random **integer** is chosen (inclusive of both endpoints)
+- For `speed`: a random **real number** is chosen (continuous between endpoints)
+
+Each train spawned by the generator gets its own random values, so trains from the same generator may have different speeds, car counts, etc.
+
 ### Repetition
 
 Place multiple consecutive pieces of the same type:

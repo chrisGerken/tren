@@ -35,7 +35,10 @@ Speed can be configured per generator using the `speed` parameter in the DSL:
 ```
 gen speed 24              # Train moves at 24 inches/second
 gen cabs 2 cars 3 speed 6 # Slower train at 6 inches/second
+gen speed 6-24            # Random speed between 6 and 24 inches/second
 ```
+
+When a range is specified (e.g., `speed 6-24`), each train spawned gets a random speed (real number) within that range. This creates variety among trains from the same generator.
 
 See [Layout DSL - Generator Syntax](layout-dsl.md#generator-syntax) for full details.
 
