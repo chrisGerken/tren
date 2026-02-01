@@ -6,7 +6,7 @@ ph1: crvl
 crvl * 11
 
 new
-gen
+gen cabs 2 cars 4 every 30
 crvl
 str
 > in.$ph1
@@ -20,6 +20,11 @@ str * 2
 crv * 4
 str * 2
 crv * 4
+#bump
 str
 
-
+$ph1.out
+crvr
+crvl
+str
+bin
