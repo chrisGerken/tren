@@ -2,8 +2,8 @@
  * Layout Builder - transforms AST into placed track pieces
  */
 
-import { parse, Statement, PieceStatement, NewStatement, ReferenceStatement, LoopCloseStatement, TitleStatement, DescriptionStatement, SpliceStatement } from './parser';
-import { Layout, TrackPiece, Vec3, vec2, ConnectionPointDef } from '../core/types';
+import { parse, Statement, PieceStatement, NewStatement, ReferenceStatement, LoopCloseStatement, TitleStatement, DescriptionStatement, SpliceStatement, RangeValue } from './parser';
+import { Layout, TrackPiece, Vec3, vec2, ConnectionPointDef, RangeValue as TypeRangeValue } from '../core/types';
 import { getArchetype, registerRuntimeArchetype } from '../core/archetypes';
 import type { TrackArchetype } from '../core/archetypes';
 
@@ -243,8 +243,8 @@ class LayoutBuilder {
         piece.genConfig = {
           cabCount: stmt.genCabs ?? 1,
           carCount: stmt.genCars ?? 5,
-          speed: stmt.genSpeed,  // undefined means use default (12)
-          frequency: stmt.genEvery,
+          speed: stmt.genSpeed as TypeRangeValue | number | undefined,  // undefined means use default (12)
+          frequency: stmt.genEvery as TypeRangeValue | number | undefined,
           lastSpawnTime: -Infinity,  // Never spawned yet
           enabled: true,
         };

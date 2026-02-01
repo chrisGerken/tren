@@ -23,6 +23,12 @@ export interface NewStatement {
   line: number;
 }
 
+/** Range value for generator parameters */
+export interface RangeValue {
+  min: number;
+  max: number;
+}
+
 export interface PieceStatement {
   type: 'piece';
   label?: string;
@@ -31,10 +37,11 @@ export interface PieceStatement {
   count: number;
   line: number;
   // Generator-specific parameters (only for 'gen' archetype)
-  genCabs?: number;      // Number of cabs (default 1)
-  genCars?: number;      // Number of cars (default 5)
-  genSpeed?: number;     // Train speed in inches/second (default 12)
-  genEvery?: number;     // Spawn frequency in seconds (undefined = one-shot)
+  // Each can be a single value or a range (min-max)
+  genCabs?: number | RangeValue;      // Number of cabs (default 1)
+  genCars?: number | RangeValue;      // Number of cars (default 5)
+  genSpeed?: number | RangeValue;     // Train speed in inches/second (default 12)
+  genEvery?: number | RangeValue;     // Spawn frequency in seconds (undefined = one-shot)
 }
 
 export interface ReferenceStatement {
@@ -337,34 +344,26 @@ class Parser {
       archetypeCode = firstToken.value;
     }
 
-    // Parse gen-specific parameters: gen [cabs N] [cars M] [speed S] [every T]
-    let genCabs: number | undefined;
-    let genCars: number | undefined;
-    let genSpeed: number | undefined;
-    let genEvery: number | undefined;
+    // Parse gen-specific parameters: gen [cabs N|N-M] [cars N|N-M] [speed S|S-S] [every T|T-T]
+    let genCabs: number | RangeValue | undefined;
+    let genCars: number | RangeValue | undefined;
+    let genSpeed: number | RangeValue | undefined;
+    let genEvery: number | RangeValue | undefined;
 
     if (archetypeCode === 'gen' || archetypeCode === 'generator') {
       while (this.isGenModifier()) {
         if (this.check(TokenType.CABS)) {
           this.advance(); // consume 'cabs'
-          if (this.check(TokenType.NUMBER)) {
-            genCabs = parseInt(this.advance().value, 10);
-          }
+          genCabs = this.parseNumberOrRange(true);
         } else if (this.check(TokenType.CARS)) {
           this.advance(); // consume 'cars'
-          if (this.check(TokenType.NUMBER)) {
-            genCars = parseInt(this.advance().value, 10);
-          }
+          genCars = this.parseNumberOrRange(true);
         } else if (this.check(TokenType.SPEED)) {
           this.advance(); // consume 'speed'
-          if (this.check(TokenType.NUMBER)) {
-            genSpeed = parseFloat(this.advance().value);
-          }
+          genSpeed = this.parseNumberOrRange(false);
         } else if (this.check(TokenType.EVERY)) {
           this.advance(); // consume 'every'
-          if (this.check(TokenType.NUMBER)) {
-            genEvery = parseInt(this.advance().value, 10);
-          }
+          genEvery = this.parseNumberOrRange(true);
         } else {
           break;
         }
@@ -396,6 +395,26 @@ class Parser {
   private isGenModifier(): boolean {
     const type = this.peek().type;
     return type === TokenType.CABS || type === TokenType.CARS || type === TokenType.SPEED || type === TokenType.EVERY;
+  }
+
+  /**
+   * Parse a NUMBER or RANGE token into a value or range object
+   * @param asInteger - if true, parse as integers; if false, parse as floats
+   */
+  private parseNumberOrRange(asInteger: boolean): number | RangeValue | undefined {
+    if (this.check(TokenType.NUMBER)) {
+      const value = this.advance().value;
+      return asInteger ? parseInt(value, 10) : parseFloat(value);
+    } else if (this.check(TokenType.RANGE)) {
+      const value = this.advance().value;
+      const parts = value.split('-');
+      if (parts.length === 2) {
+        const min = asInteger ? parseInt(parts[0], 10) : parseFloat(parts[0]);
+        const max = asInteger ? parseInt(parts[1], 10) : parseFloat(parts[1]);
+        return { min, max };
+      }
+    }
+    return undefined;
   }
 
   private peek(): Token {

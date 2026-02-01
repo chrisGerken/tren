@@ -6,7 +6,7 @@ ph1: crvl
 crvl * 11
 
 new
-gen cabs 2 cars 4 every 30
+gen cabs 1-2 cars 3-6 speed 8-16 every 20-40
 crvl
 str
 > in.$ph1

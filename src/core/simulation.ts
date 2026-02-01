@@ -2,7 +2,7 @@
  * Simulation Engine - manages train spawning, movement, and removal
  */
 
-import { Car, Train, Layout, TrackPiece, vec3 } from './types';
+import { Car, Train, Layout, TrackPiece, vec3, RangeValue } from './types';
 import { getArchetype } from './archetypes';
 import {
   moveTrain,
@@ -16,6 +16,37 @@ import {
 
 // Default train speed in inches per second
 const DEFAULT_SPEED = 12;
+
+/**
+ * Check if a value is a range
+ */
+function isRange(value: number | RangeValue | undefined): value is RangeValue {
+  return value !== undefined && typeof value === 'object' && 'min' in value && 'max' in value;
+}
+
+/**
+ * Resolve a value that may be a number, range, or undefined to a random integer
+ */
+function resolveIntegerValue(value: number | RangeValue | undefined, defaultValue: number): number {
+  if (value === undefined) return defaultValue;
+  if (isRange(value)) {
+    // Random integer between min and max (inclusive)
+    return Math.floor(Math.random() * (value.max - value.min + 1)) + value.min;
+  }
+  return value;
+}
+
+/**
+ * Resolve a value that may be a number, range, or undefined to a random real number
+ */
+function resolveRealValue(value: number | RangeValue | undefined, defaultValue: number): number {
+  if (value === undefined) return defaultValue;
+  if (isRange(value)) {
+    // Random real number between min and max
+    return Math.random() * (value.max - value.min) + value.min;
+  }
+  return value;
+}
 
 // Debug logging
 const DEBUG_LOGGING = false;
@@ -34,6 +65,8 @@ export class Simulation {
   private selectedRoutes: Map<string, number>;
   private nextTrainId: number = 1;
   private nextCarId: number = 1;
+  // Cached resolved frequencies per generator (for range support)
+  private resolvedFrequencies: Map<string, number> = new Map();
 
   constructor(
     layout: Layout,
@@ -74,6 +107,7 @@ export class Simulation {
   reset(): void {
     this.trains = [];
     this.simulationTime = 0;
+    this.resolvedFrequencies.clear();
     // Reset generator spawn times
     for (const piece of this.layout.pieces) {
       if (piece.genConfig) {
@@ -148,9 +182,17 @@ export class Simulation {
         }
       } else {
         // Repeating: spawn every frequency seconds
-        if (timeSinceLastSpawn >= config.frequency) {
+        // Get cached frequency or resolve a new one (for range support)
+        let frequency = this.resolvedFrequencies.get(piece.id);
+        if (frequency === undefined) {
+          frequency = resolveIntegerValue(config.frequency, 10);
+          this.resolvedFrequencies.set(piece.id, frequency);
+        }
+        if (timeSinceLastSpawn >= frequency) {
           this.spawnTrain(piece);
           config.lastSpawnTime = this.simulationTime;
+          // Resolve a new frequency for the next spawn interval
+          this.resolvedFrequencies.set(piece.id, resolveIntegerValue(config.frequency, 10));
         }
       }
     }
@@ -164,10 +206,16 @@ export class Simulation {
     if (!generatorPiece.genConfig) return;
 
     const config = generatorPiece.genConfig;
+
+    // Resolve range values to actual values for this train
+    const cabCount = resolveIntegerValue(config.cabCount, 1);
+    const carCount = resolveIntegerValue(config.carCount, 5);
+    const speed = resolveRealValue(config.speed, DEFAULT_SPEED);
+
     const train: Train = {
       id: `train_${this.nextTrainId++}`,
       cars: [],
-      speed: config.speed ?? DEFAULT_SPEED,
+      speed,
       generatorId: generatorPiece.id,
       routesTaken: new Map(),  // Tracks which route was taken at each switch
     };
@@ -185,7 +233,7 @@ export class Simulation {
 
     // Create cabs (front of train)
     // Position is car CENTER, so account for half-lengths when spacing
-    for (let i = 0; i < config.cabCount; i++) {
+    for (let i = 0; i < cabCount; i++) {
       currentDistance -= CAB_LENGTH / 2; // Move from front edge to center
       const car: Car = {
         id: `car_${this.nextCarId++}`,
@@ -202,7 +250,7 @@ export class Simulation {
     }
 
     // Create cars (behind cabs)
-    for (let i = 0; i < config.carCount; i++) {
+    for (let i = 0; i < carCount; i++) {
       currentDistance -= CAR_LENGTH / 2; // Move from front edge to center
       const car: Car = {
         id: `car_${this.nextCarId++}`,

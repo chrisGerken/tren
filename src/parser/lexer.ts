@@ -9,6 +9,7 @@ export enum TokenType {
   DOT = 'DOT',                 // .
   REPETITION = 'REPETITION',   // x or *
   NUMBER = 'NUMBER',           // numeric values
+  RANGE = 'RANGE',             // range values like 5-10
   STRING = 'STRING',           // string content (for title/description)
   NEW = 'NEW',                 // new keyword
   LOOP_CLOSE = 'LOOP_CLOSE',   // >
@@ -128,13 +129,37 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
       continue;
     }
 
-    // Number (including negative and decimals)
+    // Number (including negative, decimals, and ranges like 5-10)
     if (/[0-9]/.test(char) || (char === '-' && pos + 1 < statement.length && /[0-9]/.test(statement[pos + 1]))) {
       const start = pos;
       if (char === '-') pos++;
       while (pos < statement.length && /[0-9.]/.test(statement[pos])) {
         pos++;
       }
+
+      // Check for range syntax: number immediately followed by - and another number
+      // Only treat as range if first number is positive (not a negative number)
+      if (char !== '-' && pos < statement.length && statement[pos] === '-') {
+        const dashPos = pos;
+        pos++; // skip the dash
+        if (pos < statement.length && /[0-9]/.test(statement[pos])) {
+          // This is a range - parse the second number
+          while (pos < statement.length && /[0-9.]/.test(statement[pos])) {
+            pos++;
+          }
+          tokens.push({
+            type: TokenType.RANGE,
+            value: statement.substring(start, pos),
+            line: lineNum,
+            column: startPos + 1,
+          });
+          continue;
+        } else {
+          // Not a range, revert position
+          pos = dashPos;
+        }
+      }
+
       tokens.push({
         type: TokenType.NUMBER,
         value: statement.substring(start, pos),

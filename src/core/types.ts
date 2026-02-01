@@ -85,12 +85,18 @@ export interface Train {
   routesTaken: Map<string, number>; // Switch routes taken (pieceId.pointName -> connectionIndex)
 }
 
+/** Range value for randomized parameters */
+export interface RangeValue {
+  min: number;
+  max: number;
+}
+
 /** Generator configuration (from DSL) */
 export interface GeneratorConfig {
-  cabCount: number;                // Number of cabs (default 1)
-  carCount: number;                // Number of cars (default 5)
-  speed?: number;                  // Train speed in inches/second (default 12)
-  frequency?: number;              // Seconds between trains (undefined = one-shot)
+  cabCount: number | RangeValue;   // Number of cabs (default 1)
+  carCount: number | RangeValue;   // Number of cars (default 5)
+  speed?: number | RangeValue;     // Train speed in inches/second (default 12)
+  frequency?: number | RangeValue; // Seconds between trains (undefined = one-shot)
   lastSpawnTime: number;           // Simulation time of last spawn
   enabled: boolean;                // Whether generator is active
 }
