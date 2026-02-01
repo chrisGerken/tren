@@ -329,11 +329,19 @@ Trains are implemented with a simulation engine that runs via `requestAnimationF
 
 **DSL syntax:**
 ```
-gen                           # One train: 1 cab, 5 cars
+gen                           # One train: 1 cab, 5 cars, 12"/sec
 gen cabs 2                    # One train: 2 cabs, 5 cars
 gen cars 3                    # One train: 1 cab, 3 cars
+gen speed 24                  # One train at 24 inches/second
 gen cabs 2 cars 3 every 10    # New train every 10 seconds
+gen cabs 1-2 cars 3-8 speed 6-24 every 15-30  # Randomized values
 ```
+
+**Range syntax:**
+- Any parameter can use `LOW-HIGH` syntax for randomization
+- `cabs`, `cars`, `every` get random integers (inclusive)
+- `speed` gets a random real number (continuous)
+- Each spawned train gets its own random values
 
 **Architecture:**
 - `Simulation` class manages animation loop, spawning, movement, and removal
@@ -367,10 +375,49 @@ gen cabs 2 cars 3 every 10    # New train every 10 seconds
 - Cars become invisible when entering bin
 - Train removed when all cars are in bin
 
+## Collision Prevention
+
+Trains automatically regulate their speed to prevent rear-end collisions.
+
+**Design decisions:**
+- Each train has `desiredSpeed` (from generator config) and `currentSpeed` (actual)
+- The lead car scans ahead along the track path to detect other trains
+- Speed is adjusted gradually using acceleration/deceleration rates
+- The minimum following gap is configurable via `mingap` DSL statement
+
+**Implementation constants:**
+- `LOOK_AHEAD_DISTANCE`: 48 inches (how far ahead to scan)
+- `DEFAULT_MIN_GAP`: 1 inch (minimum distance between trains)
+- `ACCELERATION`: 6 inches/sec² (gradual speed-up)
+- `NORMAL_BRAKING`: 12 inches/sec² (comfortable slow-down)
+- `EMERGENCY_BRAKING`: 24 inches/sec² (hard stop when very close)
+
+**Speed calculation algorithm:**
+1. Lead car traces forward along track through connected sections
+2. Distance to nearest car of other trains is calculated
+3. If no obstacle within look-ahead distance: accelerate toward desired speed
+4. If obstacle detected: calculate safe speed using linear interpolation
+   - Full desired speed at `LOOK_AHEAD_DISTANCE`
+   - Zero speed at `minGap` distance
+5. Apply appropriate braking rate based on urgency
+
+**Look-ahead path following:**
+- Traces through connected track pieces following train's route memory
+- At virtual switches, uses train's recorded route (from `routesTaken` map)
+- Falls back to current switch setting if no route recorded yet
+- Limits search depth to prevent infinite loops (20 pieces max)
+
+**DSL configuration:**
+```
+mingap 0.5    # Tight following for dense layouts
+mingap 2      # More conservative following distance
+```
+
+The `mingap` value (default 1 inch) sets the absolute minimum gap. The actual following distance increases with speed to allow for braking.
+
 ## Open Questions
 
 These will be addressed in user scenario discussions:
 - Save/load format for simulation state (running trains, switch positions)
-- Collision response behavior (stop simulation, automatic braking, or damage modeling)
-- Train speed control (discrete levels vs. continuous)
+- Head-on and intersection collision detection (currently only rear-end is prevented)
 - Runtime commands for controlling trains and switches during simulation

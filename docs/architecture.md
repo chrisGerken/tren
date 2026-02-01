@@ -19,6 +19,7 @@ The root container for the entire simulation.
 **Properties**:
 - `title`: Display name for the layout (default: "Simulador de Tren")
 - `description`: Optional longer description of the layout
+- `minGap`: Minimum following distance between trains in inches (default: 1 inch)
 - `pieces`: Array of all track pieces in the layout
 
 **Responsibilities**:

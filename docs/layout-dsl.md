@@ -38,7 +38,7 @@ mingap 1.5                    # Trains maintain 1.5 inch gap
 mingap 0.5                    # Very close following (for tight layouts)
 ```
 
-**Default**: 2 inches. This is the closest trains will get when following each other. Lower values allow tighter packing but require faster reaction times.
+**Default**: 1 inch. This is the closest trains will get when following each other. Lower values allow tighter packing but require faster reaction times.
 
 ### Statement Separators
 

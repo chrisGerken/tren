@@ -63,7 +63,7 @@ Trains automatically regulate their speed to prevent collisions:
 - Normal braking: 12 inches/second² (comfortable slow-down)
 - Emergency braking: 24 inches/second² (hard stop)
 
-**Safe following distance**: Calculated based on current speed and the speed of the train ahead. At minimum, trains maintain a gap specified by the layout's `mingap` setting (default 2 inches, configurable via DSL). The following distance increases with speed to allow for braking.
+**Safe following distance**: Calculated based on current speed and the speed of the train ahead. At minimum, trains maintain a gap specified by the layout's `mingap` setting (default 1 inch, configurable via DSL). The following distance increases with speed to allow for braking.
 
 **Look-ahead distance**: Trains scan up to 48 inches ahead (adjustable). This distance follows the track path, including through curves and switch selections.
 
@@ -111,7 +111,7 @@ When a faster train approaches a slower train ahead:
 When approaching a stopped train:
 1. The following train begins braking when within look-ahead distance
 2. Braking rate increases as distance decreases
-3. The train stops with a minimum gap (2 inches) from the train ahead
+3. The train stops with a minimum gap (default 1 inch, configurable via `mingap`) from the train ahead
 4. When the train ahead moves, the following train resumes
 
 ### Collision Types (Future)

@@ -4,14 +4,17 @@ A 2D top-down train simulator built with Three.js and Tauri for cross-platform d
 
 ## Project Status
 
-**Phase**: Design and planning
+**Phase**: MVP implementation complete
+
+Train simulation with collision prevention is functional. Generators spawn trains that follow tracks, respect virtual switches, and automatically adjust speed to avoid collisions.
 
 ## Overview
 
 This simulator allows users to:
 - Build track layouts from predefined track piece archetypes using a text-based DSL
-- Place and operate trains (consists of engine cabs and cars)
-- Control switches and route trains through the layout
+- Configure train generators with customizable car counts, speeds, and spawn frequencies
+- Watch trains move around the layout with automatic collision prevention
+- Control virtual switches to route trains through the layout
 - Interact via mouse clicks or layout definition files
 
 ## Documentation
