@@ -64,7 +64,7 @@ Trains are ordered car lists (consists). The primary cab (first cab in train) co
 
 **Route memory:** Each train remembers which route it took at each switch. All cars in the train follow the same route, even if the switch is changed while the train is crossing.
 
-**Collision types:** rear-end, head-on (same track), intersection (at defined collision points like diamond crossings).
+**Collision prevention:** Trains have desired speed (from generator) and current speed (actual). Trains look ahead along the track and automatically slow down when approaching another train, maintaining safe following distance. They accelerate back to desired speed when clear.
 
 ## Layout DSL
 

@@ -27,9 +27,14 @@ Other cabs in the consist have no special behavior—they're just rolling stock 
 
 ### Train Speed
 
-Each train has its own speed, set when spawned by its generator. Speed is measured in inches per second.
+Each train has two speed values:
 
-**Default speed**: 12 inches per second (approximately 1 foot per second)
+- **Desired Speed**: The target speed from the generator config. This is the speed the train wants to travel at when unobstructed.
+- **Current Speed**: The actual speed the train is moving at, which may be lower than desired due to collision prevention.
+
+Speed is measured in inches per second.
+
+**Default desired speed**: 12 inches per second (approximately 1 foot per second)
 
 Speed can be configured per generator using the `speed` parameter in the DSL:
 ```
@@ -38,9 +43,29 @@ gen cabs 2 cars 3 speed 6 # Slower train at 6 inches/second
 gen speed 6-24            # Random speed between 6 and 24 inches/second
 ```
 
-When a range is specified (e.g., `speed 6-24`), each train spawned gets a random speed (real number) within that range. This creates variety among trains from the same generator.
+When a range is specified (e.g., `speed 6-24`), each train spawned gets a random desired speed (real number) within that range. This creates variety among trains from the same generator.
 
 See [Layout DSL - Generator Syntax](layout-dsl.md#generator-syntax) for full details.
+
+### Speed Regulation (Collision Prevention)
+
+Trains automatically regulate their speed to prevent collisions:
+
+1. **Look-ahead**: The lead car scans ahead along the track to detect other trains
+2. **Distance calculation**: The system calculates the distance to the rear of the nearest train ahead
+3. **Speed adjustment**:
+   - If clear ahead: accelerate toward desired speed
+   - If train ahead is close: decelerate to maintain safe following distance
+   - If train ahead is very close: brake hard, potentially to a stop
+
+**Acceleration/Deceleration rates**:
+- Acceleration: 6 inches/second² (gradual speed-up)
+- Normal braking: 12 inches/second² (comfortable slow-down)
+- Emergency braking: 24 inches/second² (hard stop)
+
+**Safe following distance**: Calculated based on current speed and the speed of the train ahead. At minimum, trains maintain a 2-inch gap. The following distance increases with speed to allow for braking.
+
+**Look-ahead distance**: Trains scan up to 48 inches ahead (adjustable). This distance follows the track path, including through curves and switch selections.
 
 ## Train as a Consist
 
@@ -69,40 +94,37 @@ When the primary cab crosses from one track section to another:
 - A car transitions to a new section only when its own position crosses the boundary
 - This means cars may briefly span multiple sections during a transition
 
-## Collision Detection
+## Collision Prevention
 
-### Same-Track Collisions
+The simulation uses automatic speed regulation to prevent collisions rather than detecting and responding to them after the fact. See [Speed Regulation](#speed-regulation-collision-prevention) above.
 
-When trains share the same track path:
+### Same-Track Following
 
-**Rear-end collision**:
-- Faster train catches slower train ahead
-- Collision between lead car of following train and last car of leading train
-- Detection: compare positions along the same spline
+When a faster train approaches a slower train ahead:
+1. The following train detects the train ahead via look-ahead
+2. It gradually slows down to match the leading train's speed
+3. It maintains a safe following distance based on both trains' speeds
+4. If the leading train speeds up or clears the path, the following train accelerates
+
+### Stopped Trains
+
+When approaching a stopped train:
+1. The following train begins braking when within look-ahead distance
+2. Braking rate increases as distance decreases
+3. The train stops with a minimum gap (2 inches) from the train ahead
+4. When the train ahead moves, the following train resumes
+
+### Collision Types (Future)
+
+These collision scenarios are not yet implemented but may be added:
 
 **Head-on collision**:
 - Trains traveling opposite directions on same section
-- Collision between both lead cars
-- Detection: positions converging, distance goes to zero
+- Would require bidirectional look-ahead
 
-### Intersection Collisions (Cross-Track)
-
-At collision points defined in track archetypes (e.g., diamond crossings):
-- Two independent track sections share physical space at a specific point
-- A car on section A and a car on section B can collide if both occupy that point simultaneously
-
-Detection:
-1. For each collision point, track which cars are within collision range
-2. If cars from different sections are both in range, collision occurs
-
-### Collision Response
-
-(To be defined in user scenarios)
-
-Options may include:
-- Simulation stops with error indication
-- Trains halt before collision (automatic braking)
-- Damage/derailment modeling
+**Intersection collisions** (at diamond crossings):
+- Two independent track sections share physical space
+- Would require collision point detection in archetypes
 
 ## Route Memory at Switches
 
