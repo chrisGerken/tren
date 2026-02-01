@@ -5,7 +5,7 @@
 import { open } from '@tauri-apps/api/dialog';
 import { readTextFile } from '@tauri-apps/api/fs';
 import { TrackScene } from './renderer/scene';
-import { renderLayout, setSelectedRoute, getSelectedRoutes } from './renderer/track-renderer';
+import { renderLayout, setSelectedRouteByKey, getSelectedRoutes } from './renderer/track-renderer';
 import { renderTrains } from './renderer/train-renderer';
 import { buildLayout } from './parser/builder';
 import { Simulation } from './core/simulation';
@@ -31,13 +31,13 @@ let currentLayout: Layout | null = null;
 let simulation: Simulation | null = null;
 
 // Set up switch click callback
-scene.setSwitchClickCallback((pieceId, pointName, connectionIndex) => {
-  if (DEBUG_LOGGING) console.log(`Switch click callback: ${pieceId}.${pointName} -> ${connectionIndex}`);
-  setSelectedRoute(pieceId, pointName, connectionIndex);
+scene.setSwitchClickCallback((routeKey, connectionIndex) => {
+  if (DEBUG_LOGGING) console.log(`Switch click callback: ${routeKey} -> ${connectionIndex}`);
+  setSelectedRouteByKey(routeKey, connectionIndex);
   if (currentLayout) {
     if (DEBUG_LOGGING) console.log(`Calling renderLayout with ${currentLayout.pieces.length} pieces`);
     renderLayout(scene, currentLayout);
-    setStatus(`Switch toggled: ${pieceId}.${pointName} → route ${connectionIndex + 1}`);
+    setStatus(`Switch toggled: ${routeKey} → route ${connectionIndex + 1}`);
   } else {
     if (DEBUG_LOGGING) console.log('currentLayout is null!');
   }

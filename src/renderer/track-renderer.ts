@@ -28,25 +28,38 @@ const DEBUG_LOGGING = false;
 const selectedRoutes = new Map<string, number>();
 
 /**
- * Get or initialize the selected route for a switch point
+ * Get or initialize the selected route by full key
  */
-function getSelectedRoute(pieceId: string, pointName: string): number {
-  const key = `${pieceId}.${pointName}`;
+function getSelectedRouteByKey(key: string): number {
   if (!selectedRoutes.has(key)) {
     selectedRoutes.set(key, 0); // Default to first connection
   }
   const value = selectedRoutes.get(key)!;
-  if (DEBUG_LOGGING) console.log(`getSelectedRoute: ${key} = ${value}`);
+  if (DEBUG_LOGGING) console.log(`getSelectedRouteByKey: key="${key}" → ${value}`);
   return value;
 }
 
 /**
- * Set the selected route for a switch point
+ * Get or initialize the selected route for a switch point (legacy, without direction)
+ */
+function getSelectedRoute(pieceId: string, pointName: string): number {
+  return getSelectedRouteByKey(`${pieceId}.${pointName}`);
+}
+
+/**
+ * Set the selected route by full key (includes direction)
+ */
+export function setSelectedRouteByKey(key: string, connectionIndex: number): void {
+  const oldValue = selectedRoutes.get(key);
+  if (DEBUG_LOGGING) console.log(`setSelectedRouteByKey: key="${key}" ${oldValue} → ${connectionIndex}`);
+  selectedRoutes.set(key, connectionIndex);
+}
+
+/**
+ * Set the selected route for a switch point (legacy, without direction)
  */
 export function setSelectedRoute(pieceId: string, pointName: string, connectionIndex: number): void {
-  const key = `${pieceId}.${pointName}`;
-  if (DEBUG_LOGGING) console.log(`setSelectedRoute: ${key} = ${connectionIndex}`);
-  selectedRoutes.set(key, connectionIndex);
+  setSelectedRouteByKey(`${pieceId}.${pointName}`, connectionIndex);
 }
 
 /**
@@ -189,6 +202,7 @@ function renderTrackPiece(
       group.add(cpMesh);
 
       // Render switch indicators if this is a virtual switch (multiple connections)
+      if (DEBUG_LOGGING) console.log(`  ${piece.id}.${cp.name}: ${connections.length} connections`);
       if (connections.length > 1) {
         const switchIndicators = renderSwitchIndicators(
           piece,
@@ -404,15 +418,84 @@ interface CurveInfo {
  * All indicators are placed at the same distance from the connection point,
  * at the minimum distance where they are all at least MIN_INDICATOR_SEPARATION apart.
  */
+/**
+ * Check if a connection point name is an "in" type
+ */
+function isInPoint(pointName: string): boolean {
+  return pointName === 'in' || pointName === 'in1' || pointName === 'in2';
+}
+
+/**
+ * Check if a connection point name is an "out" type
+ */
+function isOutPoint(pointName: string): boolean {
+  return pointName === 'out' || pointName === 'out1' || pointName === 'out2';
+}
+
+/**
+ * Render switch indicators for a connection point
+ * Creates TWO independent sets of indicators if there are multiple forward AND backward connections
+ */
 function renderSwitchIndicators(
   piece: TrackPiece,
   pointName: string,
   _worldPos: THREE.Vector3,
-  connections: Connection[],
+  allConnections: Connection[],
   pieceMap: Map<string, TrackPiece>
 ): THREE.Mesh[] {
   const indicators: THREE.Mesh[] = [];
-  const selectedIndex = getSelectedRoute(piece.id, pointName);
+
+  // Separate connections into forward (entering via 'in') and backward (entering via 'out')
+  const forwardConnections = allConnections.filter(c => isInPoint(c.pointName));
+  const backwardConnections = allConnections.filter(c => isOutPoint(c.pointName));
+
+  // Render forward switch indicators if multiple forward connections
+  if (forwardConnections.length > 1) {
+    const fwdIndicators = renderDirectionalSwitchIndicators(
+      piece, pointName, 'fwd', forwardConnections, pieceMap, allConnections
+    );
+    indicators.push(...fwdIndicators);
+  }
+
+  // Render backward switch indicators if multiple backward connections
+  if (backwardConnections.length > 1) {
+    const bwdIndicators = renderDirectionalSwitchIndicators(
+      piece, pointName, 'bwd', backwardConnections, pieceMap, allConnections
+    );
+    indicators.push(...bwdIndicators);
+  }
+
+  return indicators;
+}
+
+/**
+ * Render switch indicators for one direction (forward or backward)
+ */
+function renderDirectionalSwitchIndicators(
+  piece: TrackPiece,
+  pointName: string,
+  direction: 'fwd' | 'bwd',
+  connections: Connection[],
+  pieceMap: Map<string, TrackPiece>,
+  allConnections: Connection[]  // All connections at this point (for canonical ID)
+): THREE.Mesh[] {
+  const indicators: THREE.Mesh[] = [];
+
+  // Use canonical junction ID so all pieces at this junction share the same switch state
+  // The canonical ID is the lowest piece ID among all pieces at this junction
+  const junctionPieceIds = allConnections.map(c => c.pieceId);
+  junctionPieceIds.push(piece.id);
+  junctionPieceIds.sort();
+  const canonicalJunctionId = junctionPieceIds[0];
+
+  // Route key uses canonical junction ID so all inbound tracks share the same switch
+  const routeKey = `junction.${canonicalJunctionId}.${direction}`;
+  const selectedIndex = getSelectedRouteByKey(routeKey);
+
+  if (DEBUG_LOGGING) {
+    console.log(`renderSwitchIndicators: ${routeKey}, ${connections.length} connections, selectedIndex=${selectedIndex}`);
+    connections.forEach((c, i) => console.log(`  route[${i}]: ${c.pieceId}.${c.pointName} ${c.isAutoConnect ? '(auto)' : ''}`));
+  }
 
   // Build curve info for each connection
   const curveInfos: (CurveInfo | null)[] = [];
@@ -429,26 +512,35 @@ function renderSwitchIndicators(
     info ? getPositionAtDistance(info, distance) : null
   );
 
+  // Count valid positions - if only 0 or 1, there's no real switch choice
+  const validPositionCount = positions.filter(p => p !== null).length;
+  if (validPositionCount <= 1) {
+    // No switch needed - either no valid routes or only one valid route
+    return indicators;
+  }
+
   // Create indicator meshes
   for (let i = 0; i < connections.length; i++) {
     const pos = positions[i];
+    if (DEBUG_LOGGING) console.log(`  Indicator ${i}: pos=${pos ? `(${pos.x.toFixed(2)}, ${pos.z.toFixed(2)})` : 'null'}, curveInfo=${curveInfos[i] ? 'valid' : 'null'}`);
     if (!pos) continue;
 
     const isSelected = i === selectedIndex;
     const color = isSelected ? SWITCH_SELECTED_COLOR : SWITCH_UNSELECTED_COLOR;
-    const geometry = new THREE.SphereGeometry(0.35, 16, 16);
+    const geometry = new THREE.SphereGeometry(0.6, 16, 16);  // Larger for easier clicking
     const material = new THREE.MeshBasicMaterial({ color });
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.set(pos.x, 0.7, pos.z);
 
     // Store metadata for click handling
+    // routeKey includes direction for independent forward/backward switches
     mesh.userData = {
       isSwitchIndicator: true,
-      pieceId: piece.id,
-      pointName: pointName,
+      routeKey: routeKey,
       connectionIndex: i,
     };
 
+    if (DEBUG_LOGGING) console.log(`  Created indicator ${i} at (${pos.x.toFixed(2)}, 0.7, ${pos.z.toFixed(2)}), selected=${isSelected}, color=${isSelected ? 'green' : 'red'}`);
     indicators.push(mesh);
   }
 

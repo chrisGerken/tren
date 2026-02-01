@@ -21,6 +21,7 @@ export enum TokenType {
   USING = 'USING',             // using keyword (optional for splice)
   CABS = 'CABS',               // cabs keyword (for gen statement)
   CARS = 'CARS',               // cars keyword (for gen statement)
+  SPEED = 'SPEED',             // speed keyword (for gen statement)
   EVERY = 'EVERY',             // every keyword (for gen statement)
   EOF = 'EOF',
 }
@@ -282,6 +283,16 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
       if (value === 'cars') {
         tokens.push({
           type: TokenType.CARS,
+          value: value,
+          line: lineNum,
+          column: startPos + 1,
+        });
+        continue;
+      }
+
+      if (value === 'speed') {
+        tokens.push({
+          type: TokenType.SPEED,
           value: value,
           line: lineNum,
           column: startPos + 1,

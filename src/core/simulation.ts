@@ -6,6 +6,7 @@ import { Car, Train, Layout, TrackPiece, vec3 } from './types';
 import { getArchetype } from './archetypes';
 import {
   moveTrain,
+  moveCar,
   updateCarWorldPosition,
   CAB_LENGTH,
   CAR_LENGTH,
@@ -166,7 +167,7 @@ export class Simulation {
     const train: Train = {
       id: `train_${this.nextTrainId++}`,
       cars: [],
-      speed: DEFAULT_SPEED,
+      speed: config.speed ?? DEFAULT_SPEED,
       generatorId: generatorPiece.id,
       routesTaken: new Map(),  // Tracks which route was taken at each switch
     };
@@ -232,7 +233,30 @@ export class Simulation {
   private updateTrains(deltaTime: number): void {
     for (const train of this.trains) {
       const distance = train.speed * deltaTime;
-      moveTrain(train.cars, distance, this.layout, this.selectedRoutes, train.routesTaken);
+
+      // Track routes used by the last car - these will be cleared after it passes
+      const routesToClear = new Set<string>();
+
+      // Move each car, passing the clear set only to the last car
+      const lastCarIndex = train.cars.length - 1;
+      for (let i = 0; i < train.cars.length; i++) {
+        const isLastCar = i === lastCarIndex;
+        moveCar(
+          train.cars[i],
+          distance,
+          this.layout,
+          this.selectedRoutes,
+          train.routesTaken,
+          isLastCar ? routesToClear : undefined
+        );
+      }
+
+      // Clear routes that the last car has now passed
+      // This ensures all cars use the same route, then it's forgotten for the next lap
+      for (const routeKey of routesToClear) {
+        train.routesTaken.delete(routeKey);
+        if (DEBUG_LOGGING) console.log(`Cleared route memory: ${routeKey} for train ${train.id}`);
+      }
 
       // Update visibility for each car
       for (const car of train.cars) {

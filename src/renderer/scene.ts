@@ -6,7 +6,8 @@ import * as THREE from 'three';
 import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 
 // Callback type for switch indicator clicks
-export type SwitchClickCallback = (pieceId: string, pointName: string, connectionIndex: number) => void;
+// routeKey format: "pieceId.pointName.direction" (e.g., "piece_5.out.fwd")
+export type SwitchClickCallback = (routeKey: string, connectionIndex: number) => void;
 
 export class TrackScene {
   scene: THREE.Scene;
@@ -118,9 +119,8 @@ export class TrackScene {
     for (const intersect of intersects) {
       const userData = intersect.object.userData;
       if (userData && userData.isSwitchIndicator) {
-        // Only respond to clicks on non-selected (red) indicators
         if (this.onSwitchClick) {
-          this.onSwitchClick(userData.pieceId, userData.pointName, userData.connectionIndex);
+          this.onSwitchClick(userData.routeKey, userData.connectionIndex);
         }
         break;
       }

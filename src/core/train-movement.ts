@@ -110,40 +110,123 @@ export function updateCarWorldPosition(car: Car, layout: Layout): void {
 }
 
 /**
+ * Determine if a connection point name is an "in" type
+ */
+function isInPoint(pointName: string): boolean {
+  return pointName === 'in' || pointName === 'in1' || pointName === 'in2';
+}
+
+/**
+ * Determine if a connection point name is an "out" type
+ */
+function isOutPoint(pointName: string): boolean {
+  return pointName === 'out' || pointName === 'out1' || pointName === 'out2';
+}
+
+/**
  * Get the next section when exiting a piece at a connection point
  * If trainRoutes is provided, use/record the route taken by the train
  * (ensures all cars in a train take the same route at switches)
+ *
+ * @param previousPieceId - The piece the car was on before the current piece (to avoid routing back)
+ * @param travelDirection - 'forward' if traveling in->out, 'backward' if traveling out->in
+ * @param routesToClearAfterLastCar - If provided, routes used from trainRoutes will be added here
  */
 export function getNextSection(
   pieceId: string,
   exitPoint: string,
   layout: Layout,
   selectedRoutes: Map<string, number>,
-  trainRoutes?: Map<string, number>
+  trainRoutes?: Map<string, number>,
+  previousPieceId?: string,
+  travelDirection?: 'forward' | 'backward',
+  routesToClearAfterLastCar?: Set<string>
 ): { pieceId: string; entryPoint: string } | null {
   const piece = layout.pieces.find(p => p.id === pieceId);
   if (!piece) return null;
 
-  const connections = piece.connections.get(exitPoint);
-  if (!connections || connections.length === 0) {
+  const allConnections = piece.connections.get(exitPoint);
+  if (!allConnections || allConnections.length === 0) {
     return null; // Dead end
   }
 
+  // Filter out the connection back to previous piece
+  const validConnections = allConnections.filter(c => c.pieceId !== previousPieceId);
+
+  if (validConnections.length === 0) {
+    return null; // Only connection is back to where we came from
+  }
+
+  if (validConnections.length === 1) {
+    return {
+      pieceId: validConnections[0].pieceId,
+      entryPoint: validConnections[0].pointName,
+    };
+  }
+
+  // Multiple connections - this is a switch
+  // Separate into "forward" (entering via 'in') and "backward" (entering via 'out') groups
+  const forwardConnections = validConnections.filter(c => isInPoint(c.pointName));
+  const backwardConnections = validConnections.filter(c => isOutPoint(c.pointName));
+
+  // Determine which group to use based on travel direction
+  // Forward travel should use forward connections (entering next piece via 'in')
+  // Backward travel should use backward connections (entering next piece via 'out')
+  let connections: typeof validConnections;
+  let switchDirection: 'fwd' | 'bwd';
+
+  if (travelDirection === 'backward') {
+    // Backward travel prefers backward connections
+    if (backwardConnections.length > 0) {
+      connections = backwardConnections;
+      switchDirection = 'bwd';
+    } else {
+      connections = forwardConnections;
+      switchDirection = 'fwd';
+    }
+  } else {
+    // Forward travel (default) prefers forward connections
+    if (forwardConnections.length > 0) {
+      connections = forwardConnections;
+      switchDirection = 'fwd';
+    } else {
+      connections = backwardConnections;
+      switchDirection = 'bwd';
+    }
+  }
+
+  if (connections.length === 0) {
+    // Shouldn't happen, but fall back to all valid
+    connections = validConnections;
+    switchDirection = 'fwd';
+  }
+
   if (connections.length === 1) {
-    // Single connection
     return {
       pieceId: connections[0].pieceId,
       entryPoint: connections[0].pointName,
     };
   }
 
-  // Multiple connections - virtual switch
-  const routeKey = `${pieceId}.${exitPoint}`;
+  // Multiple connections in the same direction group - use switch
+  // Use canonical junction ID so all pieces at this junction share the same switch state
+  // The canonical ID is the lowest piece ID among all pieces at this junction
+  const junctionPieceIds = allConnections.map(c => c.pieceId);
+  junctionPieceIds.push(pieceId);
+  junctionPieceIds.sort();
+  const canonicalJunctionId = junctionPieceIds[0];
+
+  // Route key uses canonical junction ID so all inbound tracks share the same switch
+  const routeKey = `junction.${canonicalJunctionId}.${switchDirection}`;
 
   let selectedIndex: number;
   if (trainRoutes?.has(routeKey)) {
-    // Train already crossed this switch - use the same route
+    // Use stored route (ensures all cars take same path)
     selectedIndex = trainRoutes.get(routeKey)!;
+    // If this is the last car, mark this route for clearing after it passes
+    if (routesToClearAfterLastCar) {
+      routesToClearAfterLastCar.add(routeKey);
+    }
   } else {
     // First car to cross - use current switch setting and record it
     selectedIndex = selectedRoutes.get(routeKey) ?? 0;
@@ -161,16 +244,32 @@ export function getNextSection(
 }
 
 /**
+ * Get the opposite connection point name
+ */
+function getOppositePoint(pointName: string): string {
+  if (pointName === 'in') return 'out';
+  if (pointName === 'out') return 'in';
+  if (pointName === 'in1') return 'out1';
+  if (pointName === 'out1') return 'in1';
+  if (pointName === 'in2') return 'out2';
+  if (pointName === 'out2') return 'in2';
+  return 'out'; // default
+}
+
+/**
  * Move a car along the track by a distance
  * Handles section transitions at boundaries
  * trainRoutes ensures all cars in a train take the same route at switches
+ *
+ * @param routesToClearAfterLastCar - If provided (for last car), routes used will be added here for clearing
  */
 export function moveCar(
   car: Car,
   distance: number,
   layout: Layout,
   selectedRoutes: Map<string, number>,
-  trainRoutes?: Map<string, number>
+  trainRoutes?: Map<string, number>,
+  routesToClearAfterLastCar?: Set<string>
 ): void {
   car.distanceAlongSection += distance;
 
@@ -179,92 +278,118 @@ export function moveCar(
 
   let sectionLength = getSectionLength(piece, 0);
 
-  // For zero-length pieces (gen, bin, etc.), immediately transition to next piece
+  // For zero-length pieces (placeholder, etc.), immediately transition to next piece
+  // Exit via the OPPOSITE of entry point to maintain direction
   let safetyCounter = 0;
   while (sectionLength === 0 && safetyCounter < 10) {
     safetyCounter++;
-    const exitPoint = car.distanceAlongSection >= 0 ? 'out' : 'in';
-    const nextSection = getNextSection(car.currentPieceId, exitPoint, layout, selectedRoutes, trainRoutes);
+
+    // Determine exit point: opposite of entry, or based on distance if no entry recorded
+    let exitPoint: string;
+    let travelDirection: 'forward' | 'backward';
+
+    if (car.entryPoint) {
+      // Exit via opposite of where we entered
+      exitPoint = getOppositePoint(car.entryPoint);
+      // Travel direction: if we entered via 'in' and exit via 'out', we're going forward
+      travelDirection = isInPoint(car.entryPoint) ? 'forward' : 'backward';
+    } else {
+      // No entry point recorded (e.g., spawned here) - use distance to guess
+      exitPoint = car.distanceAlongSection >= 0 ? 'out' : 'in';
+      travelDirection = 'forward';
+    }
+
+    const nextSection = getNextSection(
+      car.currentPieceId, exitPoint, layout, selectedRoutes, trainRoutes,
+      car.previousPieceId, travelDirection, routesToClearAfterLastCar
+    );
     if (!nextSection) {
-      // Dead end on zero-length piece
       car.distanceAlongSection = 0;
       updateCarWorldPosition(car, layout);
       return;
     }
+
+    car.previousPieceId = car.currentPieceId;
     car.currentPieceId = nextSection.pieceId;
+    car.entryPoint = nextSection.entryPoint;
     piece = layout.pieces.find(p => p.id === car.currentPieceId);
     if (!piece) return;
     sectionLength = getSectionLength(piece, 0);
-    // Distance carries over (could be negative if emerging from generator)
   }
 
-  // Handle overflow (moving past end of section)
+  // Handle overflow (moving past end of section - forward direction)
   while (car.distanceAlongSection >= sectionLength && sectionLength > 0) {
     const overflow = car.distanceAlongSection - sectionLength;
+    const exitPoint = 'out';
 
-    // Determine exit point based on direction
-    const exitPoint = 'out'; // Simplified: assume forward direction exits via 'out'
-
-    const nextSection = getNextSection(car.currentPieceId, exitPoint, layout, selectedRoutes, trainRoutes);
+    const nextSection = getNextSection(
+      car.currentPieceId, exitPoint, layout, selectedRoutes, trainRoutes,
+      car.previousPieceId, 'forward', routesToClearAfterLastCar
+    );
     if (!nextSection) {
-      // Dead end - stop at end of section
       car.distanceAlongSection = sectionLength;
       return;
     }
 
-    // Transition to next section
+    car.previousPieceId = car.currentPieceId;
     car.currentPieceId = nextSection.pieceId;
-    // Entry point determines where we start on the new section
-    // If entering via 'in', start at 0; if entering via 'out', start at end
+    car.entryPoint = nextSection.entryPoint;
+
     const newPiece = layout.pieces.find(p => p.id === nextSection.pieceId);
     if (newPiece) {
       const newSectionLength = getSectionLength(newPiece, 0);
-      if (nextSection.entryPoint === 'out') {
-        // Entering from the 'out' end, so we're at the end going backwards
+      if (isOutPoint(nextSection.entryPoint)) {
+        // Entering from 'out' end - we're at the end, going backwards on this piece
         car.distanceAlongSection = newSectionLength - overflow;
       } else {
-        // Entering from 'in', start at beginning
+        // Entering from 'in' - start at beginning, going forward
         car.distanceAlongSection = overflow;
       }
+      sectionLength = newSectionLength;
     } else {
       car.distanceAlongSection = overflow;
+      break;
     }
-
-    // Get new section length for next iteration
-    const newPieceForLength = layout.pieces.find(p => p.id === car.currentPieceId);
-    if (!newPieceForLength) break;
   }
 
-  // Handle underflow (moving past start of section - reverse)
-  // But DON'T transition into zero-length pieces (like generators) - just keep negative distance
-  while (car.distanceAlongSection < 0) {
-    const exitPoint = 'in'; // Exiting backwards via 'in'
+  // Handle underflow (moving past start of section - backward direction)
+  while (car.distanceAlongSection < 0 && sectionLength > 0) {
+    const exitPoint = 'in';
 
-    const nextSection = getNextSection(car.currentPieceId, exitPoint, layout, selectedRoutes, trainRoutes);
+    const nextSection = getNextSection(
+      car.currentPieceId, exitPoint, layout, selectedRoutes, trainRoutes,
+      car.previousPieceId, 'backward', routesToClearAfterLastCar
+    );
     if (!nextSection) {
-      // Dead end - keep negative distance (car is "emerging")
+      // Dead end or entering zero-length piece - stop here
+      car.distanceAlongSection = 0;
       break;
     }
 
-    // Check if next piece is zero-length (generator, bin, etc.)
     const nextPiece = layout.pieces.find(p => p.id === nextSection.pieceId);
     if (nextPiece) {
       const nextSectionLength = getSectionLength(nextPiece, 0);
       if (nextSectionLength === 0) {
-        // Don't transition into zero-length piece - keep negative distance
+        // Don't transition into zero-length piece going backward
+        car.distanceAlongSection = 0;
         break;
       }
-    }
 
-    const underflow = -car.distanceAlongSection;
-    car.currentPieceId = nextSection.pieceId;
-    if (nextPiece) {
-      const newSectionLength = getSectionLength(nextPiece, 0);
-      if (nextSection.entryPoint === 'in') {
+      const underflow = -car.distanceAlongSection;
+      car.previousPieceId = car.currentPieceId;
+      car.currentPieceId = nextSection.pieceId;
+      car.entryPoint = nextSection.entryPoint;
+
+      if (isInPoint(nextSection.entryPoint)) {
+        // Entering via 'in' while going backward - start at beginning
         car.distanceAlongSection = underflow;
       } else {
-        car.distanceAlongSection = newSectionLength - underflow;
+        // Entering via 'out' - we're at the end
+        car.distanceAlongSection = nextSectionLength - underflow;
       }
+      sectionLength = nextSectionLength;
+    } else {
+      break;
     }
   }
 

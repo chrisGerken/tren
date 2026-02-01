@@ -33,6 +33,7 @@ export interface PieceStatement {
   // Generator-specific parameters (only for 'gen' archetype)
   genCabs?: number;      // Number of cabs (default 1)
   genCars?: number;      // Number of cars (default 5)
+  genSpeed?: number;     // Train speed in inches/second (default 12)
   genEvery?: number;     // Spawn frequency in seconds (undefined = one-shot)
 }
 
@@ -336,9 +337,10 @@ class Parser {
       archetypeCode = firstToken.value;
     }
 
-    // Parse gen-specific parameters: gen [cabs N] [cars M] [every S]
+    // Parse gen-specific parameters: gen [cabs N] [cars M] [speed S] [every T]
     let genCabs: number | undefined;
     let genCars: number | undefined;
+    let genSpeed: number | undefined;
     let genEvery: number | undefined;
 
     if (archetypeCode === 'gen' || archetypeCode === 'generator') {
@@ -352,6 +354,11 @@ class Parser {
           this.advance(); // consume 'cars'
           if (this.check(TokenType.NUMBER)) {
             genCars = parseInt(this.advance().value, 10);
+          }
+        } else if (this.check(TokenType.SPEED)) {
+          this.advance(); // consume 'speed'
+          if (this.check(TokenType.NUMBER)) {
+            genSpeed = parseFloat(this.advance().value);
           }
         } else if (this.check(TokenType.EVERY)) {
           this.advance(); // consume 'every'
@@ -381,13 +388,14 @@ class Parser {
       line: firstToken.line,
       genCabs,
       genCars,
+      genSpeed,
       genEvery,
     };
   }
 
   private isGenModifier(): boolean {
     const type = this.peek().type;
-    return type === TokenType.CABS || type === TokenType.CARS || type === TokenType.EVERY;
+    return type === TokenType.CABS || type === TokenType.CARS || type === TokenType.SPEED || type === TokenType.EVERY;
   }
 
   private peek(): Token {

@@ -68,6 +68,8 @@ export interface Car {
   type: CarType;
   length: number;                  // Length in inches
   currentPieceId: string;          // Which track piece the car is on
+  previousPieceId?: string;        // Previous piece (to avoid routing back)
+  entryPoint?: string;             // Which connection point we entered via ('in' or 'out')
   distanceAlongSection: number;    // Distance from section start in inches
   visible: boolean;                // For gen/bin/tunnel transitions
   worldPosition: Vec3;             // Cached world position
@@ -87,6 +89,7 @@ export interface Train {
 export interface GeneratorConfig {
   cabCount: number;                // Number of cabs (default 1)
   carCount: number;                // Number of cars (default 5)
+  speed?: number;                  // Train speed in inches/second (default 12)
   frequency?: number;              // Seconds between trains (undefined = one-shot)
   lastSpawnTime: number;           // Simulation time of last spawn
   enabled: boolean;                // Whether generator is active

@@ -243,6 +243,7 @@ class LayoutBuilder {
         piece.genConfig = {
           cabCount: stmt.genCabs ?? 1,
           carCount: stmt.genCars ?? 5,
+          speed: stmt.genSpeed,  // undefined means use default (12)
           frequency: stmt.genEvery,
           lastSpawnTime: -Infinity,  // Never spawned yet
           enabled: true,
@@ -777,6 +778,7 @@ class LayoutBuilder {
   /**
    * Detect auto-connections between pieces.
    * Connection points at the same position with opposite directions are automatically connected.
+   * Groups points by position first, then connects all opposite-direction points within each group.
    */
   private detectAutoConnections(): void {
     const POSITION_TOLERANCE = 0.5;  // inches
@@ -810,40 +812,101 @@ class LayoutBuilder {
       }
     }
 
-    // Find pairs of points that are close together with opposite directions
-    for (let i = 0; i < worldPoints.length; i++) {
-      for (let j = i + 1; j < worldPoints.length; j++) {
-        const a = worldPoints[i];
-        const b = worldPoints[j];
+    // Group points by position (using union-find approach)
+    // Two points are in the same group if they're within tolerance of each other
+    const groups: WorldPoint[][] = [];
+    const pointToGroup = new Map<WorldPoint, WorldPoint[]>();
 
-        // Skip if same piece
-        if (a.piece.id === b.piece.id) continue;
+    for (const point of worldPoints) {
+      // Find existing group this point belongs to
+      let foundGroup: WorldPoint[] | null = null;
 
-        // Skip if already connected
-        const aConnections = a.piece.connections.get(a.pointName) || [];
-        const alreadyConnected = aConnections.some(
-          c => c.pieceId === b.piece.id && c.pointName === b.pointName
-        );
-        if (alreadyConnected) continue;
+      for (const group of groups) {
+        // Check if point is within tolerance of any point in this group
+        for (const groupPoint of group) {
+          const dx = point.worldPos.x - groupPoint.worldPos.x;
+          const dz = point.worldPos.z - groupPoint.worldPos.z;
+          const distance = Math.sqrt(dx * dx + dz * dz);
+          if (distance <= POSITION_TOLERANCE) {
+            foundGroup = group;
+            break;
+          }
+        }
+        if (foundGroup) break;
+      }
 
-        // Check position distance
-        const dx = a.worldPos.x - b.worldPos.x;
-        const dz = a.worldPos.z - b.worldPos.z;
-        const distance = Math.sqrt(dx * dx + dz * dz);
-        if (distance > POSITION_TOLERANCE) continue;
+      if (foundGroup) {
+        foundGroup.push(point);
+        pointToGroup.set(point, foundGroup);
+      } else {
+        // Create new group
+        const newGroup = [point];
+        groups.push(newGroup);
+        pointToGroup.set(point, newGroup);
+      }
+    }
 
-        // Check directions are opposite (dot product close to -1)
-        const dot = a.worldDir.x * b.worldDir.x + a.worldDir.z * b.worldDir.z;
-        if (dot > -1 + DIRECTION_TOLERANCE) continue;
+    // Merge groups that should be connected (transitive closure)
+    // If group A has a point near group B, merge them
+    let merged = true;
+    while (merged) {
+      merged = false;
+      for (let i = 0; i < groups.length && !merged; i++) {
+        for (let j = i + 1; j < groups.length && !merged; j++) {
+          // Check if any point in group i is near any point in group j
+          outer: for (const pi of groups[i]) {
+            for (const pj of groups[j]) {
+              const dx = pi.worldPos.x - pj.worldPos.x;
+              const dz = pi.worldPos.z - pj.worldPos.z;
+              const distance = Math.sqrt(dx * dx + dz * dz);
+              if (distance <= POSITION_TOLERANCE) {
+                // Merge group j into group i
+                for (const p of groups[j]) {
+                  groups[i].push(p);
+                  pointToGroup.set(p, groups[i]);
+                }
+                groups.splice(j, 1);
+                merged = true;
+                break outer;
+              }
+            }
+          }
+        }
+      }
+    }
 
-        // Auto-connect!
-        const aConns = a.piece.connections.get(a.pointName) || [];
-        aConns.push({ pieceId: b.piece.id, pointName: b.pointName, isAutoConnect: true });
-        a.piece.connections.set(a.pointName, aConns);
+    // Within each group, connect all opposite-direction pairs
+    for (const group of groups) {
+      if (group.length < 2) continue;
 
-        const bConns = b.piece.connections.get(b.pointName) || [];
-        bConns.push({ pieceId: a.piece.id, pointName: a.pointName, isAutoConnect: true });
-        b.piece.connections.set(b.pointName, bConns);
+      for (let i = 0; i < group.length; i++) {
+        for (let j = i + 1; j < group.length; j++) {
+          const a = group[i];
+          const b = group[j];
+
+          // Skip if same piece
+          if (a.piece.id === b.piece.id) continue;
+
+          // Skip if already connected
+          const aConnections = a.piece.connections.get(a.pointName) || [];
+          const alreadyConnected = aConnections.some(
+            c => c.pieceId === b.piece.id && c.pointName === b.pointName
+          );
+          if (alreadyConnected) continue;
+
+          // Check directions are opposite (dot product close to -1)
+          const dot = a.worldDir.x * b.worldDir.x + a.worldDir.z * b.worldDir.z;
+          if (dot > -1 + DIRECTION_TOLERANCE) continue;
+
+          // Auto-connect!
+          const aConns = a.piece.connections.get(a.pointName) || [];
+          aConns.push({ pieceId: b.piece.id, pointName: b.pointName, isAutoConnect: true });
+          a.piece.connections.set(a.pointName, aConns);
+
+          const bConns = b.piece.connections.get(b.pointName) || [];
+          bConns.push({ pieceId: a.piece.id, pointName: a.pointName, isAutoConnect: true });
+          b.piece.connections.set(b.pointName, bConns);
+        }
       }
     }
   }
