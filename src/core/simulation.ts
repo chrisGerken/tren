@@ -347,26 +347,39 @@ export class Simulation {
    * Called after a train passes through if randomSwitches is enabled
    */
   private randomizeSwitch(routeKey: string): void {
-    // Extract the canonical junction ID from the route key
+    // Extract the direction from the route key
     // Format is: junction.{canonicalJunctionId}.{fwd|rev}
     const parts = routeKey.split('.');
     if (parts.length < 3 || parts[0] !== 'junction') return;
 
-    const canonicalJunctionId = parts[1];
     const direction = parts[2];
-
-    // Find all pieces connected to this junction to determine how many routes exist
-    // The canonical junction ID is the smallest piece ID involved
-    const piece = this.layout.pieces.find(p => p.id === canonicalJunctionId);
-    if (!piece) return;
-
-    // Check both 'in' and 'out' connections
     const pointName = direction === 'fwd' ? 'out' : 'in';
-    const connections = piece.connections.get(pointName);
-    if (!connections || connections.length <= 1) return;
+
+    // Find the piece that actually has multiple connections for this junction
+    // by searching all pieces and checking if they would generate this route key
+    let connectionCount = 0;
+
+    for (const piece of this.layout.pieces) {
+      const connections = piece.connections.get(pointName);
+      if (!connections || connections.length <= 1) continue;
+
+      // Reconstruct the canonical junction ID to see if it matches
+      const junctionPieceIds = connections.map(c => c.pieceId);
+      junctionPieceIds.push(piece.id);
+      junctionPieceIds.sort();
+      const canonicalId = junctionPieceIds[0];
+      const testRouteKey = `junction.${canonicalId}.${direction}`;
+
+      if (testRouteKey === routeKey) {
+        connectionCount = connections.length;
+        break;
+      }
+    }
+
+    if (connectionCount <= 1) return;
 
     // Randomly select a new route
-    const newRouteIndex = Math.floor(Math.random() * connections.length);
+    const newRouteIndex = Math.floor(Math.random() * connectionCount);
     this.selectedRoutes.set(routeKey, newRouteIndex);
 
     if (DEBUG_LOGGING) {
