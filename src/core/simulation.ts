@@ -501,10 +501,11 @@ export class Simulation {
 
     // Multiple connections - check train's route memory first, then current switch setting
     // Build the canonical junction ID (same logic as in train-movement.ts)
-    const junctionPieceIds = connections.map(c => c.pieceId);
-    junctionPieceIds.push(pieceId);
-    junctionPieceIds.sort();
-    const canonicalJunctionId = junctionPieceIds[0];
+    // Use piece.point pairs to distinguish different connection points on same piece
+    const junctionPoints = connections.map(c => `${c.pieceId}.${c.pointName}`);
+    junctionPoints.push(`${pieceId}.out`);
+    junctionPoints.sort();
+    const canonicalJunctionId = junctionPoints[0];
     const routeKey = `junction.${canonicalJunctionId}.fwd`;
 
     let selectedIndex: number;

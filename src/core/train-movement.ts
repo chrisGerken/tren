@@ -210,11 +210,11 @@ export function getNextSection(
 
   // Multiple connections in the same direction group - use switch
   // Use canonical junction ID so all pieces at this junction share the same switch state
-  // The canonical ID is the lowest piece ID among all pieces at this junction
-  const junctionPieceIds = allConnections.map(c => c.pieceId);
-  junctionPieceIds.push(pieceId);
-  junctionPieceIds.sort();
-  const canonicalJunctionId = junctionPieceIds[0];
+  // The canonical ID includes piece.point pairs to distinguish different connection points on same piece
+  const junctionPoints = allConnections.map(c => `${c.pieceId}.${c.pointName}`);
+  junctionPoints.push(`${pieceId}.${exitPoint}`);
+  junctionPoints.sort();
+  const canonicalJunctionId = junctionPoints[0];
 
   // Route key uses canonical junction ID so all inbound tracks share the same switch
   const routeKey = `junction.${canonicalJunctionId}.${switchDirection}`;
