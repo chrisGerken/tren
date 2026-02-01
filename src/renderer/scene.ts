@@ -216,7 +216,7 @@ export class TrackScene {
   }
 
   /**
-   * Fit camera to show all track pieces
+   * Fit camera to show all track pieces at 90% of window area
    */
   fitToLayout(): void {
     if (this.trackGroup.children.length === 0) return;
@@ -225,14 +225,27 @@ export class TrackScene {
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
 
-    // Add padding
-    const maxDim = Math.max(size.x, size.z) * 1.2;
     const aspect = this.container.clientWidth / this.container.clientHeight;
+    const layoutAspect = size.x / size.z;
 
-    this.camera.left = -maxDim * aspect / 2;
-    this.camera.right = maxDim * aspect / 2;
-    this.camera.top = maxDim / 2;
-    this.camera.bottom = -maxDim / 2;
+    // Scale to fit 90% of window, accounting for aspect ratios
+    let viewWidth: number;
+    let viewHeight: number;
+
+    if (layoutAspect > aspect) {
+      // Layout is wider than window - fit to width
+      viewWidth = size.x / 0.9;
+      viewHeight = viewWidth / aspect;
+    } else {
+      // Layout is taller than window - fit to height
+      viewHeight = size.z / 0.9;
+      viewWidth = viewHeight * aspect;
+    }
+
+    this.camera.left = -viewWidth / 2;
+    this.camera.right = viewWidth / 2;
+    this.camera.top = viewHeight / 2;
+    this.camera.bottom = -viewHeight / 2;
 
     this.camera.position.set(center.x, 100, center.z);
     this.camera.lookAt(center.x, 0, center.z);
