@@ -228,8 +228,14 @@ export function getNextSection(
       routesToClearAfterLastCar.add(routeKey);
     }
   } else {
-    // First car to cross - use current switch setting and record it
-    selectedIndex = selectedRoutes.get(routeKey) ?? 0;
+    // First car to cross - determine route and record it
+    if (layout.randomSwitches) {
+      // Random mode: randomly select a route
+      selectedIndex = Math.floor(Math.random() * connections.length);
+    } else {
+      // Normal mode: use current switch setting
+      selectedIndex = selectedRoutes.get(routeKey) ?? 0;
+    }
     if (trainRoutes) {
       trainRoutes.set(routeKey, selectedIndex);
     }

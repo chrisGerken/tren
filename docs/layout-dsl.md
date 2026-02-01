@@ -42,20 +42,20 @@ mingap 0.5                    # Very close following (for tight layouts)
 
 ### Random Switch Mode
 
-The `random` statement enables automatic random switch changes for unattended operation:
+The `random` statement enables random route selection at all switches:
 
 ```
 random                        # Enable random switch mode
 ```
 
 When `random` is present:
-- Switches automatically change to a random route after each train passes through
-- This creates varied and unpredictable train behavior
-- Useful for computer art, demonstrations, or passive observation
-- Switch indicators remain visible and can still be clicked to manually set routes
-- Only takes effect after the entire train has cleared the switch
+- Each train randomly selects a route when it first reaches any switch
+- All cars in the same train follow the same randomly-selected route
+- Different trains may take different routes at the same switch
+- Switch indicators remain visible but their settings are ignored
+- Creates varied and unpredictable train behavior
 
-This mode is ideal for creating interesting autonomous layouts that don't require user interaction.
+This mode is ideal for computer art, demonstrations, or passive observation without user interaction.
 
 ### Statement Separators
 

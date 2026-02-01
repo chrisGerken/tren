@@ -429,19 +429,19 @@ The `mingap` value (default 1 inch) sets the absolute minimum gap. The actual fo
 
 ## Random Switch Mode
 
-The `random` DSL statement enables autonomous operation where switches change randomly.
+The `random` DSL statement enables random route selection at all switches.
 
 **Design decisions:**
-- Random changes occur after the last car of a train clears a switch
-- Uses the `routesTaken` map clearing as the trigger (ensures entire train passes first)
-- Switch indicators remain visible and interactive
+- When a train's first car reaches a switch, a route is randomly selected
+- All subsequent cars in the same train follow that route (via `trainRoutes` map)
+- Switch indicators remain visible but their settings are ignored
 - Selection is uniformly random among available routes
 
 **Implementation:**
 - `Layout.randomSwitches` boolean flag set by parser
-- `Simulation.randomizeSwitch()` called when route memory is cleared
-- Extracts junction info from route key format `junction.{id}.{fwd|rev}`
-- Randomly selects from available connections at that switch point
+- `getNextSection()` in train-movement.ts checks `layout.randomSwitches`
+- If true, uses `Math.random()` instead of `selectedRoutes` for first car
+- Route is stored in `trainRoutes` so all cars take the same path
 
 **Use cases:**
 - Computer art / demonstrations
