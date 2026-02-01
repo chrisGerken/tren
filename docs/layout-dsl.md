@@ -29,6 +29,17 @@ description Created for testing virtual switches.
 
 Multiple description statements are allowed and will be concatenated with spaces.
 
+### Minimum Gap
+
+The `mingap` statement sets the minimum following distance between trains (in inches):
+
+```
+mingap 1.5                    # Trains maintain 1.5 inch gap
+mingap 0.5                    # Very close following (for tight layouts)
+```
+
+**Default**: 2 inches. This is the closest trains will get when following each other. Lower values allow tighter packing but require faster reaction times.
+
 ### Statement Separators
 
 Multiple statements can be placed on one line, separated by semicolons. Semicolons are not required after the last or only statement on a line.
