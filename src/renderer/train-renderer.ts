@@ -13,13 +13,13 @@ const CAR_HEIGHT = 1.5;
 // Colors
 const CAB_COLOR = 0xffff00;   // Yellow for cabs (engines)
 
-// Car colors - dark variants for rolling stock
+// Car colors - lighter variants for rolling stock
 const CAR_COLORS = [
-  0x8b0000,   // Dark red
-  0x00008b,   // Dark blue
-  0x006400,   // Dark green
-  0x4b0082,   // Dark purple (indigo)
-  0xff8c00,   // Dark orange
+  0xe74c3c,   // Light red
+  0x3498db,   // Light blue
+  0x2ecc71,   // Light green
+  0x9b59b6,   // Light purple
+  0xf39c12,   // Light orange
 ];
 
 // Track the last car color index for weighted random selection during spawning
