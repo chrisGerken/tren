@@ -93,9 +93,10 @@ export function renderLayout(scene: TrackScene, layout: Layout): void {
       // Calculate piece center from connection points
       const center = getPieceCenter(piece, archetype);
       // Add slight offset perpendicular to track to avoid overlap
+      // Note: offsetZ is negated to match the Z-flip in rendering
       const labelOffset = 2;
       const offsetX = Math.cos(piece.rotation + Math.PI / 2) * labelOffset;
-      const offsetZ = Math.sin(piece.rotation + Math.PI / 2) * labelOffset;
+      const offsetZ = -Math.sin(piece.rotation + Math.PI / 2) * labelOffset;
       scene.addLabel(piece.label, center.x + offsetX, center.z + offsetZ);
     }
   }
@@ -114,10 +115,10 @@ function renderTrackPieceDebug(piece: TrackPiece, archetype: TrackArchetype): TH
   const cos = Math.cos(piece.rotation);
   const sin = Math.sin(piece.rotation);
 
-  // Helper to transform local to world
+  // Helper to transform local to world (with Z negated for screen orientation)
   const toWorld = (local: { x: number; z: number }) => ({
     x: piece.position.x + (local.x * cos - local.z * sin),
-    z: piece.position.z + (local.x * sin + local.z * cos),
+    z: -(piece.position.z + (local.x * sin + local.z * cos)),
   });
 
   // Find 'in' and 'out' connection points
@@ -171,12 +172,15 @@ function renderTrackPiece(
   const cos = Math.cos(piece.rotation);
   const sin = Math.sin(piece.rotation);
 
-  // Helper to transform local to world
+  // Helper to transform local to world (with Z negated for screen orientation)
+  // The coordinate convention has +Z as "left", but the camera shows -Z as "up".
+  // By negating Z, we flip the layout so +Z appears at the top of the screen,
+  // making left curves visually curve upward (which looks like "left" when traveling right).
   const toWorld = (local: { x: number; y: number; z: number }): THREE.Vector3 => {
     return new THREE.Vector3(
       piece.position.x + (local.x * cos - local.z * sin),
       local.y,
-      piece.position.z + (local.x * sin + local.z * cos)
+      -(piece.position.z + (local.x * sin + local.z * cos))
     );
   };
 
@@ -317,10 +321,10 @@ function getPieceCenter(piece: TrackPiece, archetype: TrackArchetype): { x: numb
   const cos = Math.cos(piece.rotation);
   const sin = Math.sin(piece.rotation);
 
-  // Transform local point to world
+  // Transform local point to world (with Z negated for screen orientation)
   const toWorld = (local: { x: number; z: number }) => ({
     x: piece.position.x + (local.x * cos - local.z * sin),
-    z: piece.position.z + (local.x * sin + local.z * cos),
+    z: -(piece.position.z + (local.x * sin + local.z * cos)),
   });
 
   // Try to find center from 'in' and 'out' connection points
@@ -343,8 +347,8 @@ function getPieceCenter(piece: TrackPiece, archetype: TrackArchetype): { x: numb
     return toWorld(points[midIndex]);
   }
 
-  // Fallback to piece position
-  return { x: piece.position.x, z: piece.position.z };
+  // Fallback to piece position (with Z negated for screen orientation)
+  return { x: piece.position.x, z: -piece.position.z };
 }
 
 /**
@@ -372,11 +376,12 @@ function renderBumperStopWorld(
     const localTangent = { x: p2.x - p1.x, z: p2.z - p1.z };
 
     // Transform tangent to world coordinates (rotation only, not translation)
+    // Note: Z is negated to match the screen orientation flip
     const cos = Math.cos(piece.rotation);
     const sin = Math.sin(piece.rotation);
     const worldTangent = {
       x: localTangent.x * cos - localTangent.z * sin,
-      z: localTangent.x * sin + localTangent.z * cos,
+      z: -(localTangent.x * sin + localTangent.z * cos),
     };
 
     // Bumper should be perpendicular to tangent
@@ -390,8 +395,7 @@ function renderBumperStopWorld(
   mesh.position.set(worldPos.x, 0.5, worldPos.z);
   // Rotate bumper perpendicular to track direction
   // The box's long axis (Z) should be perpendicular to the tangent
-  // Negate because Three.js Y rotation is opposite to our coordinate system convention
-  mesh.rotation.y = -tangentAngle;
+  mesh.rotation.y = tangentAngle;
 
   return mesh;
 }
@@ -563,7 +567,7 @@ function buildCurveInfo(
   const section = connectedArchetype.sections[0];
   if (section.splinePoints.length < 2) return null;
 
-  // Build the spline curve in world coordinates
+  // Build the spline curve in world coordinates (with Z negated for screen orientation)
   const cos = Math.cos(connectedPiece.rotation);
   const sin = Math.sin(connectedPiece.rotation);
 
@@ -571,7 +575,7 @@ function buildCurveInfo(
     return new THREE.Vector3(
       connectedPiece.position.x + (local.x * cos - local.z * sin),
       local.y,
-      connectedPiece.position.z + (local.x * sin + local.z * cos)
+      -(connectedPiece.position.z + (local.x * sin + local.z * cos))
     );
   };
 

@@ -5,7 +5,6 @@
 import { Car, Train, Layout, TrackPiece, vec3, RangeValue } from './types';
 import { getArchetype } from './archetypes';
 import {
-  moveTrain,
   moveCar,
   updateCarWorldPosition,
   CAB_LENGTH,
@@ -14,15 +13,13 @@ import {
   getSectionLength,
 } from './train-movement';
 import { getRandomCarColor, resetCarColorTracking } from '../renderer/train-renderer';
+import { LockManager } from './lock-manager';
 
 // Default train speed in inches per second
 const DEFAULT_SPEED = 12;
 
-// Collision prevention constants
-const LOOK_AHEAD_DISTANCE = 48;      // How far ahead to scan (inches)
-const DEFAULT_MIN_GAP = 1;           // Default minimum gap between trains (inches)
+// Speed adjustment constants
 const ACCELERATION = 6;              // Speed increase per second (inches/sec²)
-const NORMAL_BRAKING = 12;           // Normal deceleration (inches/sec²)
 const EMERGENCY_BRAKING = 24;        // Hard braking (inches/sec²)
 
 /**
@@ -75,6 +72,8 @@ export class Simulation {
   private nextCarId: number = 1;
   // Cached resolved frequencies per generator (for range support)
   private resolvedFrequencies: Map<string, number> = new Map();
+  // Lock manager for connection point locking
+  private lockManager: LockManager = new LockManager();
 
   constructor(
     layout: Layout,
@@ -116,6 +115,7 @@ export class Simulation {
     this.trains = [];
     this.simulationTime = 0;
     this.resolvedFrequencies.clear();
+    this.lockManager.clear();
     // Reset generator spawn times
     for (const piece of this.layout.pieces) {
       if (piece.genConfig) {
@@ -284,6 +284,22 @@ export class Simulation {
       updateCarWorldPosition(car, this.layout);
     }
 
+    // Try to acquire initial locks before spawning
+    const lockResult = this.lockManager.acquireLeadingLocks(
+      train,
+      this.layout,
+      this.selectedRoutes,
+      this.simulationTime
+    );
+
+    if (!lockResult.success) {
+      // Track ahead is blocked - don't spawn yet
+      if (DEBUG_LOGGING) {
+        console.log(`Cannot spawn train - blocked at ${lockResult.blocked} by ${lockResult.blockingTrainId}`);
+      }
+      return;
+    }
+
     this.trains.push(train);
     if (DEBUG_LOGGING) console.log(`Spawned train ${train.id} with ${train.cars.length} cars`);
   }
@@ -293,10 +309,29 @@ export class Simulation {
    */
   private updateTrains(deltaTime: number): void {
     for (const train of this.trains) {
-      // Step 1: Adjust speed based on collision prevention
-      this.adjustTrainSpeed(train, deltaTime);
+      // Step 1: Try to acquire leading locks
+      const lockResult = this.lockManager.acquireLeadingLocks(
+        train,
+        this.layout,
+        this.selectedRoutes,
+        this.simulationTime
+      );
 
-      // Step 2: Move cars based on current speed
+      // Step 2: Adjust speed based on lock acquisition
+      if (!lockResult.success) {
+        // Can't acquire locks - decelerate to stop
+        train.currentSpeed = Math.max(0, train.currentSpeed - EMERGENCY_BRAKING * deltaTime);
+      } else {
+        // Locks acquired - accelerate toward desired speed
+        if (train.currentSpeed < train.desiredSpeed) {
+          train.currentSpeed = Math.min(
+            train.desiredSpeed,
+            train.currentSpeed + ACCELERATION * deltaTime
+          );
+        }
+      }
+
+      // Step 3: Move cars based on current speed
       const distance = train.currentSpeed * deltaTime;
 
       // Track routes used by the last car - these will be cleared after it passes
@@ -323,200 +358,19 @@ export class Simulation {
         if (DEBUG_LOGGING) console.log(`Cleared route memory: ${routeKey} for train ${train.id}`);
       }
 
+      // Step 4: Release locks for connection points the train has cleared
+      this.lockManager.releaseTrailingLocks(
+        train,
+        this.layout,
+        this.selectedRoutes,
+        this.simulationTime
+      );
+
       // Update visibility for each car
       for (const car of train.cars) {
         this.updateCarVisibility(car);
       }
     }
-  }
-
-  /**
-   * Get the minimum following gap for this layout
-   */
-  private getMinGap(): number {
-    return this.layout.minGap ?? DEFAULT_MIN_GAP;
-  }
-
-  /**
-   * Adjust train speed based on collision prevention
-   */
-  private adjustTrainSpeed(train: Train, deltaTime: number): void {
-    // Find distance to train ahead
-    const distanceToObstacle = this.findDistanceToTrainAhead(train);
-    const minGap = this.getMinGap();
-
-    if (distanceToObstacle === null || distanceToObstacle > LOOK_AHEAD_DISTANCE) {
-      // No obstacle or very far away - accelerate toward desired speed
-      if (train.currentSpeed < train.desiredSpeed) {
-        train.currentSpeed = Math.min(
-          train.desiredSpeed,
-          train.currentSpeed + ACCELERATION * deltaTime
-        );
-      } else if (train.currentSpeed > train.desiredSpeed) {
-        // Slow down if somehow going faster than desired
-        train.currentSpeed = Math.max(
-          train.desiredSpeed,
-          train.currentSpeed - NORMAL_BRAKING * deltaTime
-        );
-      }
-    } else {
-      // Obstacle detected - calculate safe speed
-      const safeSpeed = this.calculateSafeSpeed(distanceToObstacle, train.desiredSpeed);
-
-      if (train.currentSpeed > safeSpeed) {
-        // Need to slow down
-        const brakingRate = distanceToObstacle < minGap * 2
-          ? EMERGENCY_BRAKING
-          : NORMAL_BRAKING;
-        train.currentSpeed = Math.max(
-          safeSpeed,
-          train.currentSpeed - brakingRate * deltaTime
-        );
-      } else if (train.currentSpeed < safeSpeed && train.currentSpeed < train.desiredSpeed) {
-        // Can speed up (obstacle is moving or far enough)
-        train.currentSpeed = Math.min(
-          Math.min(safeSpeed, train.desiredSpeed),
-          train.currentSpeed + ACCELERATION * deltaTime
-        );
-      }
-    }
-
-    // Ensure speed doesn't go negative
-    if (train.currentSpeed < 0) {
-      train.currentSpeed = 0;
-    }
-  }
-
-  /**
-   * Calculate safe speed based on distance to obstacle
-   */
-  private calculateSafeSpeed(distance: number, desiredSpeed: number): number {
-    const minGap = this.getMinGap();
-    if (distance <= minGap) {
-      return 0; // Must stop
-    }
-
-    // Linear interpolation: full speed at LOOK_AHEAD_DISTANCE, stop at minGap
-    const ratio = (distance - minGap) / (LOOK_AHEAD_DISTANCE - minGap);
-    return desiredSpeed * Math.min(1, ratio);
-  }
-
-  /**
-   * Find the distance to the nearest train ahead along the track
-   * Returns null if no train is found within look-ahead distance
-   */
-  private findDistanceToTrainAhead(train: Train): number | null {
-    if (train.cars.length === 0) return null;
-
-    const leadCar = train.cars[0];
-
-    // Check all other trains for their rear-most car position
-    let minDistance: number | null = null;
-
-    for (const otherTrain of this.trains) {
-      if (otherTrain.id === train.id) continue;
-      if (otherTrain.cars.length === 0) continue;
-
-      // Find distance to each car of the other train
-      for (const otherCar of otherTrain.cars) {
-        const distance = this.calculateTrackDistance(leadCar, otherCar, train);
-        if (distance !== null && distance > 0) {
-          // Subtract half the other car's length to get distance to its rear
-          const distanceToRear = distance - otherCar.length / 2 - leadCar.length / 2;
-          if (distanceToRear > 0 && (minDistance === null || distanceToRear < minDistance)) {
-            minDistance = distanceToRear;
-          }
-        }
-      }
-    }
-
-    return minDistance;
-  }
-
-  /**
-   * Calculate track distance from one car to another (positive if target is ahead)
-   * Returns null if cars are not on the same route or target is not ahead
-   */
-  private calculateTrackDistance(fromCar: Car, toCar: Car, train: Train): number | null {
-    // Simple case: same piece
-    if (fromCar.currentPieceId === toCar.currentPieceId) {
-      const distance = toCar.distanceAlongSection - fromCar.distanceAlongSection;
-      return distance > 0 ? distance : null;
-    }
-
-    // Different pieces - trace forward from fromCar to find toCar
-    let totalDistance = 0;
-    let currentPieceId = fromCar.currentPieceId;
-    let distanceInCurrentPiece = fromCar.distanceAlongSection;
-
-    // Trace forward through connected pieces
-    for (let steps = 0; steps < 20; steps++) {  // Limit search depth
-      const piece = this.layout.pieces.find(p => p.id === currentPieceId);
-      if (!piece) break;
-
-      const sectionLength = getSectionLength(piece, 0);
-
-      // Check if toCar is on this piece
-      if (toCar.currentPieceId === currentPieceId) {
-        const distanceOnThisPiece = toCar.distanceAlongSection - distanceInCurrentPiece;
-        if (distanceOnThisPiece > 0) {
-          return totalDistance + distanceOnThisPiece;
-        }
-        return null; // Target is behind us on this piece
-      }
-
-      // Add remaining distance on current piece
-      totalDistance += sectionLength - distanceInCurrentPiece;
-
-      if (totalDistance > LOOK_AHEAD_DISTANCE) {
-        return null; // Too far ahead, stop searching
-      }
-
-      // Move to next piece (following train's route selections)
-      const nextSection = this.getNextPieceForLookAhead(currentPieceId, train);
-      if (!nextSection) break;
-
-      currentPieceId = nextSection.pieceId;
-      distanceInCurrentPiece = 0; // Start at beginning of next piece
-    }
-
-    return null; // Target not found on route ahead
-  }
-
-  /**
-   * Get the next piece when looking ahead (respects train's route memory and current switch settings)
-   */
-  private getNextPieceForLookAhead(pieceId: string, train: Train): { pieceId: string } | null {
-    const piece = this.layout.pieces.find(p => p.id === pieceId);
-    if (!piece) return null;
-
-    const connections = piece.connections.get('out');
-    if (!connections || connections.length === 0) {
-      return null;
-    }
-
-    if (connections.length === 1) {
-      return { pieceId: connections[0].pieceId };
-    }
-
-    // Multiple connections - check train's route memory first, then current switch setting
-    // Build the canonical junction ID (same logic as in train-movement.ts)
-    // Use piece.point pairs to distinguish different connection points on same piece
-    const junctionPoints = connections.map(c => `${c.pieceId}.${c.pointName}`);
-    junctionPoints.push(`${pieceId}.out`);
-    junctionPoints.sort();
-    const canonicalJunctionId = junctionPoints[0];
-    const routeKey = `junction.${canonicalJunctionId}.fwd`;
-
-    let selectedIndex: number;
-    if (train.routesTaken.has(routeKey)) {
-      selectedIndex = train.routesTaken.get(routeKey)!;
-    } else {
-      selectedIndex = this.selectedRoutes.get(routeKey) ?? 0;
-    }
-
-    const connection = connections[Math.min(selectedIndex, connections.length - 1)];
-    return { pieceId: connection.pieceId };
   }
 
   /**
@@ -555,10 +409,20 @@ export class Simulation {
       });
 
       if (allInBin) {
+        // Release all locks held by this train
+        this.lockManager.releaseAllLocks(train.id);
         if (DEBUG_LOGGING) console.log(`Removing train ${train.id} - all cars in bin`);
         return false; // Remove this train
       }
       return true; // Keep this train
     });
+  }
+
+  /**
+   * Check if a junction (switch) is locked by any train
+   * Used to prevent switch changes while a train is in the junction
+   */
+  isJunctionLocked(routeKey: string): boolean {
+    return this.lockManager.isJunctionLocked(routeKey);
   }
 }

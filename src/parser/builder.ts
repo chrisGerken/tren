@@ -7,6 +7,9 @@ import { Layout, TrackPiece, Vec3, vec2, ConnectionPointDef, RangeValue as TypeR
 import { getArchetype, registerRuntimeArchetype } from '../core/archetypes';
 import type { TrackArchetype } from '../core/archetypes';
 
+// Debug logging for layout building
+const DEBUG_LOGGING = false;
+
 interface SpliceInfo {
   label?: string;
   point?: string;
@@ -223,6 +226,14 @@ class LayoutBuilder {
       this.state.currentRotation = worldRotation;
       this.state.currentPiece = labeledPiece;
       this.state.currentPointName = pointName;
+
+      if (DEBUG_LOGGING) {
+        console.log(`Line ${stmt.line}: New segment from $${stmt.baseLabel}.${pointName}:`);
+        console.log(`Line ${stmt.line}:   baseAngle: ${(baseAngle * 180 / Math.PI).toFixed(1)}°`);
+        console.log(`Line ${stmt.line}:   degrees offset: ${stmt.degrees}°`);
+        console.log(`Line ${stmt.line}:   currentRotation: ${(worldRotation * 180 / Math.PI).toFixed(1)}°`);
+        console.log(`Line ${stmt.line}:   position: (${offsetPos.x.toFixed(2)}, ${offsetPos.z.toFixed(2)})`);
+      }
     } else {
       // Start at origin with specified rotation and offset
       const worldRotation = degreesRadians;
@@ -241,6 +252,13 @@ class LayoutBuilder {
       this.state.currentRotation = worldRotation;
       this.state.currentPiece = null;
       this.state.currentPointName = 'out';
+
+      if (DEBUG_LOGGING) {
+        console.log(`Line ${stmt.line}: New segment at origin:`);
+        console.log(`Line ${stmt.line}:   degrees: ${stmt.degrees}°`);
+        console.log(`Line ${stmt.line}:   currentRotation: ${(worldRotation * 180 / Math.PI).toFixed(1)}°`);
+        console.log(`Line ${stmt.line}:   position: (${startPos.x.toFixed(2)}, ${startPos.z.toFixed(2)})`);
+      }
     }
   }
 
@@ -248,7 +266,7 @@ class LayoutBuilder {
     const archetype = getArchetype(stmt.archetypeCode);
 
     for (let i = 0; i < stmt.count; i++) {
-      const piece = this.placePiece(archetype, stmt.attachPoint);
+      const piece = this.placePiece(archetype, stmt.attachPoint, stmt.line, stmt.label);
 
       // Apply label only to the first piece (or last? Let's use first)
       if (i === 0 && stmt.label) {
@@ -274,7 +292,7 @@ class LayoutBuilder {
     }
   }
 
-  private placePiece(archetype: TrackArchetype, explicitAttachPoint?: string): TrackPiece {
+  private placePiece(archetype: TrackArchetype, explicitAttachPoint?: string, line?: number, label?: string): TrackPiece {
     // Determine which connection point to attach
     // For first piece of segment or pieces with only one connection, be flexible
     let attachPointName = explicitAttachPoint || 'in';
@@ -323,6 +341,15 @@ class LayoutBuilder {
       connections: new Map(),
     };
 
+    if (DEBUG_LOGGING) {
+      const labelStr = label ? ` "${label}"` : '';
+      const lineStr = line !== undefined ? `Line ${line}` : 'Line ?';
+      console.log(`${lineStr}: Placed ${archetype.code}${labelStr} (${piece.id}):`);
+      console.log(`${lineStr}:   incomingRotation: ${(this.state.currentRotation * 180 / Math.PI).toFixed(1)}°`);
+      console.log(`${lineStr}:   pieceRotation: ${(pieceRotation * 180 / Math.PI).toFixed(1)}°`);
+      console.log(`${lineStr}:   position: (${piecePosition.x.toFixed(2)}, ${piecePosition.z.toFixed(2)})`);
+    }
+
     // Update current position and rotation for next piece
     if (continuePoint) {
       const rotatedContinue = this.rotatePoint(continuePoint.position, pieceRotation);
@@ -335,6 +362,11 @@ class LayoutBuilder {
       const continueDir = this.rotatePoint(continuePoint.direction, pieceRotation);
       this.state.currentRotation = Math.atan2(continueDir.z, continueDir.x);
       this.state.currentPointName = continuePointName!; // Non-null: continuePoint implies continuePointName is defined
+
+      if (DEBUG_LOGGING) {
+        const lineStr = line !== undefined ? `Line ${line}` : 'Line ?';
+        console.log(`${lineStr}:   outgoingRotation: ${(this.state.currentRotation * 180 / Math.PI).toFixed(1)}°`);
+      }
     }
 
     return piece;
@@ -366,6 +398,14 @@ class LayoutBuilder {
     this.state.currentRotation = Math.atan2(rotatedDir.z, rotatedDir.x);
     this.state.currentPiece = labeledPiece;
     this.state.currentPointName = pointName;
+
+    if (DEBUG_LOGGING) {
+      console.log(`Line ${stmt.line}: Reference $${stmt.label}.${pointName}:`);
+      console.log(`Line ${stmt.line}:   labeledPiece (${labeledPiece.archetypeCode}) rotation: ${(labeledPiece.rotation * 180 / Math.PI).toFixed(1)}°`);
+      console.log(`Line ${stmt.line}:   point.direction (local): (${point.direction.x.toFixed(3)}, ${point.direction.z.toFixed(3)})`);
+      console.log(`Line ${stmt.line}:   rotatedDir (world): (${rotatedDir.x.toFixed(3)}, ${rotatedDir.z.toFixed(3)})`);
+      console.log(`Line ${stmt.line}:   new currentRotation: ${(this.state.currentRotation * 180 / Math.PI).toFixed(1)}°`);
+    }
   }
 
   private processLoopClose(stmt: LoopCloseStatement): void {
@@ -438,6 +478,22 @@ class LayoutBuilder {
     // Update segment start position
     this.state.currentSegment.startPosition.x += translateX;
     this.state.currentSegment.startPosition.z += translateZ;
+
+    // Update builder state to reflect the post-transform position and rotation
+    // This ensures subsequent pieces (without a 'new' statement) use correct values
+    this.state.currentPosition = {
+      x: targetPos.x,
+      y: 0,
+      z: targetPos.z,
+    };
+    this.state.currentRotation = desiredAngle;
+
+    if (DEBUG_LOGGING) {
+      console.log(`Line ${stmt.line}: Loop close to $${stmt.label}.${stmt.point}:`);
+      console.log(`Line ${stmt.line}:   rotationDelta: ${(rotationDelta * 180 / Math.PI).toFixed(1)}°`);
+      console.log(`Line ${stmt.line}:   new currentPosition: (${targetPos.x.toFixed(2)}, ${targetPos.z.toFixed(2)})`);
+      console.log(`Line ${stmt.line}:   new currentRotation: ${(desiredAngle * 180 / Math.PI).toFixed(1)}°`);
+    }
 
     // Create connection records
     if (this.state.currentPiece) {

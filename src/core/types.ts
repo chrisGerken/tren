@@ -114,3 +114,21 @@ export function vec3(x: number, y: number, z: number): Vec3 {
 export function vec2(x: number, z: number): Vec3 {
   return { x, y: 0, z };
 }
+
+// =============================================================================
+// Connection Point Locking Types
+// =============================================================================
+
+/** Connection point identifier: "pieceId.pointName" */
+export type ConnectionPointId = string;
+
+/** Lock held on a connection point */
+export interface ConnectionPointLock {
+  trainId: string;
+  acquiredAt: number;  // simulation time
+}
+
+/** Per-train lock tracking */
+export interface TrainLockState {
+  heldLocks: Set<ConnectionPointId>;
+}

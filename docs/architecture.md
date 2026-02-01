@@ -161,3 +161,74 @@ The tolerances accommodate accumulated geometric errors from sequences of curves
 Connection points at approximately the same position but with parallel directions (not facing each other) remain unconnected.
 
 See [Layout DSL](layout-dsl.md) for examples and usage details.
+
+## Collision Prevention: Lock Manager
+
+The `LockManager` class (`src/core/lock-manager.ts`) handles connection point locking to prevent train collisions.
+
+### Connection Point Identifiers
+
+Connection points are identified by string IDs in the format `${pieceId}.${pointName}`, e.g., `piece_5.out`.
+
+```typescript
+type ConnectionPointId = string;  // "pieceId.pointName"
+
+interface ConnectionPointLock {
+  trainId: string;
+  acquiredAt: number;  // simulation time
+}
+
+interface TrainLockState {
+  heldLocks: Set<ConnectionPointId>;
+}
+```
+
+### LockManager Class
+
+```typescript
+class LockManager {
+  // Main lock registry
+  private locks: Map<ConnectionPointId, ConnectionPointLock>;
+
+  // Per-train lock tracking
+  private trainStates: Map<string, TrainLockState>;
+
+  // Configuration
+  readonly minLockDistance = 10;  // inches
+  readonly minLockCount = 2;      // connection points
+
+  // Core operations
+  tryAcquireLocks(trainId, points[], simulationTime): LockAcquisitionResult;
+  releaseLock(trainId, point): boolean;
+  releaseAllLocks(trainId): void;
+
+  // High-level operations
+  acquireLeadingLocks(train, layout, selectedRoutes, simulationTime): LockAcquisitionResult;
+  releaseTrailingLocks(train, layout, selectedRoutes, simulationTime): void;
+  calculateStraddledPoints(train, layout): ConnectionPointId[];
+
+  // Junction protection
+  isJunctionLocked(routeKey): boolean;
+}
+```
+
+### Integration with Simulation
+
+The `Simulation` class (`src/core/simulation.ts`) uses the LockManager:
+
+1. **Each frame in `updateTrains()`:**
+   - Call `acquireLeadingLocks()` for each train
+   - Adjust speed based on lock acquisition success
+   - Move cars
+   - Call `releaseTrailingLocks()` for each train
+
+2. **On train spawn:**
+   - Try `acquireLeadingLocks()` before adding train
+   - If blocked, don't spawn (try again next interval)
+
+3. **On train removal:**
+   - Call `releaseAllLocks()` when all cars enter bin
+
+4. **On switch click:**
+   - Check `isJunctionLocked()` before allowing change
+   - Reject with status message if locked

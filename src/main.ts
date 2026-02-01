@@ -33,6 +33,13 @@ let simulation: Simulation | null = null;
 // Set up switch click callback
 scene.setSwitchClickCallback((routeKey, connectionIndex) => {
   if (DEBUG_LOGGING) console.log(`Switch click callback: ${routeKey} -> ${connectionIndex}`);
+
+  // Check if the junction is locked by a train
+  if (simulation?.isJunctionLocked(routeKey)) {
+    setStatus('Switch locked - train in junction');
+    return;
+  }
+
   setSelectedRouteByKey(routeKey, connectionIndex);
   if (currentLayout) {
     if (DEBUG_LOGGING) console.log(`Calling renderLayout with ${currentLayout.pieces.length} pieces`);

@@ -387,45 +387,65 @@ gen cabs 1-2 cars 3-8 speed 6-24 every 15-30  # Randomized values
 - Cars become invisible when entering bin
 - Train removed when all cars are in bin
 
-## Collision Prevention
+## Collision Prevention: Connection Point Locking
 
-Trains automatically regulate their speed to prevent rear-end collisions.
+Trains use **connection point locking** instead of distance-based speed regulation. This approach is cleaner and more efficient.
 
 **Design decisions:**
-- Each train has `desiredSpeed` (from generator config) and `currentSpeed` (actual)
-- The lead car scans ahead along the track path to detect other trains
-- Speed is adjusted gradually using acceleration/deceleration rates
-- The minimum following gap is configurable via `mingap` DSL statement
+- Trains lock connection points ahead of the leading car
+- Trains hold locks on all connection points they straddle
+- Trailing car releases locks when it clears points
+- Switches cannot change while their junction point is locked
+- Ordered acquisition (nearest to farthest) prevents deadlocks
 
-**Implementation constants:**
-- `LOOK_AHEAD_DISTANCE`: 48 inches (how far ahead to scan)
-- `DEFAULT_MIN_GAP`: 1 inch (minimum distance between trains)
-- `ACCELERATION`: 6 inches/sec² (gradual speed-up)
-- `NORMAL_BRAKING`: 12 inches/sec² (comfortable slow-down)
-- `EMERGENCY_BRAKING`: 24 inches/sec² (hard stop when very close)
+**Implementation: LockManager class (`src/core/lock-manager.ts`):**
+- `locks`: Map of connectionPointId → lock info (trainId, acquiredAt)
+- `trainStates`: Map of trainId → set of held locks
+- `tryAcquireLocks()`: Acquire locks in order, stop if blocked
+- `releaseLock()`: Release a specific lock
+- `releaseAllLocks()`: Release all locks for a train (on removal)
+- `acquireLeadingLocks()`: Scan ahead and acquire locks
+- `releaseTrailingLocks()`: Release locks the train has cleared
+- `isJunctionLocked()`: Check if a switch can be changed
 
-**Speed calculation algorithm:**
-1. Lead car traces forward along track through connected sections
-2. Distance to nearest car of other trains is calculated
-3. If no obstacle within look-ahead distance: accelerate toward desired speed
-4. If obstacle detected: calculate safe speed using linear interpolation
-   - Full desired speed at `LOOK_AHEAD_DISTANCE`
-   - Zero speed at `minGap` distance
-5. Apply appropriate braking rate based on urgency
+**Configuration constants:**
+- `minLockDistance`: 10 inches (minimum look-ahead distance)
+- `minLockCount`: 2 connection points (minimum locks to proceed)
+- `ACCELERATION`: 6 inches/sec² (speed-up when locks acquired)
+- `EMERGENCY_BRAKING`: 24 inches/sec² (deceleration when blocked)
 
-**Look-ahead path following:**
-- Traces through connected track pieces following train's route memory
-- At virtual switches, uses train's recorded route (from `routesTaken` map)
-- Falls back to current switch setting if no route recorded yet
-- Limits search depth to prevent infinite loops (20 pieces max)
+**Lock acquisition algorithm:**
+1. Start from leading car's current piece
+2. Add exit point of current piece to lock list
+3. Get next piece via `getNextSection()` (respects switch selection)
+4. Add entry point of next piece
+5. Accumulate distance (zero-length pieces contribute 0)
+6. Repeat until distance ≥ 10 inches AND points ≥ 2
+7. Try to acquire all points in order; if any blocked, stop and wait
 
-**DSL configuration:**
-```
-mingap 0.5    # Tight following for dense layouts
-mingap 2      # More conservative following distance
-```
+**Spawn blocking:**
+- Before spawning, simulation tries to acquire initial locks
+- If blocked, spawn is deferred (generator tries again later)
 
-The `mingap` value (default 1 inch) sets the absolute minimum gap. The actual following distance increases with speed to allow for braking.
+**Train removal:**
+- When all cars enter bin, `releaseAllLocks()` is called
+- This unblocks any waiting trains
+
+**Switch protection:**
+- `isJunctionLocked()` checks if junction's connection point is locked
+- Switch click handler refuses to change locked switches
+- Status bar shows "Switch locked - train in junction"
+
+**Zero-length pieces:**
+- `gen`, `bin`, `ph` (placeholder), `tun` (tunnel) have length 0
+- Their connection points still need locks
+- They contribute 0 to distance calculation
+- Result: more points locked when traversing zero-length sequences
+
+**Crossings (x90, x45):**
+- Only lock connection points on the route being used
+- `in1`/`out1` for one track, `in2`/`out2` for other
+- Trains on different routes can cross simultaneously
 
 ## Random Switch Mode
 
@@ -447,6 +467,63 @@ The `random` DSL statement enables random route selection at all switches.
 - Computer art / demonstrations
 - Stress testing layouts
 - Passive observation without user interaction
+
+## Coordinate System and Z-Flip Rendering
+
+The simulation uses a coordinate system where +Z is "left" (per the codebase convention), but Three.js's default camera orientation shows +Z as "down" on screen. To make left curves visually curve upward (which looks correct), the rendering negates all Z coordinates.
+
+**Coordinate convention:**
+- Simulation: X = forward (primary direction), Z = lateral (positive = left)
+- Three.js camera: Looking down from +Y, default shows +Z as down on screen
+
+**Z-flip implementation:**
+- All `toWorld()` transforms in track-renderer.ts negate the Z component
+- Train positions: `posZ = -car.worldPosition.z`
+- Train rotations: `rotation.y = car.rotation` (not negated, because Z-flip changes the rotation sign)
+
+**Files affected:**
+- `src/renderer/track-renderer.ts`: Multiple `toWorld()` functions
+- `src/renderer/train-renderer.ts`: Position and rotation in `renderCar()` and `updateTrainMeshes()`
+
+**Why this approach:**
+- Cleaner than modifying the camera orientation (which would flip the X axis)
+- Cleaner than changing archetype definitions
+- Maintains internal coordinate convention (+Z = left) while showing correct visuals
+
+## Train Rendering Performance
+
+Train geometry, edges, and materials are cached to prevent memory exhaustion with many trains over extended periods.
+
+**Problem:**
+- Original code created new materials and EdgesGeometry every frame for every car
+- At 60fps with many trains, this created thousands of objects per second
+- Led to memory exhaustion and application freeze after several minutes
+
+**Solution - Cached resources:**
+```typescript
+// Geometry cached (was already done)
+let cabGeometry: THREE.ExtrudeGeometry | null = null;
+let carGeometry: THREE.ExtrudeGeometry | null = null;
+
+// NEW: Edges cached (expensive to compute)
+let cabEdges: THREE.EdgesGeometry | null = null;
+let carEdges: THREE.EdgesGeometry | null = null;
+
+// NEW: Materials cached by color
+const materialCache = new Map<number, THREE.MeshStandardMaterial>();
+let outlineMaterial: THREE.LineBasicMaterial | null = null;
+```
+
+**Getter functions:**
+- `getCabGeometry()`, `getCarGeometry()`: Return cached geometry
+- `getCabEdges()`, `getCarEdges()`: Return cached edge geometry
+- `getMaterial(color)`: Return cached material for given color
+- `getOutlineMaterial()`: Return cached black outline material
+
+**Scene update optimization:**
+- `updateTrains()` no longer disposes geometry/materials (they're shared)
+- Only removes Object3D references from scene graph
+- Transfers children from input group instead of cloning
 
 ## Open Questions
 

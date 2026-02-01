@@ -148,16 +148,27 @@ export class TrackScene {
   }
 
   clearLayout(): void {
-    // Remove all track pieces
+    // Recursively dispose all meshes in a group
+    const disposeObject = (obj: THREE.Object3D) => {
+      if (obj instanceof THREE.Mesh) {
+        obj.geometry.dispose();
+        if (obj.material instanceof THREE.Material) {
+          obj.material.dispose();
+        } else if (Array.isArray(obj.material)) {
+          obj.material.forEach(m => m.dispose());
+        }
+      }
+      // Recurse into children
+      for (const child of obj.children) {
+        disposeObject(child);
+      }
+    };
+
+    // Remove all track pieces with proper disposal
     while (this.trackGroup.children.length > 0) {
       const child = this.trackGroup.children[0];
       this.trackGroup.remove(child);
-      if (child instanceof THREE.Mesh) {
-        child.geometry.dispose();
-        if (child.material instanceof THREE.Material) {
-          child.material.dispose();
-        }
-      }
+      disposeObject(child);
     }
 
     // Remove all labels
@@ -172,23 +183,21 @@ export class TrackScene {
 
   /**
    * Update train visuals - replaces all train meshes
+   * Note: Train geometry and materials are cached in train-renderer.ts,
+   * so we only remove objects from the scene without disposing shared resources.
    */
   updateTrains(trainGroup: THREE.Group): void {
-    // Clear existing trains
+    // Clear existing trains - just remove from scene, don't dispose shared geometry/materials
     while (this.trainGroup.children.length > 0) {
-      const child = this.trainGroup.children[0];
-      this.trainGroup.remove(child);
-      if (child instanceof THREE.Mesh) {
-        child.geometry.dispose();
-        if (child.material instanceof THREE.Material) {
-          child.material.dispose();
-        }
-      }
+      this.trainGroup.remove(this.trainGroup.children[0]);
     }
 
-    // Add new train meshes
-    for (const child of trainGroup.children) {
-      this.trainGroup.add(child.clone());
+    // Transfer children from input group (don't clone to avoid memory waste)
+    // We need to copy the array since we're modifying it during iteration
+    const children = [...trainGroup.children];
+    for (const child of children) {
+      trainGroup.remove(child);
+      this.trainGroup.add(child);
     }
   }
 

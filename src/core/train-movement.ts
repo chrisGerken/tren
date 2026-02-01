@@ -112,14 +112,14 @@ export function updateCarWorldPosition(car: Car, layout: Layout): void {
 /**
  * Determine if a connection point name is an "in" type
  */
-function isInPoint(pointName: string): boolean {
+export function isInPoint(pointName: string): boolean {
   return pointName === 'in' || pointName === 'in1' || pointName === 'in2';
 }
 
 /**
  * Determine if a connection point name is an "out" type
  */
-function isOutPoint(pointName: string): boolean {
+export function isOutPoint(pointName: string): boolean {
   return pointName === 'out' || pointName === 'out1' || pointName === 'out2';
 }
 
@@ -252,7 +252,7 @@ export function getNextSection(
 /**
  * Get the opposite connection point name
  */
-function getOppositePoint(pointName: string): string {
+export function getOppositePoint(pointName: string): string {
   if (pointName === 'in') return 'out';
   if (pointName === 'out') return 'in';
   if (pointName === 'in1') return 'out1';

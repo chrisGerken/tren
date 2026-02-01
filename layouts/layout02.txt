@@ -1,3 +1,5 @@
+random
+
 start: ph
 
 crvl x 4
@@ -19,11 +21,11 @@ crv * 4
 str * 2
 crv * 4
 str * 2
-crv * 4
-#bump
+crv * 3
+exit: crv
 str
 
-$ph1.out
+$exit.out
 crvr
 crvl
 str

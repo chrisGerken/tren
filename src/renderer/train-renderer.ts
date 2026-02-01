@@ -167,9 +167,15 @@ function createCarShape(): THREE.Shape {
   return shape;
 }
 
-// Cache the geometries since they're reused
+// Cache geometries and edges since they're reused
 let cabGeometry: THREE.ExtrudeGeometry | null = null;
 let carGeometry: THREE.ExtrudeGeometry | null = null;
+let cabEdges: THREE.EdgesGeometry | null = null;
+let carEdges: THREE.EdgesGeometry | null = null;
+
+// Cache materials by color to avoid recreating them
+const materialCache = new Map<number, THREE.MeshStandardMaterial>();
+let outlineMaterial: THREE.LineBasicMaterial | null = null;
 
 function getCabGeometry(): THREE.ExtrudeGeometry {
   if (!cabGeometry) {
@@ -199,6 +205,40 @@ function getCarGeometry(): THREE.ExtrudeGeometry {
     carGeometry.translate(0, CAR_HEIGHT / 2, 0);
   }
   return carGeometry;
+}
+
+function getCabEdges(): THREE.EdgesGeometry {
+  if (!cabEdges) {
+    cabEdges = new THREE.EdgesGeometry(getCabGeometry(), 15);
+  }
+  return cabEdges;
+}
+
+function getCarEdges(): THREE.EdgesGeometry {
+  if (!carEdges) {
+    carEdges = new THREE.EdgesGeometry(getCarGeometry(), 15);
+  }
+  return carEdges;
+}
+
+function getMaterial(color: number): THREE.MeshStandardMaterial {
+  let material = materialCache.get(color);
+  if (!material) {
+    material = new THREE.MeshStandardMaterial({
+      color,
+      roughness: 0.7,
+      metalness: 0.3,
+    });
+    materialCache.set(color, material);
+  }
+  return material;
+}
+
+function getOutlineMaterial(): THREE.LineBasicMaterial {
+  if (!outlineMaterial) {
+    outlineMaterial = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 1 });
+  }
+  return outlineMaterial;
 }
 
 /**
@@ -231,32 +271,49 @@ function renderTrain(train: Train): THREE.Group {
 }
 
 /**
- * Render a single car with custom shape
+ * Render a single car with custom shape and black border
  * Cabs have truncated rounded triangle front, cars have rounded rectangle
  */
-function renderCar(car: Car): THREE.Mesh {
+function renderCar(car: Car): THREE.Group {
   const isCab = car.type === 'cab';
   const geometry = isCab ? getCabGeometry() : getCarGeometry();
+  const edges = isCab ? getCabEdges() : getCarEdges();
   // Cabs are always yellow; cars use their stored color (assigned at spawn time)
   const color = isCab ? CAB_COLOR : (car.color ?? CAR_COLORS[0]);
 
-  const material = new THREE.MeshStandardMaterial({
-    color,
-    roughness: 0.7,
-    metalness: 0.3,
-  });
-
+  // Use cached materials
+  const material = getMaterial(color);
   const mesh = new THREE.Mesh(geometry, material);
-  mesh.name = car.id;
+
+  // Use cached outline material and edges
+  const outline = new THREE.LineSegments(edges, getOutlineMaterial());
+
+  // Create group to hold both mesh and outline
+  const group = new THREE.Group();
+  group.name = car.id;
+  group.add(mesh);
+  group.add(outline);
 
   // Position at world coordinates (geometry is already centered with bottom at Y=0)
-  mesh.position.set(car.worldPosition.x, 0, car.worldPosition.z);
-  mesh.rotation.y = -car.rotation; // Negate for Three.js convention
+  // Note: Z is negated to match the track rendering's Z-flip for screen orientation
+  // With Z-flip, the rotation sign also flips, so we use car.rotation directly (not negated)
+  const posX = car.worldPosition.x;
+  const posZ = -car.worldPosition.z;
+  const rot = car.rotation;
+
+  // Guard against NaN values which can cause rendering issues
+  if (Number.isNaN(posX) || Number.isNaN(posZ) || Number.isNaN(rot)) {
+    console.error(`NaN detected in car ${car.id}: pos=(${posX}, ${posZ}), rot=${rot}`);
+    group.visible = false;
+  } else {
+    group.position.set(posX, 0, posZ);
+    group.rotation.y = rot;
+  }
 
   // Set visibility
-  mesh.visible = car.visible;
+  group.visible = car.visible;
 
-  return mesh;
+  return group;
 }
 
 /**
@@ -264,22 +321,32 @@ function renderCar(car: Car): THREE.Mesh {
  * More efficient than recreating all geometry each frame
  */
 export function updateTrainMeshes(group: THREE.Group, trains: Train[]): void {
-  // Build a map of car meshes by ID
-  const meshMap = new Map<string, THREE.Mesh>();
+  // Build a map of car groups by ID
+  const groupMap = new Map<string, THREE.Group>();
   group.traverse((obj) => {
-    if (obj instanceof THREE.Mesh && obj.name) {
-      meshMap.set(obj.name, obj);
+    if (obj instanceof THREE.Group && obj.name) {
+      groupMap.set(obj.name, obj);
     }
   });
 
-  // Update each car's mesh
+  // Update each car's group
   for (const train of trains) {
     for (const car of train.cars) {
-      const mesh = meshMap.get(car.id);
-      if (mesh) {
-        mesh.position.set(car.worldPosition.x, 0, car.worldPosition.z);
-        mesh.rotation.y = -car.rotation;
-        mesh.visible = car.visible;
+      const carGroup = groupMap.get(car.id);
+      if (carGroup) {
+        const posX = car.worldPosition.x;
+        const posZ = -car.worldPosition.z;
+        const rot = car.rotation;  // No negation with Z-flip
+
+        // Guard against NaN values
+        if (Number.isNaN(posX) || Number.isNaN(posZ) || Number.isNaN(rot)) {
+          console.error(`NaN detected in car ${car.id}: pos=(${posX}, ${posZ}), rot=${rot}`);
+          carGroup.visible = false;
+        } else {
+          carGroup.position.set(posX, 0, posZ);
+          carGroup.rotation.y = rot;
+          carGroup.visible = car.visible;
+        }
       }
     }
   }

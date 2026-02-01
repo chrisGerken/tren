@@ -96,34 +96,91 @@ When the primary cab crosses from one track section to another:
 
 ## Collision Prevention
 
-The simulation uses automatic speed regulation to prevent collisions rather than detecting and responding to them after the fact. See [Speed Regulation](#speed-regulation-collision-prevention) above.
+The simulation uses **connection point locking** to prevent collisions. Trains lock connection points ahead of the leading car and release them as the trailing car clears.
+
+### Connection Point Locking
+
+Each connection point (where track pieces join) can be locked by at most one train at a time. The locking mechanism provides:
+
+1. **Mutual exclusion**: Only one train can hold a lock on a connection point
+2. **Ordered acquisition**: Locks are acquired in track order (nearest to farthest), preventing deadlocks
+3. **Automatic release**: Locks are released when the trailing car clears the point
+
+### Lock Acquisition
+
+The leading car continuously scans ahead to acquire locks:
+
+1. Start from the leading car's current piece
+2. Add the exit point of the current piece
+3. Get the next piece via the selected route
+4. Add the entry point of the next piece
+5. Continue until BOTH conditions are met:
+   - Distance covered ≥ 10 inches
+   - At least 2 connection points locked
+6. If any point is already locked by another train, stop and wait
+
+**Configuration:**
+- `minLockDistance`: 10 inches (minimum look-ahead distance)
+- `minLockCount`: 2 connection points (minimum locks required)
+
+### Lock Release
+
+The trailing car releases locks as it clears connection points:
+
+1. Calculate which points the train currently straddles (any car overlapping the point)
+2. Calculate which points are in the look-ahead set
+3. Release locks that are no longer straddled AND not in the look-ahead set
+
+### Speed Regulation
+
+When a train cannot acquire the locks it needs:
+- It decelerates using emergency braking (24 inches/sec²)
+- It may come to a complete stop if blocked
+
+When a train has sufficient locks:
+- It accelerates toward its desired speed (6 inches/sec² acceleration)
+
+### Switch (Junction) Locking
+
+Switches cannot be changed while a train's connection point is locked at that junction. This prevents derailments from switching while a train is crossing.
 
 ### Same-Track Following
 
 When a faster train approaches a slower train ahead:
-1. The following train detects the train ahead via look-ahead
-2. It gradually slows down to match the leading train's speed
-3. It maintains a safe following distance based on both trains' speeds
-4. If the leading train speeds up or clears the path, the following train accelerates
+1. The following train's lock acquisition fails (points locked by lead train)
+2. It decelerates to a stop behind the lead train
+3. When the lead train releases locks (moves forward), the following train acquires them
+4. The following train accelerates and resumes
 
-### Stopped Trains
+### Spawn Blocking
 
-When approaching a stopped train:
-1. The following train begins braking when within look-ahead distance
-2. Braking rate increases as distance decreases
-3. The train stops with a minimum gap (default 1 inch, configurable via `mingap`) from the train ahead
-4. When the train ahead moves, the following train resumes
+When a generator attempts to spawn a new train:
+1. The simulation tries to acquire initial locks for the train
+2. If the exit track is blocked (locks held by another train), spawning is deferred
+3. The generator will try again on the next spawn interval
 
-### Collision Types (Future)
+### Train Removal
 
-These collision scenarios are not yet implemented but may be added:
+When a train is removed (all cars in bin):
+1. All locks held by the train are released
+2. This allows waiting trains to acquire those locks and proceed
 
-**Head-on collision**:
+### Collision Types Handled
+
+**Rear-end collisions**: Prevented by lock acquisition - following train cannot acquire locks held by lead train
+
+**Merge collisions**: Prevented at junctions - only one train can hold locks on the junction point
+
+**Switch derailments**: Prevented by junction locking - switch cannot change while locked
+
+### Future Collision Types
+
+**Head-on collision** (not yet implemented):
 - Trains traveling opposite directions on same section
-- Would require bidirectional look-ahead
+- Current lock system would need bidirectional awareness
 
-**Intersection collisions** (at diamond crossings):
-- Two independent track sections share physical space
+**Intersection collisions at crossings** (not yet implemented):
+- Two independent track sections share physical space at diamond crossings
 - Would require collision point detection in archetypes
 
 ## Route Memory at Switches
