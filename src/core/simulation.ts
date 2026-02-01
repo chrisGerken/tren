@@ -316,6 +316,11 @@ export class Simulation {
       for (const routeKey of routesToClear) {
         train.routesTaken.delete(routeKey);
         if (DEBUG_LOGGING) console.log(`Cleared route memory: ${routeKey} for train ${train.id}`);
+
+        // If random switches are enabled, randomize the switch after the train passes
+        if (this.layout.randomSwitches) {
+          this.randomizeSwitch(routeKey);
+        }
       }
 
       // Update visibility for each car
@@ -330,6 +335,38 @@ export class Simulation {
    */
   private getMinGap(): number {
     return this.layout.minGap ?? DEFAULT_MIN_GAP;
+  }
+
+  /**
+   * Randomly change a switch to a different route
+   * Called after a train passes through if randomSwitches is enabled
+   */
+  private randomizeSwitch(routeKey: string): void {
+    // Extract the canonical junction ID from the route key
+    // Format is: junction.{canonicalJunctionId}.{fwd|rev}
+    const parts = routeKey.split('.');
+    if (parts.length < 3 || parts[0] !== 'junction') return;
+
+    const canonicalJunctionId = parts[1];
+    const direction = parts[2];
+
+    // Find all pieces connected to this junction to determine how many routes exist
+    // The canonical junction ID is the smallest piece ID involved
+    const piece = this.layout.pieces.find(p => p.id === canonicalJunctionId);
+    if (!piece) return;
+
+    // Check both 'in' and 'out' connections
+    const pointName = direction === 'fwd' ? 'out' : 'in';
+    const connections = piece.connections.get(pointName);
+    if (!connections || connections.length <= 1) return;
+
+    // Randomly select a new route
+    const newRouteIndex = Math.floor(Math.random() * connections.length);
+    this.selectedRoutes.set(routeKey, newRouteIndex);
+
+    if (DEBUG_LOGGING) {
+      console.log(`Random switch: ${routeKey} changed to route ${newRouteIndex}`);
+    }
   }
 
   /**

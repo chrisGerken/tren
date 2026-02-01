@@ -13,7 +13,8 @@ export type Statement =
   | TitleStatement
   | DescriptionStatement
   | MingapStatement
-  | SpliceStatement;
+  | SpliceStatement
+  | RandomStatement;
 
 export interface NewStatement {
   type: 'new';
@@ -84,6 +85,11 @@ export interface SpliceStatement {
   line: number;
 }
 
+export interface RandomStatement {
+  type: 'random';
+  line: number;
+}
+
 /**
  * Parse DSL text into an array of statements
  */
@@ -129,6 +135,9 @@ class Parser {
 
       case TokenType.MINGAP:
         return this.parseMingapStatement();
+
+      case TokenType.RANDOM:
+        return this.parseRandomStatement();
 
       case TokenType.SPLICE:
         return this.parseSpliceStatement();
@@ -271,6 +280,11 @@ class Parser {
       value = parseFloat(this.advance().value);
     }
     return { type: 'mingap', value, line: token.line };
+  }
+
+  private parseRandomStatement(): RandomStatement {
+    const token = this.advance(); // consume 'random'
+    return { type: 'random', line: token.line };
   }
 
   private parseSpliceStatement(): SpliceStatement {

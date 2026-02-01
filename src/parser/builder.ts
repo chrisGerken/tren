@@ -2,7 +2,7 @@
  * Layout Builder - transforms AST into placed track pieces
  */
 
-import { parse, Statement, PieceStatement, NewStatement, ReferenceStatement, LoopCloseStatement, TitleStatement, DescriptionStatement, MingapStatement, SpliceStatement, RangeValue } from './parser';
+import { parse, Statement, PieceStatement, NewStatement, ReferenceStatement, LoopCloseStatement, TitleStatement, DescriptionStatement, MingapStatement, SpliceStatement, RandomStatement, RangeValue } from './parser';
 import { Layout, TrackPiece, Vec3, vec2, ConnectionPointDef, RangeValue as TypeRangeValue } from '../core/types';
 import { getArchetype, registerRuntimeArchetype } from '../core/archetypes';
 import type { TrackArchetype } from '../core/archetypes';
@@ -35,6 +35,7 @@ interface BuilderState {
   title?: string;
   descriptions: string[];
   minGap?: number;
+  randomSwitches?: boolean;
   pendingSplices: SpliceInfo[];
 }
 
@@ -99,6 +100,7 @@ class LayoutBuilder {
         ? this.state.descriptions.join(' ')
         : undefined,
       minGap: this.state.minGap,
+      randomSwitches: this.state.randomSwitches,
       pieces: this.state.pieces,
     };
   }
@@ -126,6 +128,9 @@ class LayoutBuilder {
       case 'mingap':
         this.processMingap(stmt);
         break;
+      case 'random':
+        this.processRandom(stmt);
+        break;
       case 'splice':
         this.processSplice(stmt);
         break;
@@ -145,6 +150,10 @@ class LayoutBuilder {
 
   private processMingap(stmt: MingapStatement): void {
     this.state.minGap = stmt.value;
+  }
+
+  private processRandom(_stmt: RandomStatement): void {
+    this.state.randomSwitches = true;
   }
 
   private processSplice(stmt: SpliceStatement): void {

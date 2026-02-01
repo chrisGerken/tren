@@ -11,8 +11,194 @@ const CAR_WIDTH = 2;
 const CAR_HEIGHT = 1.5;
 
 // Colors
-const CAB_COLOR = 0xd8a60b;   // Yellow for cabs (engines)
-const CAR_COLOR = 0x800020;   // Dark maroon for rolling stock
+const CAB_COLOR = 0xffff00;   // Yellow for cabs (engines)
+
+// Car colors - dark variants for rolling stock
+const CAR_COLORS = [
+  0x8b0000,   // Dark red
+  0x00008b,   // Dark blue
+  0x006400,   // Dark green
+  0x4b0082,   // Dark purple (indigo)
+  0xff8c00,   // Dark orange
+];
+
+// Track the last car color for weighted random selection
+let lastCarColorIndex: number | null = null;
+
+/**
+ * Get a random car color with weighted probability
+ * Previous color has 2x probability of being chosen
+ */
+function getRandomCarColor(): number {
+  const weights: number[] = CAR_COLORS.map((_, index) => {
+    // Previous color gets weight 2, others get weight 1
+    return (lastCarColorIndex !== null && index === lastCarColorIndex) ? 2 : 1;
+  });
+
+  const totalWeight = weights.reduce((sum, w) => sum + w, 0);
+  let random = Math.random() * totalWeight;
+
+  for (let i = 0; i < weights.length; i++) {
+    random -= weights[i];
+    if (random <= 0) {
+      lastCarColorIndex = i;
+      return CAR_COLORS[i];
+    }
+  }
+
+  // Fallback (shouldn't happen)
+  lastCarColorIndex = 0;
+  return CAR_COLORS[0];
+}
+
+/**
+ * Reset color tracking (call when starting a new train)
+ */
+function resetCarColorTracking(): void {
+  lastCarColorIndex = null;
+}
+
+/**
+ * Create a cab shape with truncated rounded triangle front and rounded rear
+ * Shape is drawn in XY plane (X = length/forward, Y = width/lateral)
+ */
+function createCabShape(): THREE.Shape {
+  const halfLength = CAB_LENGTH / 2;  // 2
+  const halfWidth = CAR_WIDTH / 2;    // 1
+
+  // Rounding parameters
+  const rearCornerRadius = 0.25;
+  const frontCornerRadius = 0.15;
+
+  // Taper parameters - front narrows to truncated triangle
+  const taperStartX = halfLength * 0.35;  // Where narrowing begins
+  const frontTipHalfWidth = halfWidth * 0.35;  // Width at truncated front
+  const truncationDepth = 0.15;  // How far back the truncation cuts
+
+  const shape = new THREE.Shape();
+
+  // Draw counter-clockwise starting from rear-right
+  // Rear-right corner (start after the arc)
+  shape.moveTo(-halfLength + rearCornerRadius, -halfWidth);
+
+  // Rear-right rounded corner
+  shape.quadraticCurveTo(
+    -halfLength, -halfWidth,
+    -halfLength, -halfWidth + rearCornerRadius
+  );
+
+  // Left side of rear (going up toward rear-left corner)
+  shape.lineTo(-halfLength, halfWidth - rearCornerRadius);
+
+  // Rear-left rounded corner
+  shape.quadraticCurveTo(
+    -halfLength, halfWidth,
+    -halfLength + rearCornerRadius, halfWidth
+  );
+
+  // Top edge (left side) - straight to taper start
+  shape.lineTo(taperStartX, halfWidth);
+
+  // Taper to front-left corner
+  shape.lineTo(halfLength - truncationDepth, frontTipHalfWidth + frontCornerRadius);
+
+  // Front-left rounded corner (transition to truncated front)
+  shape.quadraticCurveTo(
+    halfLength - truncationDepth + frontCornerRadius * 0.5, frontTipHalfWidth,
+    halfLength, frontTipHalfWidth
+  );
+
+  // Truncated front edge
+  shape.lineTo(halfLength, -frontTipHalfWidth);
+
+  // Front-right rounded corner
+  shape.quadraticCurveTo(
+    halfLength - truncationDepth + frontCornerRadius * 0.5, -frontTipHalfWidth,
+    halfLength - truncationDepth, -frontTipHalfWidth - frontCornerRadius
+  );
+
+  // Taper from front-right to main body
+  shape.lineTo(taperStartX, -halfWidth);
+
+  // Bottom edge (right side) - back to start
+  shape.lineTo(-halfLength + rearCornerRadius, -halfWidth);
+
+  return shape;
+}
+
+/**
+ * Create a car shape with rounded corners (simple rounded rectangle)
+ */
+function createCarShape(): THREE.Shape {
+  const halfLength = CAR_LENGTH / 2;  // 1.5
+  const halfWidth = CAR_WIDTH / 2;    // 1
+  const cornerRadius = 0.2;
+
+  const shape = new THREE.Shape();
+
+  // Draw counter-clockwise starting from rear-right
+  shape.moveTo(-halfLength + cornerRadius, -halfWidth);
+
+  // Rear-right rounded corner
+  shape.quadraticCurveTo(-halfLength, -halfWidth, -halfLength, -halfWidth + cornerRadius);
+
+  // Left side
+  shape.lineTo(-halfLength, halfWidth - cornerRadius);
+
+  // Rear-left rounded corner
+  shape.quadraticCurveTo(-halfLength, halfWidth, -halfLength + cornerRadius, halfWidth);
+
+  // Top edge
+  shape.lineTo(halfLength - cornerRadius, halfWidth);
+
+  // Front-left rounded corner
+  shape.quadraticCurveTo(halfLength, halfWidth, halfLength, halfWidth - cornerRadius);
+
+  // Right side
+  shape.lineTo(halfLength, -halfWidth + cornerRadius);
+
+  // Front-right rounded corner
+  shape.quadraticCurveTo(halfLength, -halfWidth, halfLength - cornerRadius, -halfWidth);
+
+  // Bottom edge back to start
+  shape.lineTo(-halfLength + cornerRadius, -halfWidth);
+
+  return shape;
+}
+
+// Cache the geometries since they're reused
+let cabGeometry: THREE.ExtrudeGeometry | null = null;
+let carGeometry: THREE.ExtrudeGeometry | null = null;
+
+function getCabGeometry(): THREE.ExtrudeGeometry {
+  if (!cabGeometry) {
+    const shape = createCabShape();
+    cabGeometry = new THREE.ExtrudeGeometry(shape, {
+      depth: CAR_HEIGHT,
+      bevelEnabled: false,
+    });
+    // Rotate so extrusion is along Y (up) instead of Z
+    cabGeometry.rotateX(-Math.PI / 2);
+    // Shift so bottom is at Y=0
+    cabGeometry.translate(0, CAR_HEIGHT / 2, 0);
+  }
+  return cabGeometry;
+}
+
+function getCarGeometry(): THREE.ExtrudeGeometry {
+  if (!carGeometry) {
+    const shape = createCarShape();
+    carGeometry = new THREE.ExtrudeGeometry(shape, {
+      depth: CAR_HEIGHT,
+      bevelEnabled: false,
+    });
+    // Rotate so extrusion is along Y (up) instead of Z
+    carGeometry.rotateX(-Math.PI / 2);
+    // Shift so bottom is at Y=0
+    carGeometry.translate(0, CAR_HEIGHT / 2, 0);
+  }
+  return carGeometry;
+}
 
 /**
  * Render all trains as a Three.js group
@@ -21,6 +207,7 @@ export function renderTrains(trains: Train[]): THREE.Group {
   const group = new THREE.Group();
 
   for (const train of trains) {
+    resetCarColorTracking();  // Reset for each train
     const trainGroup = renderTrain(train);
     group.add(trainGroup);
   }
@@ -44,13 +231,14 @@ function renderTrain(train: Train): THREE.Group {
 }
 
 /**
- * Render a single car as a box
+ * Render a single car with custom shape
+ * Cabs have truncated rounded triangle front, cars have rounded rectangle
  */
 function renderCar(car: Car): THREE.Mesh {
-  const length = car.type === 'cab' ? CAB_LENGTH : CAR_LENGTH;
-  const color = car.type === 'cab' ? CAB_COLOR : CAR_COLOR;
+  const isCab = car.type === 'cab';
+  const geometry = isCab ? getCabGeometry() : getCarGeometry();
+  const color = isCab ? CAB_COLOR : getRandomCarColor();
 
-  const geometry = new THREE.BoxGeometry(length, CAR_HEIGHT, CAR_WIDTH);
   const material = new THREE.MeshStandardMaterial({
     color,
     roughness: 0.7,
@@ -60,8 +248,8 @@ function renderCar(car: Car): THREE.Mesh {
   const mesh = new THREE.Mesh(geometry, material);
   mesh.name = car.id;
 
-  // Position and rotate
-  mesh.position.set(car.worldPosition.x, CAR_HEIGHT / 2, car.worldPosition.z);
+  // Position at world coordinates (geometry is already centered with bottom at Y=0)
+  mesh.position.set(car.worldPosition.x, 0, car.worldPosition.z);
   mesh.rotation.y = -car.rotation; // Negate for Three.js convention
 
   // Set visibility
@@ -88,10 +276,24 @@ export function updateTrainMeshes(group: THREE.Group, trains: Train[]): void {
     for (const car of train.cars) {
       const mesh = meshMap.get(car.id);
       if (mesh) {
-        mesh.position.set(car.worldPosition.x, CAR_HEIGHT / 2, car.worldPosition.z);
+        mesh.position.set(car.worldPosition.x, 0, car.worldPosition.z);
         mesh.rotation.y = -car.rotation;
         mesh.visible = car.visible;
       }
     }
+  }
+}
+
+/**
+ * Clear cached geometries (useful for hot reload or testing)
+ */
+export function clearGeometryCache(): void {
+  if (cabGeometry) {
+    cabGeometry.dispose();
+    cabGeometry = null;
+  }
+  if (carGeometry) {
+    carGeometry.dispose();
+    carGeometry = null;
   }
 }

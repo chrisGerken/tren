@@ -40,6 +40,23 @@ mingap 0.5                    # Very close following (for tight layouts)
 
 **Default**: 1 inch. This is the closest trains will get when following each other. Lower values allow tighter packing but require faster reaction times.
 
+### Random Switch Mode
+
+The `random` statement enables automatic random switch changes for unattended operation:
+
+```
+random                        # Enable random switch mode
+```
+
+When `random` is present:
+- Switches automatically change to a random route after each train passes through
+- This creates varied and unpredictable train behavior
+- Useful for computer art, demonstrations, or passive observation
+- Switch indicators remain visible and can still be clicked to manually set routes
+- Only takes effect after the entire train has cleared the switch
+
+This mode is ideal for creating interesting autonomous layouts that don't require user interaction.
+
 ### Statement Separators
 
 Multiple statements can be placed on one line, separated by semicolons. Semicolons are not required after the last or only statement on a line.

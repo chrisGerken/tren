@@ -350,9 +350,21 @@ gen cabs 1-2 cars 3-8 speed 6-24 every 15-30  # Randomized values
 - Trains follow `selectedRoutes` map at virtual switches
 
 **Car types:**
-- Cabs (engines): yellow rectangles, 4" long
-- Cars (rolling stock): maroon rectangles, 3" long
+- Cabs (engines): yellow, 4" long, distinctive shape with tapered front
+- Cars (rolling stock): randomly colored, 3" long, rounded rectangle
 - Gap between cars: 0.5"
+
+**Cab rendering:**
+- Uses `THREE.ExtrudeGeometry` with custom `THREE.Shape`
+- Shape: rounded rear corners, tapered sides, truncated triangle front
+- Front narrows to ~35% of body width for locomotive-like silhouette
+- Geometry cached and reused for all cabs
+
+**Car rendering:**
+- Uses `THREE.ExtrudeGeometry` with rounded rectangle shape
+- Colors: randomly selected from dark red, blue, green, purple, orange
+- Previous car's color has 2× probability of being selected again
+- Creates subtle color groupings within trains
 
 **Movement:**
 - Default speed: 12 inches/second
@@ -414,6 +426,27 @@ mingap 2      # More conservative following distance
 ```
 
 The `mingap` value (default 1 inch) sets the absolute minimum gap. The actual following distance increases with speed to allow for braking.
+
+## Random Switch Mode
+
+The `random` DSL statement enables autonomous operation where switches change randomly.
+
+**Design decisions:**
+- Random changes occur after the last car of a train clears a switch
+- Uses the `routesTaken` map clearing as the trigger (ensures entire train passes first)
+- Switch indicators remain visible and interactive
+- Selection is uniformly random among available routes
+
+**Implementation:**
+- `Layout.randomSwitches` boolean flag set by parser
+- `Simulation.randomizeSwitch()` called when route memory is cleared
+- Extracts junction info from route key format `junction.{id}.{fwd|rev}`
+- Randomly selects from available connections at that switch point
+
+**Use cases:**
+- Computer art / demonstrations
+- Stress testing layouts
+- Passive observation without user interaction
 
 ## Open Questions
 

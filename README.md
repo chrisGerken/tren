@@ -33,6 +33,124 @@ This simulator allows users to:
 - **Desktop Packaging**: Tauri (cross-platform: Windows, Mac, Linux)
 - **Language**: TypeScript/JavaScript
 
+## Installation
+
+### MacOS
+
+#### Prerequisites
+
+Install Homebrew if you don't have it:
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+#### Option 1: Install via Homebrew (Recommended)
+
+Once a Homebrew tap is set up:
+```bash
+brew tap YOUR_USERNAME/tren
+brew install --cask tren
+```
+
+#### Option 2: Manual Installation
+
+1. Download the latest `.dmg` file from the [Releases](https://github.com/YOUR_USERNAME/tren/releases) page
+2. Open the DMG file
+3. Drag `Tren.app` to your Applications folder
+4. On first launch, right-click the app and select "Open" to bypass Gatekeeper
+
+#### Building from Source (MacOS)
+
+```bash
+# Install build dependencies
+brew install node rust
+
+# Clone and build
+git clone https://github.com/YOUR_USERNAME/tren.git
+cd tren
+npm install
+npm run tauri build
+```
+
+The built application will be in `src-tauri/target/release/bundle/macos/Tren.app`.
+
+See [publish/macos/README.md](publish/macos/README.md) for detailed build and distribution instructions.
+
+---
+
+### Debian/Ubuntu Linux
+
+#### Prerequisites
+
+Install Node.js:
+```bash
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt-get install -y nodejs
+```
+
+Install Rust:
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source $HOME/.cargo/env
+```
+
+Install Tauri dependencies:
+```bash
+sudo apt update
+sudo apt install -y libwebkit2gtk-4.0-dev build-essential curl wget file \
+    libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+```
+
+#### Option 1: Install from .deb Package
+
+1. Download the latest `.deb` file from the [Releases](https://github.com/YOUR_USERNAME/tren/releases) page
+2. Install:
+   ```bash
+   sudo dpkg -i tren_*.deb
+   sudo apt-get install -f  # Install any missing dependencies
+   ```
+
+#### Option 2: Run AppImage (No Installation Required)
+
+1. Download the `.AppImage` file from Releases
+2. Make executable and run:
+   ```bash
+   chmod +x Tren_*.AppImage
+   ./Tren_*.AppImage
+   ```
+
+#### Building from Source (Linux)
+
+```bash
+git clone https://github.com/YOUR_USERNAME/tren.git
+cd tren
+npm install
+npm run tauri build
+```
+
+The built packages will be in:
+- `src-tauri/target/release/bundle/deb/` - Debian package
+- `src-tauri/target/release/bundle/appimage/` - AppImage
+
+See [publish/debian/README.md](publish/debian/README.md) for detailed build and distribution instructions.
+
+---
+
+### Uninstalling
+
+**MacOS**:
+```bash
+# If installed via Homebrew
+brew uninstall --cask tren
+
+# Manual: drag Tren.app from Applications to Trash
+```
+
+**Debian/Ubuntu**:
+```bash
+sudo apt remove tren
+```
+
 ## Future Considerations
 
 - User scenarios (to be documented)

@@ -53,6 +53,7 @@ export interface Layout {
   title?: string;        // Layout title for UI (default: "Simulador de Tren")
   description?: string;  // Layout description (concatenated from all description statements)
   minGap?: number;       // Minimum following distance between trains (default: 1 inch)
+  randomSwitches?: boolean;  // If true, switches randomly change when trains pass
   pieces: TrackPiece[];
 }
 

@@ -137,12 +137,23 @@ When a train crosses a virtual switch (a connection point with multiple routes):
 ## Visual Representation (2D)
 
 For the initial 2D top-down version:
-- Each car is rendered as a rectangle
-- Cabs (engines) are yellow, 4" long × 2" wide
-- Cars (rolling stock) are maroon, 3" long × 2" wide
+
+### Cab Shape
+- Cabs (engines) have a distinctive shape: rounded rear, tapered front with truncated triangle tip
+- Color: yellow
+- Dimensions: 4" long × 2" wide × 1.5" height
+- The front tapers to about 35% of the body width, creating a locomotive-like silhouette
+
+### Car Shape
+- Cars (rolling stock) are rounded rectangles with smooth corners
+- Color: randomly selected from dark red, dark blue, dark green, dark purple, or dark orange
+- Dimensions: 3" long × 2" wide × 1.5" height
+- The previous car's color has 2× probability of being selected for the next car, creating subtle color groupings
+
+### Common Properties
 - Gap between cars: 0.5"
-- Rectangle is positioned at the car's spline position (X, Z)
-- Rectangle is rotated to align with the spline tangent (heading)
+- Cars are positioned at spline positions (X, Z)
+- Cars are rotated to align with spline tangent (heading)
 - No elevation or banking—all cars at Y = 0
 
 ### Tunnel Visibility
