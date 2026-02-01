@@ -25,6 +25,20 @@ The **primary cab** is the first cab in the train (typically at the front). It o
 
 Other cabs in the consist have no special behavior—they're just rolling stock following along.
 
+### Train Speed
+
+Each train has its own speed, set when spawned by its generator. Speed is measured in inches per second.
+
+**Default speed**: 12 inches per second (approximately 1 foot per second)
+
+Speed can be configured per generator using the `speed` parameter in the DSL:
+```
+gen speed 24              # Train moves at 24 inches/second
+gen cabs 2 cars 3 speed 6 # Slower train at 6 inches/second
+```
+
+See [Layout DSL - Generator Syntax](layout-dsl.md#generator-syntax) for full details.
+
 ## Train as a Consist
 
 A train is an ordered list of cars forming a consist.

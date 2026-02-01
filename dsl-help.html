@@ -153,12 +153,14 @@ crvl x 4     # Four left curves (90° total)
 crvr * 8     # Eight right curves (180°)</code></pre>
 
     <h3>Generator Syntax</h3>
-    <p>Generators spawn trains with configurable car counts:</p>
-    <pre><code>gen                           # One train: 1 cab, 5 cars
+    <p>Generators spawn trains with configurable car counts and speed:</p>
+    <pre><code>gen                           # One train: 1 cab, 5 cars, 12"/sec
 gen cabs 2                    # One train: 2 cabs, 5 cars
 gen cars 3                    # One train: 1 cab, 3 cars
+gen speed 24                  # One train at 24 inches/second
 gen cabs 2 cars 3             # One train: 2 cabs, 3 cars
-gen cabs 2 cars 3 every 15    # New train every 15 seconds</code></pre>
+gen cabs 2 cars 3 speed 6 every 15    # Full specification</code></pre>
+    <p>Parameters: <code>cabs N</code> (default 1), <code>cars M</code> (default 5), <code>speed S</code> (default 12 inches/sec), <code>every S</code> (spawn interval in seconds).</p>
     <p>Without <code>every</code>, the generator spawns one train and disables. With <code>every N</code>, it spawns a new train every N seconds.</p>
   </div>
 

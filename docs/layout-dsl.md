@@ -172,20 +172,22 @@ Use archetype codes to specify track pieces. See [Track Dimensions](track-dimens
 
 ### Generator Syntax
 
-Generators spawn trains. The basic syntax is just `gen`, but you can configure the train composition and spawn frequency:
+Generators spawn trains. The basic syntax is just `gen`, but you can configure the train composition, speed, and spawn frequency:
 
 ```
-gen                           # One train: 1 cab, 5 cars (default)
+gen                           # One train: 1 cab, 5 cars, 12"/sec (default)
 gen cabs 2                    # One train: 2 cabs, 5 cars
 gen cars 3                    # One train: 1 cab, 3 cars
+gen speed 24                  # One train at 24 inches/second
 gen cabs 2 cars 3             # One train: 2 cabs, 3 cars
 gen every 10                  # New train every 10 seconds: 1 cab, 5 cars
-gen cabs 2 cars 3 every 10    # Full specification
+gen cabs 2 cars 3 speed 6 every 10    # Full specification
 ```
 
 **Parameters:**
 - `cabs N` - Number of cab cars (engines) at front of train. Default: 1
 - `cars M` - Number of regular cars (rolling stock). Default: 5
+- `speed S` - Train speed in inches per second. Default: 12
 - `every S` - Spawn frequency in seconds. If omitted, only one train is spawned.
 
 Parameters can appear in any order after `gen`.
