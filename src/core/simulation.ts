@@ -17,6 +17,13 @@ import {
 // Default train speed in inches per second
 const DEFAULT_SPEED = 12;
 
+// Collision prevention constants
+const LOOK_AHEAD_DISTANCE = 48;      // How far ahead to scan (inches)
+const MIN_FOLLOWING_GAP = 2;         // Minimum gap between trains (inches)
+const ACCELERATION = 6;              // Speed increase per second (inches/sec²)
+const NORMAL_BRAKING = 12;           // Normal deceleration (inches/sec²)
+const EMERGENCY_BRAKING = 24;        // Hard braking (inches/sec²)
+
 /**
  * Check if a value is a range
  */
@@ -210,12 +217,13 @@ export class Simulation {
     // Resolve range values to actual values for this train
     const cabCount = resolveIntegerValue(config.cabCount, 1);
     const carCount = resolveIntegerValue(config.carCount, 5);
-    const speed = resolveRealValue(config.speed, DEFAULT_SPEED);
+    const desiredSpeed = resolveRealValue(config.speed, DEFAULT_SPEED);
 
     const train: Train = {
       id: `train_${this.nextTrainId++}`,
       cars: [],
-      speed,
+      desiredSpeed,
+      currentSpeed: 0,  // Start at rest, will accelerate
       generatorId: generatorPiece.id,
       routesTaken: new Map(),  // Tracks which route was taken at each switch
     };
@@ -280,7 +288,11 @@ export class Simulation {
    */
   private updateTrains(deltaTime: number): void {
     for (const train of this.trains) {
-      const distance = train.speed * deltaTime;
+      // Step 1: Adjust speed based on collision prevention
+      this.adjustTrainSpeed(train, deltaTime);
+
+      // Step 2: Move cars based on current speed
+      const distance = train.currentSpeed * deltaTime;
 
       // Track routes used by the last car - these will be cleared after it passes
       const routesToClear = new Set<string>();
@@ -311,6 +323,185 @@ export class Simulation {
         this.updateCarVisibility(car);
       }
     }
+  }
+
+  /**
+   * Adjust train speed based on collision prevention
+   */
+  private adjustTrainSpeed(train: Train, deltaTime: number): void {
+    // Find distance to train ahead
+    const distanceToObstacle = this.findDistanceToTrainAhead(train);
+
+    if (distanceToObstacle === null || distanceToObstacle > LOOK_AHEAD_DISTANCE) {
+      // No obstacle or very far away - accelerate toward desired speed
+      if (train.currentSpeed < train.desiredSpeed) {
+        train.currentSpeed = Math.min(
+          train.desiredSpeed,
+          train.currentSpeed + ACCELERATION * deltaTime
+        );
+      } else if (train.currentSpeed > train.desiredSpeed) {
+        // Slow down if somehow going faster than desired
+        train.currentSpeed = Math.max(
+          train.desiredSpeed,
+          train.currentSpeed - NORMAL_BRAKING * deltaTime
+        );
+      }
+    } else {
+      // Obstacle detected - calculate safe speed
+      const safeSpeed = this.calculateSafeSpeed(distanceToObstacle, train.desiredSpeed);
+
+      if (train.currentSpeed > safeSpeed) {
+        // Need to slow down
+        const brakingRate = distanceToObstacle < MIN_FOLLOWING_GAP * 2
+          ? EMERGENCY_BRAKING
+          : NORMAL_BRAKING;
+        train.currentSpeed = Math.max(
+          safeSpeed,
+          train.currentSpeed - brakingRate * deltaTime
+        );
+      } else if (train.currentSpeed < safeSpeed && train.currentSpeed < train.desiredSpeed) {
+        // Can speed up (obstacle is moving or far enough)
+        train.currentSpeed = Math.min(
+          Math.min(safeSpeed, train.desiredSpeed),
+          train.currentSpeed + ACCELERATION * deltaTime
+        );
+      }
+    }
+
+    // Ensure speed doesn't go negative
+    if (train.currentSpeed < 0) {
+      train.currentSpeed = 0;
+    }
+  }
+
+  /**
+   * Calculate safe speed based on distance to obstacle
+   */
+  private calculateSafeSpeed(distance: number, desiredSpeed: number): number {
+    if (distance <= MIN_FOLLOWING_GAP) {
+      return 0; // Must stop
+    }
+
+    // Linear interpolation: full speed at LOOK_AHEAD_DISTANCE, stop at MIN_FOLLOWING_GAP
+    const ratio = (distance - MIN_FOLLOWING_GAP) / (LOOK_AHEAD_DISTANCE - MIN_FOLLOWING_GAP);
+    return desiredSpeed * Math.min(1, ratio);
+  }
+
+  /**
+   * Find the distance to the nearest train ahead along the track
+   * Returns null if no train is found within look-ahead distance
+   */
+  private findDistanceToTrainAhead(train: Train): number | null {
+    if (train.cars.length === 0) return null;
+
+    const leadCar = train.cars[0];
+
+    // Check all other trains for their rear-most car position
+    let minDistance: number | null = null;
+
+    for (const otherTrain of this.trains) {
+      if (otherTrain.id === train.id) continue;
+      if (otherTrain.cars.length === 0) continue;
+
+      // Find distance to each car of the other train
+      for (const otherCar of otherTrain.cars) {
+        const distance = this.calculateTrackDistance(leadCar, otherCar, train);
+        if (distance !== null && distance > 0) {
+          // Subtract half the other car's length to get distance to its rear
+          const distanceToRear = distance - otherCar.length / 2 - leadCar.length / 2;
+          if (distanceToRear > 0 && (minDistance === null || distanceToRear < minDistance)) {
+            minDistance = distanceToRear;
+          }
+        }
+      }
+    }
+
+    return minDistance;
+  }
+
+  /**
+   * Calculate track distance from one car to another (positive if target is ahead)
+   * Returns null if cars are not on the same route or target is not ahead
+   */
+  private calculateTrackDistance(fromCar: Car, toCar: Car, train: Train): number | null {
+    // Simple case: same piece
+    if (fromCar.currentPieceId === toCar.currentPieceId) {
+      const distance = toCar.distanceAlongSection - fromCar.distanceAlongSection;
+      return distance > 0 ? distance : null;
+    }
+
+    // Different pieces - trace forward from fromCar to find toCar
+    let totalDistance = 0;
+    let currentPieceId = fromCar.currentPieceId;
+    let distanceInCurrentPiece = fromCar.distanceAlongSection;
+
+    // Trace forward through connected pieces
+    for (let steps = 0; steps < 20; steps++) {  // Limit search depth
+      const piece = this.layout.pieces.find(p => p.id === currentPieceId);
+      if (!piece) break;
+
+      const sectionLength = getSectionLength(piece, 0);
+
+      // Check if toCar is on this piece
+      if (toCar.currentPieceId === currentPieceId) {
+        const distanceOnThisPiece = toCar.distanceAlongSection - distanceInCurrentPiece;
+        if (distanceOnThisPiece > 0) {
+          return totalDistance + distanceOnThisPiece;
+        }
+        return null; // Target is behind us on this piece
+      }
+
+      // Add remaining distance on current piece
+      totalDistance += sectionLength - distanceInCurrentPiece;
+
+      if (totalDistance > LOOK_AHEAD_DISTANCE) {
+        return null; // Too far ahead, stop searching
+      }
+
+      // Move to next piece (following train's route selections)
+      const nextSection = this.getNextPieceForLookAhead(currentPieceId, train);
+      if (!nextSection) break;
+
+      currentPieceId = nextSection.pieceId;
+      distanceInCurrentPiece = 0; // Start at beginning of next piece
+    }
+
+    return null; // Target not found on route ahead
+  }
+
+  /**
+   * Get the next piece when looking ahead (respects train's route memory and current switch settings)
+   */
+  private getNextPieceForLookAhead(pieceId: string, train: Train): { pieceId: string } | null {
+    const piece = this.layout.pieces.find(p => p.id === pieceId);
+    if (!piece) return null;
+
+    const connections = piece.connections.get('out');
+    if (!connections || connections.length === 0) {
+      return null;
+    }
+
+    if (connections.length === 1) {
+      return { pieceId: connections[0].pieceId };
+    }
+
+    // Multiple connections - check train's route memory first, then current switch setting
+    // Build the canonical junction ID (same logic as in train-movement.ts)
+    const junctionPieceIds = connections.map(c => c.pieceId);
+    junctionPieceIds.push(pieceId);
+    junctionPieceIds.sort();
+    const canonicalJunctionId = junctionPieceIds[0];
+    const routeKey = `junction.${canonicalJunctionId}.fwd`;
+
+    let selectedIndex: number;
+    if (train.routesTaken.has(routeKey)) {
+      selectedIndex = train.routesTaken.get(routeKey)!;
+    } else {
+      selectedIndex = this.selectedRoutes.get(routeKey) ?? 0;
+    }
+
+    const connection = connections[Math.min(selectedIndex, connections.length - 1)];
+    return { pieceId: connection.pieceId };
   }
 
   /**

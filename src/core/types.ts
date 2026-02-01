@@ -80,7 +80,8 @@ export interface Car {
 export interface Train {
   id: string;
   cars: Car[];                     // First car is the head
-  speed: number;                   // Inches per second
+  desiredSpeed: number;            // Target speed in inches per second
+  currentSpeed: number;            // Actual speed (may be lower due to collision prevention)
   generatorId: string;             // Which generator spawned this train
   routesTaken: Map<string, number>; // Switch routes taken (pieceId.pointName -> connectionIndex)
 }
