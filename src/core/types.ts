@@ -52,6 +52,7 @@ export interface TrackPiece {
 export interface Layout {
   title?: string;        // Layout title for UI (default: "Simulador de Tren")
   description?: string;  // Layout description (concatenated from all description statements)
+  minGap?: number;       // Minimum following distance between trains (default: 1 inch)
   pieces: TrackPiece[];
 }
 

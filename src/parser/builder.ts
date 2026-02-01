@@ -2,7 +2,7 @@
  * Layout Builder - transforms AST into placed track pieces
  */
 
-import { parse, Statement, PieceStatement, NewStatement, ReferenceStatement, LoopCloseStatement, TitleStatement, DescriptionStatement, SpliceStatement, RangeValue } from './parser';
+import { parse, Statement, PieceStatement, NewStatement, ReferenceStatement, LoopCloseStatement, TitleStatement, DescriptionStatement, MingapStatement, SpliceStatement, RangeValue } from './parser';
 import { Layout, TrackPiece, Vec3, vec2, ConnectionPointDef, RangeValue as TypeRangeValue } from '../core/types';
 import { getArchetype, registerRuntimeArchetype } from '../core/archetypes';
 import type { TrackArchetype } from '../core/archetypes';
@@ -34,6 +34,7 @@ interface BuilderState {
   nextPieceId: number;
   title?: string;
   descriptions: string[];
+  minGap?: number;
   pendingSplices: SpliceInfo[];
 }
 
@@ -97,6 +98,7 @@ class LayoutBuilder {
       description: this.state.descriptions.length > 0
         ? this.state.descriptions.join(' ')
         : undefined,
+      minGap: this.state.minGap,
       pieces: this.state.pieces,
     };
   }
@@ -121,6 +123,9 @@ class LayoutBuilder {
       case 'description':
         this.processDescription(stmt);
         break;
+      case 'mingap':
+        this.processMingap(stmt);
+        break;
       case 'splice':
         this.processSplice(stmt);
         break;
@@ -136,6 +141,10 @@ class LayoutBuilder {
 
   private processDescription(stmt: DescriptionStatement): void {
     this.state.descriptions.push(stmt.text);
+  }
+
+  private processMingap(stmt: MingapStatement): void {
+    this.state.minGap = stmt.value;
   }
 
   private processSplice(stmt: SpliceStatement): void {

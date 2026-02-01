@@ -19,7 +19,7 @@ const DEFAULT_SPEED = 12;
 
 // Collision prevention constants
 const LOOK_AHEAD_DISTANCE = 48;      // How far ahead to scan (inches)
-const MIN_FOLLOWING_GAP = 2;         // Minimum gap between trains (inches)
+const DEFAULT_MIN_GAP = 1;           // Default minimum gap between trains (inches)
 const ACCELERATION = 6;              // Speed increase per second (inches/sec²)
 const NORMAL_BRAKING = 12;           // Normal deceleration (inches/sec²)
 const EMERGENCY_BRAKING = 24;        // Hard braking (inches/sec²)
@@ -326,11 +326,19 @@ export class Simulation {
   }
 
   /**
+   * Get the minimum following gap for this layout
+   */
+  private getMinGap(): number {
+    return this.layout.minGap ?? DEFAULT_MIN_GAP;
+  }
+
+  /**
    * Adjust train speed based on collision prevention
    */
   private adjustTrainSpeed(train: Train, deltaTime: number): void {
     // Find distance to train ahead
     const distanceToObstacle = this.findDistanceToTrainAhead(train);
+    const minGap = this.getMinGap();
 
     if (distanceToObstacle === null || distanceToObstacle > LOOK_AHEAD_DISTANCE) {
       // No obstacle or very far away - accelerate toward desired speed
@@ -352,7 +360,7 @@ export class Simulation {
 
       if (train.currentSpeed > safeSpeed) {
         // Need to slow down
-        const brakingRate = distanceToObstacle < MIN_FOLLOWING_GAP * 2
+        const brakingRate = distanceToObstacle < minGap * 2
           ? EMERGENCY_BRAKING
           : NORMAL_BRAKING;
         train.currentSpeed = Math.max(
@@ -378,12 +386,13 @@ export class Simulation {
    * Calculate safe speed based on distance to obstacle
    */
   private calculateSafeSpeed(distance: number, desiredSpeed: number): number {
-    if (distance <= MIN_FOLLOWING_GAP) {
+    const minGap = this.getMinGap();
+    if (distance <= minGap) {
       return 0; // Must stop
     }
 
-    // Linear interpolation: full speed at LOOK_AHEAD_DISTANCE, stop at MIN_FOLLOWING_GAP
-    const ratio = (distance - MIN_FOLLOWING_GAP) / (LOOK_AHEAD_DISTANCE - MIN_FOLLOWING_GAP);
+    // Linear interpolation: full speed at LOOK_AHEAD_DISTANCE, stop at minGap
+    const ratio = (distance - minGap) / (LOOK_AHEAD_DISTANCE - minGap);
     return desiredSpeed * Math.min(1, ratio);
   }
 

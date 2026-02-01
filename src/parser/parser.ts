@@ -12,6 +12,7 @@ export type Statement =
   | LoopCloseStatement
   | TitleStatement
   | DescriptionStatement
+  | MingapStatement
   | SpliceStatement;
 
 export interface NewStatement {
@@ -70,6 +71,12 @@ export interface DescriptionStatement {
   line: number;
 }
 
+export interface MingapStatement {
+  type: 'mingap';
+  value: number;
+  line: number;
+}
+
 export interface SpliceStatement {
   type: 'splice';
   label?: string;   // Optional: if not provided, use current piece
@@ -119,6 +126,9 @@ class Parser {
 
       case TokenType.DESCRIPTION:
         return this.parseDescriptionStatement();
+
+      case TokenType.MINGAP:
+        return this.parseMingapStatement();
 
       case TokenType.SPLICE:
         return this.parseSpliceStatement();
@@ -252,6 +262,15 @@ class Parser {
       text = this.advance().value;
     }
     return { type: 'description', text, line: token.line };
+  }
+
+  private parseMingapStatement(): MingapStatement {
+    const token = this.advance(); // consume 'mingap'
+    let value = 1; // default
+    if (this.check(TokenType.NUMBER)) {
+      value = parseFloat(this.advance().value);
+    }
+    return { type: 'mingap', value, line: token.line };
   }
 
   private parseSpliceStatement(): SpliceStatement {

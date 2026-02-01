@@ -15,6 +15,7 @@ export enum TokenType {
   LOOP_CLOSE = 'LOOP_CLOSE',   // >
   TITLE = 'TITLE',             // title keyword
   DESCRIPTION = 'DESCRIPTION', // description keyword
+  MINGAP = 'MINGAP',           // mingap keyword (minimum following distance)
   DEGREES = 'DEGREES',         // degrees keyword (for new statement)
   OFFSET = 'OFFSET',           // offset keyword (for new statement)
   BASE = 'BASE',               // base keyword (for new statement)
@@ -243,6 +244,16 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
           });
         }
         return tokens; // Done with this statement
+      }
+
+      if (value === 'mingap') {
+        tokens.push({
+          type: TokenType.MINGAP,
+          value: value,
+          line: lineNum,
+          column: startPos + 1,
+        });
+        continue;
       }
 
       if (value === 'degrees') {
