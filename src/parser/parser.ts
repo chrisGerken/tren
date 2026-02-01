@@ -152,6 +152,13 @@ class Parser {
         return this.parseLoopClose();
 
       case TokenType.IDENTIFIER:
+        // Check for point.$label reference syntax (e.g., out.$sw1)
+        if (this.peekNext()?.type === TokenType.DOT) {
+          const tokenAfterDot = this.tokens[this.pos + 2];
+          if (tokenAfterDot?.type === TokenType.LABEL_REF) {
+            return this.parsePointLabelReference();
+          }
+        }
         return this.parsePieceOrExplicitConnection();
 
       case TokenType.EOF:
@@ -333,6 +340,24 @@ class Parser {
     }
 
     return { type: 'reference', label, point, line: refToken.line };
+  }
+
+  /**
+   * Parse point.$label reference syntax (e.g., out.$sw1)
+   * This is an alternative to $label.point syntax
+   */
+  private parsePointLabelReference(): ReferenceStatement {
+    const pointToken = this.advance(); // consume point name (e.g., 'out')
+    const point = pointToken.value;
+
+    this.advance(); // consume dot
+
+    if (!this.check(TokenType.LABEL_REF)) {
+      throw new Error(`Expected $label after '${point}.' at line ${pointToken.line}`);
+    }
+    const label = this.advance().value;
+
+    return { type: 'reference', label, point, line: pointToken.line };
   }
 
   private parseLoopClose(): LoopCloseStatement {
