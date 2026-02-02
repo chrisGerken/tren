@@ -475,6 +475,114 @@ Without splice, you would need to calculate exact piece lengths to ensure the me
 - Works best with straight pieces; curved pieces may have less precise results
 - The target track must have 'in' and 'out' connection points (crossings not supported)
 
+## Flex Connect
+
+The `flex connect` statement automatically creates custom track pieces to bridge gaps that cannot be closed with standard track pieces. This is useful when a layout forms an almost-complete loop but the endpoints don't align perfectly with any standard piece combinations.
+
+### Syntax
+
+```
+flex connect $label1.point1 $label2.point2
+```
+
+Where:
+- `$label1.point1` - The first connection point (typically the "out" of the last piece before the gap)
+- `$label2.point2` - The second connection point (typically the "in" of the first piece after the gap)
+
+### Auto-Generated Labels
+
+The flex connect statement automatically creates labeled pieces that can be referenced in subsequent statements:
+
+- `{label1}_{label2}_str` - The straight piece (if created)
+- `{label1}_{label2}_crv` - The curve piece (if created)
+
+For example, `flex connect $f1.out $f2.in` creates pieces labeled `f1_f2_str` and `f1_f2_crv` that you can reference as `$f1_f2_str` or `$f1_f2_crv`.
+
+**Note:** In edge cases where only one piece is needed:
+- **Straight-only**: When endpoints are collinear (same direction, aligned path), only the `_str` label is created
+- **Curve-only**: When endpoints are very close and require only a curve, only the `_crv` label is created
+
+### How It Works
+
+The flex connect solver:
+1. Calculates the world positions and directions of both connection points
+2. Checks for edge cases:
+   - **Straight-only**: If endpoints are collinear (same direction, aligned path), creates a single straight piece
+   - **Curve-only**: If the calculated straight length is very small (<0.5"), creates just a curve
+3. Otherwise, finds a valid combination of one curve and one straight piece
+4. Tries four configurations: [straight, left curve], [straight, right curve], [left curve, straight], [right curve, straight]
+5. Selects the solution with the smoothest curve (largest radius)
+6. Creates custom runtime track pieces with the calculated geometry
+7. Labels the pieces for later reference
+
+### Example
+
+```
+# Layout that forms an almost-complete loop
+after: str
+str
+crvl * 4        # 90° turn
+
+str * 2
+crvl * 4        # 90° turn
+
+str * 2
+crvl * 5        # 112.5° turn
+
+str * 2
+before: str
+
+# Bridge the gap with custom pieces
+flex connect $before.out $after.in
+
+# The flex pieces can now be referenced:
+# $before_after_str - the straight piece
+# $before_after_crv - the curve piece
+```
+
+### Chaining Flex Connects
+
+You can use the auto-generated labels to connect additional tracks to flex pieces:
+
+```
+# First flex connect
+flex connect $f1.out $f2.in
+
+# Connect another track to the flex straight piece
+$f1_f2_str.out       # or .in depending on which end you need
+str x 3
+bump
+```
+
+### Limitations
+
+- The gap must be bridgeable with at most one curve and one straight piece
+- Minimum curve radius is 5 inches (to ensure reasonable track geometry)
+- Minimum straight length is 0.5 inches (shorter straights are omitted, creating curve-only solutions)
+- Maximum arc angle is 270 degrees (prevents near-full-circle curves)
+- If no valid solution exists, a warning is logged and the connection is not made
+
+### Edge Case: Already-Connected Points
+
+If you use `flex connect` on two points that are already at the same position (e.g., consecutive pieces like `s2: str` followed by `f2: str`), the solver will:
+1. Detect distance ≈ 0 between the points
+2. Log "Could not find flex connect solution" (no bridge needed)
+3. Continue building the layout normally
+4. Auto-connect will handle the connection between the adjacent pieces
+
+This is harmless—the statement simply does nothing when no bridge is needed.
+
+### Processing Order
+
+Flex connect statements are processed in a specific order relative to other layout operations:
+
+1. **Parse**: All statements are parsed into an AST
+2. **Build pieces**: Regular track pieces are placed
+3. **Process flex connects**: Custom bridge pieces are created and connected
+4. **Auto-connect**: Adjacent pieces with opposite directions are connected
+
+This order ensures that flex connect pieces are properly integrated with the rest of the layout before auto-connect runs.
+
 ## Auto-Connect
 
 After a layout is fully specified, **auto-connect** scans all connection points on all track pieces and automatically joins any two that are close enough with opposite directions.
@@ -488,6 +596,16 @@ After a layout is fully specified, **auto-connect** scans all connection points 
    - Then connect them
 
 This automatically creates virtual switches wherever tracks meet. A single connection point can end up with multiple connections.
+
+### Interaction with Flex Connect
+
+Auto-connect runs AFTER flex connect processing. This means:
+
+1. Flex connect creates explicit connections between its bridge pieces and the endpoints
+2. Auto-connect then adds connections between adjacent pieces, even if one endpoint is also a flex endpoint
+3. This creates proper virtual switches where trains can arrive from multiple paths
+
+For example, if `f2.in` receives a flex connect from `f1.out`, and `s2.out` is adjacent to `f2.in`, auto-connect will still create the `s2.out → f2.in` connection. The result is a virtual switch at `f2.in` where trains can arrive from either the flex path or the direct path from `s2`.
 
 ### Tolerance
 

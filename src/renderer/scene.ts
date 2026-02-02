@@ -225,6 +225,23 @@ export class TrackScene {
   }
 
   /**
+   * Toggle label visibility
+   */
+  setLabelsVisible(visible: boolean): void {
+    this.labelGroup.visible = visible;
+    // Also toggle the CSS2D renderer's DOM element visibility
+    // since CSS2D objects are DOM elements that may not respect Three.js visibility
+    this.labelRenderer.domElement.style.display = visible ? 'block' : 'none';
+  }
+
+  /**
+   * Get current label visibility state
+   */
+  getLabelsVisible(): boolean {
+    return this.labelGroup.visible;
+  }
+
+  /**
    * Fit camera to show all track pieces at 90% of window area
    */
   fitToLayout(): void {

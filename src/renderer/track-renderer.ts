@@ -40,13 +40,6 @@ function getSelectedRouteByKey(key: string): number {
 }
 
 /**
- * Get or initialize the selected route for a switch point (legacy, without direction)
- */
-function getSelectedRoute(pieceId: string, pointName: string): number {
-  return getSelectedRouteByKey(`${pieceId}.${pointName}`);
-}
-
-/**
  * Set the selected route by full key (includes direction)
  */
 export function setSelectedRouteByKey(key: string, connectionIndex: number): void {

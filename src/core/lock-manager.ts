@@ -346,8 +346,8 @@ export class LockManager {
     // Calculate currently straddled points
     const straddledPoints = new Set(this.calculateStraddledPoints(train, layout));
 
-    // Calculate look-ahead points (we need to keep these)
-    const lookAheadResult = this.acquireLeadingLocks(
+    // Acquire look-ahead locks (side effect only, result not needed here)
+    this.acquireLeadingLocks(
       train,
       layout,
       selectedRoutes,

@@ -15,7 +15,8 @@ export type Statement =
   | MingapStatement
   | SpliceStatement
   | RandomStatement
-  | MaxTrainsStatement;
+  | MaxTrainsStatement
+  | FlexConnectStatement;
 
 export interface NewStatement {
   type: 'new';
@@ -97,6 +98,15 @@ export interface MaxTrainsStatement {
   line: number;
 }
 
+export interface FlexConnectStatement {
+  type: 'flexConnect';
+  point1Label: string;
+  point1Name?: string;  // Connection point name, default 'out'
+  point2Label: string;
+  point2Name?: string;  // Connection point name, default 'in'
+  line: number;
+}
+
 /**
  * Parse DSL text into an array of statements
  */
@@ -148,6 +158,9 @@ class Parser {
 
       case TokenType.MAX:
         return this.parseMaxTrainsStatement();
+
+      case TokenType.FLEX:
+        return this.parseFlexConnectStatement();
 
       case TokenType.SPLICE:
         return this.parseSpliceStatement();
@@ -319,6 +332,36 @@ class Parser {
     }
 
     return { type: 'maxTrains', value, line: token.line };
+  }
+
+  private parseFlexConnectStatement(): FlexConnectStatement {
+    const token = this.advance(); // consume 'flex'
+
+    // Expect 'connect' keyword
+    if (this.check(TokenType.CONNECT)) {
+      this.advance(); // consume 'connect'
+    }
+
+    // Parse first connection point reference: $label or $label.point
+    const ref1 = this.parseConnectionPointRef();
+    if (!ref1) {
+      throw new Error(`Expected connection point reference after 'flex connect' at line ${token.line}`);
+    }
+
+    // Parse second connection point reference
+    const ref2 = this.parseConnectionPointRef();
+    if (!ref2) {
+      throw new Error(`Expected second connection point reference in 'flex connect' at line ${token.line}`);
+    }
+
+    return {
+      type: 'flexConnect',
+      point1Label: ref1.label,
+      point1Name: ref1.point,
+      point2Label: ref2.label,
+      point2Name: ref2.point,
+      line: token.line,
+    };
   }
 
   private parseSpliceStatement(): SpliceStatement {

@@ -525,6 +525,81 @@ let outlineMaterial: THREE.LineBasicMaterial | null = null;
 - Only removes Object3D references from scene graph
 - Transfers children from input group instead of cloning
 
+## Flex Connect
+
+The `flex connect` statement creates custom track pieces to bridge gaps between two labeled connection points.
+
+**Design decisions:**
+- Creates one curve and one straight piece (or just one for edge cases)
+- Uses geometric solver to find optimal curve+straight or straight+curve combination
+- Auto-generates labels: `{label1}_{label2}_str` and `{label1}_{label2}_crv`
+- Processed after all regular pieces are placed, before auto-connect
+
+**Geometric solver algorithm:**
+1. Calculate world positions (P1, P2) and directions (D1, D2) of both endpoints
+2. Check for edge cases:
+   - **Straight-only**: If directions are aligned (dot ≈ 1) and path is collinear (cross/length < 0.02)
+   - **Curve-only**: If calculated straight length < 0.5 inches
+   - **No solution**: If distance ≈ 0 (points already at same position)
+3. For normal cases, solve linear system using Cramer's rule:
+   - Straight+Curve: `L * D1 + R * (perp1 - perp2) = delta`
+   - Curve+Straight: `L * D2 + R * (perp1 - perp2) = delta`
+4. Select solution with largest radius (smoothest curve)
+5. Reject solutions with arc angle > 270° or radius < 5 inches
+
+**Arc angle calculation fix:**
+- Original bug: When solver chose "right" curve but geometric angle was positive, arc was forced to go 360° - θ instead of θ
+- Fix: Normalize arc to [-π, π] first, then only go "long way" if arc > 90° and direction disagrees
+- This ensures small angles (like 22.5°) don't become near-full circles (337.5°)
+
+**Collinearity detection:**
+- Cross product of delta and D1 gives `|delta| * sin(angle)`
+- Normalize by delta length to get sin(angle) independent of distance
+- Also check that delta points same direction as D1 (dot > 0.98)
+- Tolerance: sin(angle) < 0.02 ≈ 1.1° deviation
+
+**Runtime archetypes:**
+- Flex pieces use dynamically created archetypes registered at runtime
+- Straight: Simple two-point spline with calculated length
+- Curve: Multi-point spline generated from radius and arc angle
+- Connection points have proper positions and directions for seamless joining
+
+## Auto-Connect
+
+After all pieces and flex connects are processed, auto-connect scans for connection points that should be joined.
+
+**Algorithm:**
+1. Collect all connection points with world positions and directions
+2. Group points by position (within 0.5 inch tolerance)
+3. Within each group, connect pairs with opposite directions (dot < -0.9)
+4. Mark auto-connections with `isAutoConnect: true` flag
+
+**Design decisions:**
+- Auto-connect runs AFTER flex connect, so flex endpoints get auto-connected to adjacent pieces
+- Does not skip points with explicit connections (removed restriction that broke adjacent piece connections)
+- Only skips if two points are already connected to each other (prevents duplicates)
+- Creates virtual switches where multiple tracks meet at one point
+
+**Interaction with flex connect:**
+- Flex connect creates explicit connections between its pieces and the endpoints
+- Auto-connect then adds connections between adjacent pieces (like s2→f2) even if one endpoint is also a flex endpoint
+- This creates proper virtual switches where trains can arrive from multiple paths
+
+## UI: Labels Toggle
+
+The Labels button toggles visibility of track piece labels in the viewport.
+
+**Implementation:**
+- Labels use CSS2DRenderer (DOM elements positioned in 3D space)
+- CSS2D elements don't respect Three.js group visibility
+- Fix: Toggle `labelRenderer.domElement.style.display` directly
+- Button shows "active" state when labels are visible (default)
+
+**Label rendering:**
+- Labels are positioned offset from piece center, perpendicular to track direction
+- Offset distance: 2 inches
+- Style: white background, monospace font, 11px, 1px border
+
 ## Open Questions
 
 These will be addressed in user scenario discussions:

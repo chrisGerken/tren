@@ -28,6 +28,8 @@ export enum TokenType {
   RANDOM = 'RANDOM',           // random keyword (for random switch changes)
   MAX = 'MAX',                 // max keyword (for max trains)
   TRAINS = 'TRAINS',           // trains keyword (for max trains)
+  FLEX = 'FLEX',               // flex keyword (for flex connect)
+  CONNECT = 'CONNECT',         // connect keyword (for flex connect)
   EOF = 'EOF',
 }
 
@@ -372,6 +374,26 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
       if (value === 'trains') {
         tokens.push({
           type: TokenType.TRAINS,
+          value: value,
+          line: lineNum,
+          column: startPos + 1,
+        });
+        continue;
+      }
+
+      if (value === 'flex') {
+        tokens.push({
+          type: TokenType.FLEX,
+          value: value,
+          line: lineNum,
+          column: startPos + 1,
+        });
+        continue;
+      }
+
+      if (value === 'connect') {
+        tokens.push({
+          type: TokenType.CONNECT,
           value: value,
           line: lineNum,
           column: startPos + 1,

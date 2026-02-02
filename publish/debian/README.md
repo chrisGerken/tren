@@ -2,9 +2,29 @@
 
 This folder contains resources for building and distributing Tren on Debian-based Linux distributions.
 
+## Installing the .deb Package
+
+The .deb package includes dependency declarations, so apt automatically installs required runtime libraries (GTK3, WebKitGTK, etc.).
+
+### From Local File
+
+```bash
+sudo apt install ./tren_0.1.0_amd64.deb
+```
+
+Using `apt install` instead of `dpkg -i` automatically resolves and installs dependencies.
+
+### Uninstalling
+
+```bash
+sudo apt remove tren
+```
+
 ## Building the Debian Package
 
-### Prerequisites
+Building from source requires development tools and libraries that are **not** needed for running the pre-built package.
+
+### Build Prerequisites
 
 1. **Install Node.js**:
    ```bash
@@ -18,7 +38,7 @@ This folder contains resources for building and distributing Tren on Debian-base
    source $HOME/.cargo/env
    ```
 
-3. **Install Tauri system dependencies**:
+3. **Install Tauri build dependencies**:
    ```bash
    sudo apt update
    sudo apt install -y libwebkit2gtk-4.0-dev \
@@ -49,23 +69,6 @@ npm run tauri build
 This creates the following outputs in `src-tauri/target/release/bundle/`:
 - `deb/tren_0.1.0_amd64.deb` - Debian package for x86_64
 - `appimage/tren_0.1.0_amd64.AppImage` - Universal Linux package
-
-## Installing the .deb Package
-
-### From Local File
-
-```bash
-sudo dpkg -i tren_0.1.0_amd64.deb
-
-# If there are missing dependencies:
-sudo apt-get install -f
-```
-
-### Uninstalling
-
-```bash
-sudo apt remove tren
-```
 
 ## Distribution via APT Repository
 

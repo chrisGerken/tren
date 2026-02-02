@@ -174,6 +174,42 @@ if (randomBtn) {
   randomBtn.addEventListener('click', toggleRandom);
 }
 
+// Set up labels toggle button
+const labelsBtn = document.getElementById('labels-btn');
+
+/**
+ * Update the Labels button's visual state
+ */
+function updateLabelsButtonState(): void {
+  if (labelsBtn) {
+    const isVisible = scene.getLabelsVisible();
+    if (isVisible) {
+      labelsBtn.classList.add('active');
+    } else {
+      labelsBtn.classList.remove('active');
+    }
+  }
+}
+
+/**
+ * Toggle the labels visibility
+ */
+function toggleLabels(): void {
+  const currentState = scene.getLabelsVisible();
+  scene.setLabelsVisible(!currentState);
+  updateLabelsButtonState();
+  scene.render();
+
+  const state = scene.getLabelsVisible() ? 'ON' : 'OFF';
+  setStatus(`Labels: ${state}`);
+}
+
+if (labelsBtn) {
+  labelsBtn.addEventListener('click', toggleLabels);
+  // Labels are visible by default, so mark button as active
+  labelsBtn.classList.add('active');
+}
+
 // Initial render
 scene.render();
 setStatus('Ready - click "Import Layout" to load a layout file');

@@ -2,7 +2,7 @@
  * Layout Builder - transforms AST into placed track pieces
  */
 
-import { parse, Statement, PieceStatement, NewStatement, ReferenceStatement, LoopCloseStatement, TitleStatement, DescriptionStatement, MingapStatement, SpliceStatement, RandomStatement, MaxTrainsStatement } from './parser';
+import { parse, Statement, PieceStatement, NewStatement, ReferenceStatement, LoopCloseStatement, TitleStatement, DescriptionStatement, MingapStatement, SpliceStatement, RandomStatement, MaxTrainsStatement, FlexConnectStatement } from './parser';
 import { Layout, TrackPiece, Vec3, vec2, ConnectionPointDef, RangeValue as TypeRangeValue } from '../core/types';
 import { getArchetype, registerRuntimeArchetype } from '../core/archetypes';
 import type { TrackArchetype } from '../core/archetypes';
@@ -17,6 +17,25 @@ interface SpliceInfo {
   currentPieceId?: string;
   currentPointName?: string;
   line: number;
+}
+
+interface FlexConnectInfo {
+  point1Label: string;
+  point1Name: string;
+  point2Label: string;
+  point2Name: string;
+  line: number;
+}
+
+interface FlexSolution {
+  type: 'straight-only' | 'curve-only' | 'straight-curve' | 'curve-straight';
+  straightLength: number;  // 0 for curve-only
+  radius: number;          // Infinity for straight-only
+  curveDirection: 'left' | 'right' | 'none';
+  P1: Vec3;
+  D1: Vec3;
+  P2: Vec3;
+  D2: Vec3;
 }
 
 interface Segment {
@@ -41,6 +60,7 @@ interface BuilderState {
   randomSwitches?: boolean;
   maxTrains?: number;
   pendingSplices: SpliceInfo[];
+  pendingFlexConnects: FlexConnectInfo[];
 }
 
 /**
@@ -79,6 +99,7 @@ class LayoutBuilder {
       title: undefined,
       descriptions: [],
       pendingSplices: [],
+      pendingFlexConnects: [],
     };
   }
 
@@ -94,6 +115,9 @@ class LayoutBuilder {
 
     // Process pending splices (before auto-connect)
     this.processPendingSplices();
+
+    // Process pending flex connects (before auto-connect)
+    this.processPendingFlexConnects();
 
     // Detect auto-connections
     this.detectAutoConnections();
@@ -142,6 +166,9 @@ class LayoutBuilder {
       case 'splice':
         this.processSplice(stmt);
         break;
+      case 'flexConnect':
+        this.processFlexConnect(stmt);
+        break;
     }
   }
 
@@ -176,6 +203,17 @@ class LayoutBuilder {
       point: stmt.point,
       currentPieceId: this.state.currentPiece?.id,
       currentPointName: this.state.currentPointName,
+      line: stmt.line,
+    });
+  }
+
+  private processFlexConnect(stmt: FlexConnectStatement): void {
+    // Collect for post-processing (after all pieces are placed)
+    this.state.pendingFlexConnects.push({
+      point1Label: stmt.point1Label,
+      point1Name: stmt.point1Name || 'out',
+      point2Label: stmt.point2Label,
+      point2Name: stmt.point2Name || 'in',
       line: stmt.line,
     });
   }
@@ -559,6 +597,645 @@ class LayoutBuilder {
     for (const splice of this.state.pendingSplices) {
       this.performSplice(splice);
     }
+  }
+
+  /**
+   * Process all pending flex connect statements.
+   * Creates custom curve+straight or straight+curve pieces to bridge gaps.
+   */
+  private processPendingFlexConnects(): void {
+    console.log(`Processing ${this.state.pendingFlexConnects.length} flex connects`);
+    for (const flexConnect of this.state.pendingFlexConnects) {
+      this.performFlexConnect(flexConnect);
+    }
+  }
+
+  /**
+   * Create flex track pieces to connect two connection points.
+   * Uses geometric calculation to find curve+straight or straight+curve combination.
+   */
+  private performFlexConnect(info: FlexConnectInfo): void {
+    // Get the two labeled pieces
+    const piece1 = this.state.labeledPieces.get(info.point1Label);
+    const piece2 = this.state.labeledPieces.get(info.point2Label);
+
+    if (!piece1) {
+      throw new Error(`Unknown label '${info.point1Label}' in flex connect at line ${info.line}`);
+    }
+    if (!piece2) {
+      throw new Error(`Unknown label '${info.point2Label}' in flex connect at line ${info.line}`);
+    }
+
+    // Get archetypes and connection points
+    const arch1 = getArchetype(piece1.archetypeCode);
+    const arch2 = getArchetype(piece2.archetypeCode);
+
+    const cp1 = this.getConnectionPoint(arch1, info.point1Name);
+    const cp2 = this.getConnectionPoint(arch2, info.point2Name);
+
+    if (!cp1) {
+      throw new Error(`Connection point '${info.point1Name}' not found on '${info.point1Label}' at line ${info.line}`);
+    }
+    if (!cp2) {
+      throw new Error(`Connection point '${info.point2Name}' not found on '${info.point2Label}' at line ${info.line}`);
+    }
+
+    // Calculate world positions and directions
+    const pos1World = this.rotatePoint(cp1.position, piece1.rotation);
+    const P1: Vec3 = {
+      x: piece1.position.x + pos1World.x,
+      y: 0,
+      z: piece1.position.z + pos1World.z,
+    };
+    const dir1World = this.rotatePoint(cp1.direction, piece1.rotation);
+    // D1 is the outgoing direction (same as connection point direction)
+    const D1: Vec3 = { x: dir1World.x, y: 0, z: dir1World.z };
+
+    const pos2World = this.rotatePoint(cp2.position, piece2.rotation);
+    const P2: Vec3 = {
+      x: piece2.position.x + pos2World.x,
+      y: 0,
+      z: piece2.position.z + pos2World.z,
+    };
+    const dir2World = this.rotatePoint(cp2.direction, piece2.rotation);
+    // D2 is the incoming direction (opposite of connection point direction)
+    const D2: Vec3 = { x: -dir2World.x, y: 0, z: -dir2World.z };
+
+    console.log(`Flex connect at line ${info.line}:`);
+    console.log(`  P1: (${P1.x.toFixed(2)}, ${P1.z.toFixed(2)}), D1: (${D1.x.toFixed(3)}, ${D1.z.toFixed(3)}) angle=${(Math.atan2(D1.z, D1.x) * 180 / Math.PI).toFixed(1)}°`);
+    console.log(`  P2: (${P2.x.toFixed(2)}, ${P2.z.toFixed(2)}), D2: (${D2.x.toFixed(3)}, ${D2.z.toFixed(3)}) angle=${(Math.atan2(D2.z, D2.x) * 180 / Math.PI).toFixed(1)}°`);
+    console.log(`  Distance: ${Math.sqrt((P2.x-P1.x)**2 + (P2.z-P1.z)**2).toFixed(2)}`);
+
+    // Try to find a valid straight+curve or curve+straight solution
+    const solution = this.solveFlexConnect(P1, D1, P2, D2, info.line);
+
+    if (!solution) {
+      console.warn(`Could not find flex connect solution at line ${info.line}`);
+      return;
+    }
+
+    console.log(`  Solution: ${solution.type}, straight=${solution.straightLength.toFixed(2)}", radius=${solution.radius.toFixed(2)}", direction=${solution.curveDirection}`);
+
+    // Create the flex track pieces (labels are derived from endpoint labels)
+    this.createFlexPieces(solution, piece1, info.point1Name, piece2, info.point2Name, info.point1Label, info.point2Label, info.line);
+  }
+
+  /**
+   * Perpendicular vector (90° clockwise rotation in 2D)
+   * Used for flex connect calculations - the sign of the resulting R value
+   * determines whether the curve goes left or right
+   */
+  private perpRight(v: Vec3): Vec3 {
+    return { x: v.z, y: 0, z: -v.x };
+  }
+
+  /**
+   * Solve for flex connect geometry.
+   * Returns either [straight, curve] or [curve, straight] solution.
+   */
+  private solveFlexConnect(
+    P1: Vec3,
+    D1: Vec3,
+    P2: Vec3,
+    D2: Vec3,
+    line: number
+  ): FlexSolution | null {
+    const delta: Vec3 = { x: P2.x - P1.x, y: 0, z: P2.z - P1.z };
+    const deltaLength = Math.sqrt(delta.x * delta.x + delta.z * delta.z);
+    const MIN_RADIUS = 5; // Minimum curve radius in inches
+    const MIN_STRAIGHT = 0.5; // Minimum straight length to create (below this, use curve-only)
+    const DIRECTION_TOLERANCE = 0.02; // Tolerance for direction alignment (cos should be > 0.98)
+    const COLLINEAR_SIN_TOLERANCE = 0.02; // Tolerance for collinearity (sin of angle < 0.02 ≈ 1.1°)
+
+    if (DEBUG_LOGGING) {
+      console.log(`  Solving with delta=(${delta.x.toFixed(2)}, ${delta.z.toFixed(2)}), length=${deltaLength.toFixed(2)}`);
+    }
+
+    // Check for straight-only case: D1 ≈ D2 and delta is parallel to D1 (same direction)
+    const directionDot = D1.x * D2.x + D1.z * D2.z;  // cos(angle between D1 and D2)
+    const isDirectionAligned = Math.abs(directionDot - 1) < DIRECTION_TOLERANCE;
+
+    // For collinearity, normalize the cross product by delta length to get sin(angle)
+    // Cross product = |delta| * |D1| * sin(angle) = |delta| * sin(angle) since D1 is unit
+    // Also check that delta points in the same direction as D1 (dot product > 0)
+    let isCollinear = false;
+    let deltaAlongD1 = false;
+    if (deltaLength > 0.1) {
+      const sinAngle = Math.abs(delta.x * D1.z - delta.z * D1.x) / deltaLength;
+      const cosAngle = (delta.x * D1.x + delta.z * D1.z) / deltaLength;  // delta · D1 / |delta|
+      isCollinear = sinAngle < COLLINEAR_SIN_TOLERANCE;
+      deltaAlongD1 = cosAngle > 0.98;  // delta points in same direction as D1
+    }
+
+    if (DEBUG_LOGGING) {
+      console.log(`  Direction dot=${directionDot.toFixed(4)}, aligned=${isDirectionAligned}, collinear=${isCollinear}, deltaAlongD1=${deltaAlongD1}`);
+    }
+
+    if (isDirectionAligned && isCollinear && deltaAlongD1 && deltaLength > 0.1) {
+      // Straight-only solution
+      if (DEBUG_LOGGING) {
+        console.log(`  [straight-only] length=${deltaLength.toFixed(2)}"`);
+      }
+      return {
+        type: 'straight-only',
+        straightLength: deltaLength,
+        radius: Infinity,
+        curveDirection: 'none',
+        P1, D1, P2, D2,
+      };
+    }
+
+    // Calculate the arc angle between D1 and D2 (used to reject excessive curves)
+    // Arc angle is the angle the curve must turn through
+    const angle1 = Math.atan2(D1.z, D1.x);
+    const angle2 = Math.atan2(D2.z, D2.x);
+    let arcAngle = angle2 - angle1;
+    // Normalize to [-PI, PI]
+    while (arcAngle > Math.PI) arcAngle -= 2 * Math.PI;
+    while (arcAngle < -Math.PI) arcAngle += 2 * Math.PI;
+    const MAX_ARC_DEGREES = 270; // Reject curves greater than 270 degrees
+    const maxArcRadians = MAX_ARC_DEGREES * Math.PI / 180;
+
+    if (DEBUG_LOGGING) {
+      console.log(`  Arc angle between D1 and D2: ${(arcAngle * 180 / Math.PI).toFixed(1)}°`);
+    }
+
+    // Try curve+straight and straight+curve combinations
+    const solutions: FlexSolution[] = [];
+
+    // For straight+curve
+    {
+      const pr1 = this.perpRight(D1);
+      const pr2 = this.perpRight(D2);
+      const result = this.solveStraightCurve(D1, pr1, pr2, delta);
+      if (result && result.L >= 0 && Math.abs(result.R) >= MIN_RADIUS) {
+        // Reject if arc angle is too large (> 270 degrees)
+        if (Math.abs(arcAngle) <= maxArcRadians) {
+          if (DEBUG_LOGGING) {
+            console.log(`  [str+curve] L=${result.L.toFixed(2)}, R=${result.R.toFixed(2)}`);
+          }
+          if (result.L < MIN_STRAIGHT) {
+            // Curve-only solution
+            solutions.push({
+              type: 'curve-only',
+              straightLength: 0,
+              radius: Math.abs(result.R),
+              curveDirection: result.R > 0 ? 'right' : 'left',
+              P1, D1, P2, D2,
+            });
+          } else {
+            solutions.push({
+              type: 'straight-curve',
+              straightLength: result.L,
+              radius: Math.abs(result.R),
+              curveDirection: result.R > 0 ? 'right' : 'left',
+              P1, D1, P2, D2,
+            });
+          }
+        } else if (DEBUG_LOGGING) {
+          console.log(`  [str+curve] rejected: arc angle ${(arcAngle * 180 / Math.PI).toFixed(1)}° exceeds ${MAX_ARC_DEGREES}°`);
+        }
+      }
+    }
+
+    // For curve+straight
+    {
+      const pr1 = this.perpRight(D1);
+      const pr2 = this.perpRight(D2);
+      const result = this.solveCurveStraight(D2, pr1, pr2, delta);
+      if (result && result.L >= 0 && Math.abs(result.R) >= MIN_RADIUS) {
+        // Reject if arc angle is too large (> 270 degrees)
+        if (Math.abs(arcAngle) <= maxArcRadians) {
+          if (DEBUG_LOGGING) {
+            console.log(`  [curve+str] L=${result.L.toFixed(2)}, R=${result.R.toFixed(2)}`);
+          }
+          if (result.L < MIN_STRAIGHT) {
+            // Curve-only solution (avoid duplicates)
+            const hasCurveOnly = solutions.some(s => s.type === 'curve-only');
+            if (!hasCurveOnly) {
+              solutions.push({
+                type: 'curve-only',
+                straightLength: 0,
+                radius: Math.abs(result.R),
+                curveDirection: result.R > 0 ? 'right' : 'left',
+                P1, D1, P2, D2,
+              });
+            }
+          } else {
+            solutions.push({
+              type: 'curve-straight',
+              straightLength: result.L,
+              radius: Math.abs(result.R),
+              curveDirection: result.R > 0 ? 'right' : 'left',
+              P1, D1, P2, D2,
+            });
+          }
+        } else if (DEBUG_LOGGING) {
+          console.log(`  [curve+str] rejected: arc angle ${(arcAngle * 180 / Math.PI).toFixed(1)}° exceeds ${MAX_ARC_DEGREES}°`);
+        }
+      }
+    }
+
+    if (solutions.length === 0) {
+      if (DEBUG_LOGGING) {
+        console.log(`No valid flex connect solution found at line ${line}`);
+        console.log(`  P1: (${P1.x.toFixed(2)}, ${P1.z.toFixed(2)}), D1: (${D1.x.toFixed(3)}, ${D1.z.toFixed(3)})`);
+        console.log(`  P2: (${P2.x.toFixed(2)}, ${P2.z.toFixed(2)}), D2: (${D2.x.toFixed(3)}, ${D2.z.toFixed(3)})`);
+      }
+      return null;
+    }
+
+    // Prefer straight-only, then curve-only, then largest radius for smoothest curve
+    solutions.sort((a, b) => {
+      if (a.type === 'straight-only') return -1;
+      if (b.type === 'straight-only') return 1;
+      if (a.type === 'curve-only' && b.type !== 'curve-only') return -1;
+      if (b.type === 'curve-only' && a.type !== 'curve-only') return 1;
+      return b.radius - a.radius;
+    });
+    return solutions[0];
+  }
+
+  /**
+   * Solve for [Straight, Curve] combination.
+   * Equation: L * D1 + R * (perp1 - perp2) = delta
+   */
+  private solveStraightCurve(
+    D1: Vec3,
+    perp1: Vec3,
+    perp2: Vec3,
+    delta: Vec3
+  ): { L: number; R: number } | null {
+    const bx = perp1.x - perp2.x;
+    const bz = perp1.z - perp2.z;
+
+    const det = D1.x * bz - D1.z * bx;
+    if (Math.abs(det) < 0.0001) return null; // No unique solution
+
+    const L = (delta.x * bz - delta.z * bx) / det;
+    const R = (D1.x * delta.z - D1.z * delta.x) / det;
+
+    return { L, R };
+  }
+
+  /**
+   * Solve for [Curve, Straight] combination.
+   * Curve from P1 (direction D1) to P_mid (direction D2), then straight from P_mid to P2.
+   *
+   * P_mid = P2 - L * D2  (straight goes from P_mid forward to P2)
+   * Center = P1 + R * perp(D1) = P_mid + R * perp(D2)
+   *
+   * Substituting: R * (perp1 - perp2) + L * D2 = delta
+   */
+  private solveCurveStraight(
+    D2: Vec3,
+    perp1: Vec3,
+    perp2: Vec3,
+    delta: Vec3
+  ): { L: number; R: number } | null {
+    // We solve: L * D2 + R * (perp1 - perp2) = delta
+    // Matrix form: | D2.x  (perp1.x - perp2.x) | | L |   | delta.x |
+    //              | D2.z  (perp1.z - perp2.z) | | R | = | delta.z |
+    const ax = D2.x;
+    const az = D2.z;
+    const bx = perp1.x - perp2.x;
+    const bz = perp1.z - perp2.z;
+
+    const det = ax * bz - az * bx;
+    if (Math.abs(det) < 0.0001) return null;
+
+    const L = (delta.x * bz - delta.z * bx) / det;
+    const R = (ax * delta.z - az * delta.x) / det;
+
+    return { L, R };
+  }
+
+  /**
+   * Create the actual track pieces for a flex connect solution.
+   * Pieces are automatically labeled as {label1}_{label2}_str and {label1}_{label2}_crv
+   */
+  private createFlexPieces(
+    solution: FlexSolution,
+    piece1: TrackPiece,
+    point1Name: string,
+    piece2: TrackPiece,
+    point2Name: string,
+    label1: string,
+    label2: string,
+    line: number
+  ): void {
+    const flexId = `flex_${this.state.nextPieceId}`;
+
+    // Generate labels for the flex pieces based on endpoint labels
+    const straightLabel = `${label1}_${label2}_str`;
+    const curveLabel = `${label1}_${label2}_crv`;
+
+    if (solution.type === 'straight-only') {
+      // Create only a straight piece
+      const straightArch = this.createFlexStraightArchetype(
+        flexId + '_str',
+        solution.straightLength
+      );
+
+      registerRuntimeArchetype(straightArch);
+
+      const straightPiece: TrackPiece = {
+        id: `piece_${this.state.nextPieceId++}`,
+        archetypeCode: straightArch.code,
+        position: { ...solution.P1 },
+        rotation: Math.atan2(solution.D1.z, solution.D1.x),
+        connections: new Map(),
+        label: straightLabel,
+      };
+
+      // Register label for later reference
+      this.state.labeledPieces.set(straightLabel, straightPiece);
+
+      // Connect: piece1.point1 -> straight.in -> straight.out -> piece2.point2
+      this.addConnection(piece1, point1Name, straightPiece, 'in');
+      this.addConnection(straightPiece, 'out', piece2, point2Name);
+
+      this.state.pieces.push(straightPiece);
+
+      if (DEBUG_LOGGING) {
+        console.log(`Flex connect at line ${line}: straight-only(${solution.straightLength.toFixed(2)}") labeled "${straightLabel}"`);
+      }
+    } else if (solution.type === 'curve-only') {
+      // Create only a curve piece
+      // curveDirection is always 'left' or 'right' for curve-only solutions
+      const curveArch = this.createFlexCurveArchetype(
+        flexId + '_crv',
+        solution.radius,
+        solution.curveDirection as 'left' | 'right',
+        solution.D1,
+        solution.D2
+      );
+
+      registerRuntimeArchetype(curveArch);
+
+      const curvePiece: TrackPiece = {
+        id: `piece_${this.state.nextPieceId++}`,
+        archetypeCode: curveArch.code,
+        position: { ...solution.P1 },
+        rotation: Math.atan2(solution.D1.z, solution.D1.x),
+        connections: new Map(),
+        label: curveLabel,
+      };
+
+      // Register label for later reference
+      this.state.labeledPieces.set(curveLabel, curvePiece);
+
+      // Connect: piece1.point1 -> curve.in -> curve.out -> piece2.point2
+      this.addConnection(piece1, point1Name, curvePiece, 'in');
+      this.addConnection(curvePiece, 'out', piece2, point2Name);
+
+      this.state.pieces.push(curvePiece);
+
+      if (DEBUG_LOGGING) {
+        console.log(`Flex connect at line ${line}: curve-only(R=${solution.radius.toFixed(2)}", ${solution.curveDirection}) labeled "${curveLabel}"`);
+      }
+    } else if (solution.type === 'straight-curve') {
+      // Create straight piece first, then curve
+      const straightArch = this.createFlexStraightArchetype(
+        flexId + '_str',
+        solution.straightLength
+      );
+      // curveDirection is always 'left' or 'right' for straight-curve solutions
+      const curveArch = this.createFlexCurveArchetype(
+        flexId + '_crv',
+        solution.radius,
+        solution.curveDirection as 'left' | 'right',
+        solution.D1,
+        solution.D2
+      );
+
+      registerRuntimeArchetype(straightArch);
+      registerRuntimeArchetype(curveArch);
+
+      // Calculate positions
+      const straightPiece: TrackPiece = {
+        id: `piece_${this.state.nextPieceId++}`,
+        archetypeCode: straightArch.code,
+        position: { ...solution.P1 },
+        rotation: Math.atan2(solution.D1.z, solution.D1.x),
+        connections: new Map(),
+        label: straightLabel,
+      };
+
+      // Curve starts where straight ends
+      const curveStart: Vec3 = {
+        x: solution.P1.x + solution.D1.x * solution.straightLength,
+        y: 0,
+        z: solution.P1.z + solution.D1.z * solution.straightLength,
+      };
+
+      const curvePiece: TrackPiece = {
+        id: `piece_${this.state.nextPieceId++}`,
+        archetypeCode: curveArch.code,
+        position: { ...curveStart },
+        rotation: Math.atan2(solution.D1.z, solution.D1.x),
+        connections: new Map(),
+        label: curveLabel,
+      };
+
+      // Register labels for later reference
+      this.state.labeledPieces.set(straightLabel, straightPiece);
+      this.state.labeledPieces.set(curveLabel, curvePiece);
+
+      // Connect: piece1.point1 -> straight.in
+      this.addConnection(piece1, point1Name, straightPiece, 'in');
+      // Connect: straight.out -> curve.in
+      this.addConnection(straightPiece, 'out', curvePiece, 'in');
+      // Connect: curve.out -> piece2.point2
+      this.addConnection(curvePiece, 'out', piece2, point2Name);
+
+      this.state.pieces.push(straightPiece, curvePiece);
+
+      if (DEBUG_LOGGING) {
+        console.log(`Flex connect at line ${line}: straight(${solution.straightLength.toFixed(2)}") labeled "${straightLabel}" + ${solution.curveDirection} curve(R=${solution.radius.toFixed(2)}") labeled "${curveLabel}"`);
+      }
+    } else {
+      // Create curve piece first, then straight (curve-straight case)
+      // curveDirection is always 'left' or 'right' for curve-straight solutions
+      const curveArch = this.createFlexCurveArchetype(
+        flexId + '_crv',
+        solution.radius,
+        solution.curveDirection as 'left' | 'right',
+        solution.D1,
+        solution.D2
+      );
+      const straightArch = this.createFlexStraightArchetype(
+        flexId + '_str',
+        solution.straightLength
+      );
+
+      registerRuntimeArchetype(curveArch);
+      registerRuntimeArchetype(straightArch);
+
+      const curvePiece: TrackPiece = {
+        id: `piece_${this.state.nextPieceId++}`,
+        archetypeCode: curveArch.code,
+        position: { ...solution.P1 },
+        rotation: Math.atan2(solution.D1.z, solution.D1.x),
+        connections: new Map(),
+        label: curveLabel,
+      };
+
+      // Straight starts where curve ends (P2 - L * D2)
+      const straightStart: Vec3 = {
+        x: solution.P2.x - solution.D2.x * solution.straightLength,
+        y: 0,
+        z: solution.P2.z - solution.D2.z * solution.straightLength,
+      };
+
+      const straightPiece: TrackPiece = {
+        id: `piece_${this.state.nextPieceId++}`,
+        archetypeCode: straightArch.code,
+        position: { ...straightStart },
+        rotation: Math.atan2(solution.D2.z, solution.D2.x),
+        connections: new Map(),
+        label: straightLabel,
+      };
+
+      // Register labels for later reference
+      this.state.labeledPieces.set(curveLabel, curvePiece);
+      this.state.labeledPieces.set(straightLabel, straightPiece);
+
+      // Connect: piece1.point1 -> curve.in
+      this.addConnection(piece1, point1Name, curvePiece, 'in');
+      // Connect: curve.out -> straight.in
+      this.addConnection(curvePiece, 'out', straightPiece, 'in');
+      // Connect: straight.out -> piece2.point2
+      this.addConnection(straightPiece, 'out', piece2, point2Name);
+
+      this.state.pieces.push(curvePiece, straightPiece);
+
+      if (DEBUG_LOGGING) {
+        console.log(`Flex connect at line ${line}: ${solution.curveDirection} curve(R=${solution.radius.toFixed(2)}") labeled "${curveLabel}" + straight(${solution.straightLength.toFixed(2)}") labeled "${straightLabel}"`);
+      }
+    }
+  }
+
+  /**
+   * Create a straight track archetype with given length.
+   */
+  private createFlexStraightArchetype(code: string, length: number): TrackArchetype {
+    return {
+      code,
+      aliases: [],
+      sections: [
+        { splinePoints: [vec2(0, 0), vec2(length, 0)] },
+      ],
+      connectionPoints: [
+        { name: 'in', position: vec2(0, 0), direction: vec2(-1, 0), sectionIndices: [0] },
+        { name: 'out', position: vec2(length, 0), direction: vec2(1, 0), sectionIndices: [0] },
+      ],
+    };
+  }
+
+  /**
+   * Create a curve track archetype with given radius and direction.
+   * The curve goes from direction D1 to direction D2.
+   */
+  private createFlexCurveArchetype(
+    code: string,
+    radius: number,
+    curveDirection: 'left' | 'right',
+    D1: Vec3,
+    D2: Vec3
+  ): TrackArchetype {
+    // Calculate the arc angle from D1 to D2
+    const angle1 = Math.atan2(D1.z, D1.x);
+    const angle2 = Math.atan2(D2.z, D2.x);
+
+    let arcAngle = angle2 - angle1;
+
+    // Normalize to [-PI, PI] to get the smallest angle difference
+    while (arcAngle > Math.PI) arcAngle -= 2 * Math.PI;
+    while (arcAngle < -Math.PI) arcAngle += 2 * Math.PI;
+
+    // The sign of arcAngle now tells us the natural curve direction:
+    // Positive = counter-clockwise (left), Negative = clockwise (right)
+    // If the solver's curveDirection disagrees AND the arc is large (> 90°),
+    // then go the long way. Otherwise, trust the geometric arc.
+    const naturalDirection = arcAngle >= 0 ? 'left' : 'right';
+    if (curveDirection !== naturalDirection && Math.abs(arcAngle) < Math.PI / 2) {
+      // Small arc but solver wants opposite direction - this is likely a solver quirk
+      // Just use the natural direction (shorter arc)
+      // The actual curveDirection parameter came from the sign of R in the solver,
+      // but for small angles, the geometric direction is more reliable
+    } else if (curveDirection !== naturalDirection) {
+      // Large arc and solver wants opposite direction - go the long way
+      if (curveDirection === 'left') {
+        arcAngle += 2 * Math.PI;  // Make it positive (left)
+      } else {
+        arcAngle -= 2 * Math.PI;  // Make it negative (right)
+      }
+    }
+    // else: directions agree, use arcAngle as-is
+
+    const arcDegrees = Math.abs(arcAngle * 180 / Math.PI);
+    const numPoints = Math.max(3, Math.ceil(arcDegrees / 5) + 1); // At least 3 points
+
+    // Generate spline points in local coordinates (starting at origin, heading +X)
+    const points: Vec3[] = [];
+    const absArc = Math.abs(arcAngle);
+
+    for (let i = 0; i < numPoints; i++) {
+      const t = i / (numPoints - 1);
+      const angle = t * absArc;
+
+      if (curveDirection === 'left') {
+        // Left curve: center is at (0, radius), curve goes counter-clockwise
+        points.push(vec2(
+          radius * Math.sin(angle),
+          radius * (1 - Math.cos(angle))
+        ));
+      } else {
+        // Right curve: center is at (0, -radius), curve goes clockwise
+        points.push(vec2(
+          radius * Math.sin(angle),
+          -radius * (1 - Math.cos(angle))
+        ));
+      }
+    }
+
+    // Calculate end position and direction in local coordinates
+    const endPos = points[points.length - 1];
+    let endDir: Vec3;
+    if (curveDirection === 'left') {
+      endDir = vec2(Math.cos(absArc), Math.sin(absArc));
+    } else {
+      endDir = vec2(Math.cos(absArc), -Math.sin(absArc));
+    }
+
+    return {
+      code,
+      aliases: [],
+      sections: [{ splinePoints: points }],
+      connectionPoints: [
+        { name: 'in', position: vec2(0, 0), direction: vec2(-1, 0), sectionIndices: [0] },
+        { name: 'out', position: endPos, direction: endDir, sectionIndices: [0] },
+      ],
+    };
+  }
+
+  /**
+   * Helper to add bidirectional connection between two pieces.
+   */
+  private addConnection(
+    pieceA: TrackPiece,
+    pointA: string,
+    pieceB: TrackPiece,
+    pointB: string
+  ): void {
+    const aConns = pieceA.connections.get(pointA) || [];
+    aConns.push({ pieceId: pieceB.id, pointName: pointB });
+    pieceA.connections.set(pointA, aConns);
+
+    const bConns = pieceB.connections.get(pointB) || [];
+    bConns.push({ pieceId: pieceA.id, pointName: pointA });
+    pieceB.connections.set(pointB, bConns);
   }
 
   private performSplice(splice: SpliceInfo): void {
@@ -970,8 +1647,10 @@ class LayoutBuilder {
           // Skip if same piece
           if (a.piece.id === b.piece.id) continue;
 
-          // Skip if already connected
+          // Get existing connections for point a
           const aConnections = a.piece.connections.get(a.pointName) || [];
+
+          // Skip if already connected to each other
           const alreadyConnected = aConnections.some(
             c => c.pieceId === b.piece.id && c.pointName === b.pointName
           );

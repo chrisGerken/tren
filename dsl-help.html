@@ -250,6 +250,61 @@ crvl x 16               # Full circle of curves
   </div>
 
   <div class="section">
+    <h2>Flex Connect</h2>
+    <p>The <code>flex connect</code> statement creates custom track pieces to bridge gaps that can't be closed with standard pieces.</p>
+    <pre><code>flex connect $label1.point1 $label2.point2</code></pre>
+    <p>The solver automatically calculates the best solution to smoothly connect the two points:</p>
+    <ul>
+      <li><strong>Straight + Curve</strong> or <strong>Curve + Straight</strong> - for most gaps</li>
+      <li><strong>Straight-only</strong> - when endpoints are collinear (same direction, aligned path)</li>
+      <li><strong>Curve-only</strong> - when the straight portion would be very short (&lt;0.5")</li>
+    </ul>
+
+    <h3>Auto-Generated Labels</h3>
+    <p>The created pieces are automatically labeled for later reference:</p>
+    <ul>
+      <li><code>{label1}_{label2}_str</code> - The straight piece (if created)</li>
+      <li><code>{label1}_{label2}_crv</code> - The curve piece (if created)</li>
+    </ul>
+    <p>For example, <code>flex connect $f1.out $f2.in</code> creates <code>$f1_f2_str</code> and <code>$f1_f2_crv</code>.</p>
+    <p><strong>Note:</strong> In edge cases, only one piece may be created (straight-only or curve-only).</p>
+
+    <h3>Example</h3>
+    <pre><code># Almost-complete loop
+after: str
+crvl * 4
+str * 2
+crvl * 5
+str * 2
+before: str
+
+# Bridge the gap
+flex connect $before.out $after.in
+
+# Reference the flex pieces
+$before_after_str.out
+str x 2
+bump</code></pre>
+
+    <h3>Limitations</h3>
+    <ul>
+      <li>Minimum curve radius: 5 inches</li>
+      <li>Minimum straight length: 0.5 inches (shorter creates curve-only)</li>
+      <li>Maximum arc angle: 270 degrees</li>
+      <li>If points are already at same position (distance ≈ 0), no bridge is created</li>
+    </ul>
+
+    <h3>Processing Order</h3>
+    <p>Flex connects are processed after regular pieces but before auto-connect:</p>
+    <ol>
+      <li>Parse all statements</li>
+      <li>Build regular track pieces</li>
+      <li>Process flex connects (create bridge pieces)</li>
+      <li>Auto-connect adjacent pieces</li>
+    </ol>
+  </div>
+
+  <div class="section">
     <h2>Auto-Connect</h2>
     <p>After a layout is built, connection points at the same position with opposite directions are automatically connected. This creates virtual switches where tracks meet.</p>
     <pre><code>crvl x 16               # Full circle - auto-connects at ends</code></pre>
@@ -309,6 +364,17 @@ crvl x 8                # 180° turn
 $start.out              # Branch from first straight
 str x 4
 > in.$start             # Rejoin</code></pre>
+  </div>
+
+  <div class="section">
+    <h2>Toolbar Controls</h2>
+    <table>
+      <tr><th>Button</th><th>Function</th></tr>
+      <tr><td><strong>Import Layout</strong></td><td>Open a layout file (.txt or .layout)</td></tr>
+      <tr><td><strong>Random</strong></td><td>Toggle random switch mode (trains choose routes randomly)</td></tr>
+      <tr><td><strong>Labels</strong></td><td>Toggle track label visibility</td></tr>
+    </table>
+    <p>Active buttons are highlighted. You can also paste layout text directly into the window.</p>
   </div>
 
 </body>
