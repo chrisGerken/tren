@@ -109,6 +109,9 @@ async function importLayout(): Promise<void> {
     const layout = buildLayout(content);
     currentLayout = layout;
 
+    // Update random button to reflect layout's setting
+    updateRandomButtonState();
+
     setStatus(`Rendering ${layout.pieces.length} pieces...`);
     renderLayout(scene, layout);
 
@@ -131,6 +134,46 @@ if (importBtn) {
   });
 }
 
+// Set up random toggle button
+const randomBtn = document.getElementById('random-btn');
+
+/**
+ * Update the Random button's visual state based on the current layout
+ */
+function updateRandomButtonState(): void {
+  if (randomBtn) {
+    const isRandom = currentLayout?.randomSwitches ?? false;
+    if (isRandom) {
+      randomBtn.classList.add('active');
+    } else {
+      randomBtn.classList.remove('active');
+    }
+  }
+}
+
+/**
+ * Toggle the random switches setting
+ */
+function toggleRandom(): void {
+  if (!currentLayout) {
+    setStatus('No layout loaded');
+    return;
+  }
+
+  currentLayout.randomSwitches = !currentLayout.randomSwitches;
+  updateRandomButtonState();
+
+  // Re-render the layout to show/hide switch indicators
+  renderLayout(scene, currentLayout);
+
+  const state = currentLayout.randomSwitches ? 'ON' : 'OFF';
+  setStatus(`Random switches: ${state}`);
+}
+
+if (randomBtn) {
+  randomBtn.addEventListener('click', toggleRandom);
+}
+
 // Initial render
 scene.render();
 setStatus('Ready - click "Import Layout" to load a layout file');
@@ -143,6 +186,10 @@ document.addEventListener('paste', async (e) => {
       setStatus('Parsing pasted layout...');
       const layout = buildLayout(text);
       currentLayout = layout;
+
+      // Update random button to reflect layout's setting
+      updateRandomButtonState();
+
       renderLayout(scene, layout);
 
       // Start simulation

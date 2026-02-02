@@ -66,6 +66,8 @@ Trains are ordered car lists (consists). The primary cab (first cab in train) co
 
 **Collision prevention:** Trains have desired speed (from generator) and current speed (actual). Trains look ahead along the track and automatically slow down when approaching another train, maintaining safe following distance. They accelerate back to desired speed when clear. Minimum gap is configurable via `mingap` DSL statement (default 1 inch).
 
+**Train limits:** The `max trains N` DSL statement limits the number of trains that can exist simultaneously (default: 5). Generators will not spawn new trains when the layout already has N trains. Once a train is destroyed (e.g., enters a bin), generators can spawn again.
+
 ## Layout DSL
 
 Layouts are defined in text files. Statements can be one per line or multiple per line separated by semicolons:

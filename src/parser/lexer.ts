@@ -26,6 +26,8 @@ export enum TokenType {
   SPEED = 'SPEED',             // speed keyword (for gen statement)
   EVERY = 'EVERY',             // every keyword (for gen statement)
   RANDOM = 'RANDOM',           // random keyword (for random switch changes)
+  MAX = 'MAX',                 // max keyword (for max trains)
+  TRAINS = 'TRAINS',           // trains keyword (for max trains)
   EOF = 'EOF',
 }
 
@@ -350,6 +352,26 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
       if (value === 'random') {
         tokens.push({
           type: TokenType.RANDOM,
+          value: value,
+          line: lineNum,
+          column: startPos + 1,
+        });
+        continue;
+      }
+
+      if (value === 'max') {
+        tokens.push({
+          type: TokenType.MAX,
+          value: value,
+          line: lineNum,
+          column: startPos + 1,
+        });
+        continue;
+      }
+
+      if (value === 'trains') {
+        tokens.push({
+          type: TokenType.TRAINS,
           value: value,
           line: lineNum,
           column: startPos + 1,

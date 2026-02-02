@@ -197,6 +197,7 @@ export class Simulation {
           this.resolvedFrequencies.set(piece.id, frequency);
         }
         if (timeSinceLastSpawn >= frequency) {
+          // Timer fires: always reset timer, but only spawn if under max trains
           this.spawnTrain(piece);
           config.lastSpawnTime = this.simulationTime;
           // Resolve a new frequency for the next spawn interval
@@ -207,11 +208,31 @@ export class Simulation {
   }
 
   /**
+   * Check if spawning a new train would exceed the max trains limit
+   */
+  private canSpawnTrain(): boolean {
+    // Default to 5 trains if no limit is specified
+    const maxTrains = this.layout.maxTrains ?? 5;
+
+    // Check if we're at or above the limit
+    return this.trains.length < maxTrains;
+  }
+
+  /**
    * Spawn a new train at a generator
    * Cars spawn inside the generator's internal track section and move forward to exit
+   * Returns true if a train was successfully spawned, false otherwise
    */
-  private spawnTrain(generatorPiece: TrackPiece): void {
-    if (!generatorPiece.genConfig) return;
+  private spawnTrain(generatorPiece: TrackPiece): boolean {
+    if (!generatorPiece.genConfig) return false;
+
+    // Check maxTrains limit before spawning
+    if (!this.canSpawnTrain()) {
+      if (DEBUG_LOGGING) {
+        console.log(`Cannot spawn train - at max trains limit (${this.layout.maxTrains})`);
+      }
+      return false;
+    }
 
     const config = generatorPiece.genConfig;
 
@@ -233,7 +254,7 @@ export class Simulation {
     const genSectionLength = getSectionLength(generatorPiece, 0);
     if (genSectionLength === 0) {
       if (DEBUG_LOGGING) console.log(`Generator ${generatorPiece.id} has no internal section`);
-      return;
+      return false;
     }
 
     // Position cars from front to back, starting near the exit (high distance)
@@ -297,11 +318,12 @@ export class Simulation {
       if (DEBUG_LOGGING) {
         console.log(`Cannot spawn train - blocked at ${lockResult.blocked} by ${lockResult.blockingTrainId}`);
       }
-      return;
+      return false;
     }
 
     this.trains.push(train);
     if (DEBUG_LOGGING) console.log(`Spawned train ${train.id} with ${train.cars.length} cars`);
+    return true;
   }
 
   /**

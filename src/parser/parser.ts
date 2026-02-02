@@ -14,7 +14,8 @@ export type Statement =
   | DescriptionStatement
   | MingapStatement
   | SpliceStatement
-  | RandomStatement;
+  | RandomStatement
+  | MaxTrainsStatement;
 
 export interface NewStatement {
   type: 'new';
@@ -90,6 +91,12 @@ export interface RandomStatement {
   line: number;
 }
 
+export interface MaxTrainsStatement {
+  type: 'maxTrains';
+  value: number;
+  line: number;
+}
+
 /**
  * Parse DSL text into an array of statements
  */
@@ -138,6 +145,9 @@ class Parser {
 
       case TokenType.RANDOM:
         return this.parseRandomStatement();
+
+      case TokenType.MAX:
+        return this.parseMaxTrainsStatement();
 
       case TokenType.SPLICE:
         return this.parseSpliceStatement();
@@ -292,6 +302,23 @@ class Parser {
   private parseRandomStatement(): RandomStatement {
     const token = this.advance(); // consume 'random'
     return { type: 'random', line: token.line };
+  }
+
+  private parseMaxTrainsStatement(): MaxTrainsStatement {
+    const token = this.advance(); // consume 'max'
+
+    // Expect 'trains' keyword
+    if (this.check(TokenType.TRAINS)) {
+      this.advance(); // consume 'trains'
+    }
+
+    // Expect a number
+    let value = 1; // default
+    if (this.check(TokenType.NUMBER)) {
+      value = parseInt(this.advance().value, 10);
+    }
+
+    return { type: 'maxTrains', value, line: token.line };
   }
 
   private parseSpliceStatement(): SpliceStatement {

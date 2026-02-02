@@ -81,11 +81,14 @@ export function renderLayout(scene: TrackScene, layout: Layout): void {
     pieceMap.set(piece.id, piece);
   }
 
+  // Check if random mode is on - if so, hide switch indicators
+  const hideIndicators = layout.randomSwitches ?? false;
+
   for (const piece of layout.pieces) {
     const archetype = getArchetype(piece.archetypeCode);
     const group = DEBUG_MODE
       ? renderTrackPieceDebug(piece, archetype)
-      : renderTrackPiece(piece, archetype, pieceMap);
+      : renderTrackPiece(piece, archetype, pieceMap, hideIndicators);
     scene.addTrackGroup(group);
 
     // Add label if piece has one
@@ -161,11 +164,13 @@ function renderTrackPieceDebug(piece: TrackPiece, archetype: TrackArchetype): TH
 
 /**
  * Render a single track piece using explicit world coordinates
+ * @param hideIndicators - If true, skip rendering switch indicators (for random mode)
  */
 function renderTrackPiece(
   piece: TrackPiece,
   archetype: TrackArchetype,
-  pieceMap: Map<string, TrackPiece>
+  pieceMap: Map<string, TrackPiece>,
+  hideIndicators: boolean = false
 ): THREE.Group {
   const group = new THREE.Group();
 
@@ -206,8 +211,9 @@ function renderTrackPiece(
       group.add(cpMesh);
 
       // Render switch indicators if this is a virtual switch (multiple connections)
+      // Skip if random mode is on (hideIndicators)
       if (DEBUG_LOGGING) console.log(`  ${piece.id}.${cp.name}: ${connections.length} connections`);
-      if (connections.length > 1) {
+      if (connections.length > 1 && !hideIndicators) {
         const switchIndicators = renderSwitchIndicators(
           piece,
           cp.name,
@@ -400,12 +406,15 @@ function renderBumperStopWorld(
   return mesh;
 }
 
-// Minimum separation distance between switch indicators (inches)
-const MIN_INDICATOR_SEPARATION = 4.0;
-// Step size when searching for optimal indicator distance (inches)
-const INDICATOR_STEP_SIZE = 0.25;
 // Maximum distance to search along track (inches)
 const MAX_INDICATOR_DISTANCE = 30.0;
+// Indicator placement fractions based on track configuration:
+// Case 1: Track is output for switches at BOTH ends - place at 40%
+const INDICATOR_FRACTION_SHARED_TRACK = 0.40;
+// Case 2: Track is output for only ONE switch - place at far end (100%)
+const INDICATOR_FRACTION_SINGLE_SWITCH = 1.00;
+// Case 3: Two consecutive output tracks between switches - place at 75%
+const INDICATOR_FRACTION_CONSECUTIVE_TRACKS = 0.75;
 
 /**
  * Information about a track curve for indicator positioning
@@ -414,6 +423,9 @@ interface CurveInfo {
   curve: THREE.CatmullRomCurve3;
   curveLength: number;
   isFromIn: boolean;
+  // Information about the far end of the track
+  farEndHasSwitch: boolean;  // True if far end has multiple connections (is a switch)
+  farEndNextTrackHasSwitch: boolean;  // True if track connected at far end leads to a switch
 }
 
 /**
@@ -508,13 +520,12 @@ function renderDirectionalSwitchIndicators(
     curveInfos.push(curveInfo);
   }
 
-  // Find minimum distance where all indicators are separated enough
-  const distance = findOptimalIndicatorDistance(curveInfos);
-
-  // Calculate positions at the optimal distance
-  const positions = curveInfos.map(info =>
-    info ? getPositionAtDistance(info, distance) : null
-  );
+  // Calculate positions using per-curve distances based on track configuration
+  const positions = curveInfos.map(info => {
+    if (!info) return null;
+    const distance = getIndicatorDistanceForCurve(info);
+    return getPositionAtDistance(info, distance);
+  });
 
   // Count valid positions - if only 0 or 1, there's no real switch choice
   const validPositionCount = positions.filter(p => p !== null).length;
@@ -549,6 +560,19 @@ function renderDirectionalSwitchIndicators(
   }
 
   return indicators;
+}
+
+/**
+ * Get the opposite connection point name
+ */
+function getOppositePointName(pointName: string): string {
+  if (pointName === 'in') return 'out';
+  if (pointName === 'out') return 'in';
+  if (pointName === 'in1') return 'out1';
+  if (pointName === 'out1') return 'in1';
+  if (pointName === 'in2') return 'out2';
+  if (pointName === 'out2') return 'in2';
+  return 'out';
 }
 
 /**
@@ -587,7 +611,39 @@ function buildCurveInfo(
 
   const isFromIn = connection.pointName === 'in' || connection.pointName === 'in1';
 
-  return { curve, curveLength, isFromIn };
+  // Determine what's at the far end of this track
+  const farEndPointName = getOppositePointName(connection.pointName);
+  const farEndConnections = connectedPiece.connections.get(farEndPointName) || [];
+  const farEndHasSwitch = farEndConnections.length > 1;
+
+  // Check if the track connected at the far end leads to a switch (Case 3)
+  // Scenario: S1 -> T1 -> T2 -> S2
+  // We're on T1, checking if T2 leads to switch S2
+  let farEndNextTrackHasSwitch = false;
+  if (farEndConnections.length === 1) {
+    const nextConnection = farEndConnections[0];  // T1's far end connects to T2
+    const nextPiece = pieceMap.get(nextConnection.pieceId);  // T2
+    if (nextPiece) {
+      const nextFarEndPointName = getOppositePointName(nextConnection.pointName);  // T2's far end
+      const nextFarEndConnections = nextPiece.connections.get(nextFarEndPointName) || [];
+
+      if (nextFarEndConnections.length > 1) {
+        // T2's far end itself is a switch point
+        farEndNextTrackHasSwitch = true;
+      } else if (nextFarEndConnections.length === 1) {
+        // T2's far end connects to one piece (S2) - check if that connection point is a switch
+        const thirdConnection = nextFarEndConnections[0];  // T2 connects to S2
+        const thirdPiece = pieceMap.get(thirdConnection.pieceId);  // S2
+        if (thirdPiece) {
+          // Check if the point on S2 that T2 connects to has multiple connections (is a switch)
+          const thirdPointConnections = thirdPiece.connections.get(thirdConnection.pointName) || [];
+          farEndNextTrackHasSwitch = thirdPointConnections.length > 1;
+        }
+      }
+    }
+  }
+
+  return { curve, curveLength, isFromIn, farEndHasSwitch, farEndNextTrackHasSwitch };
 }
 
 /**
@@ -606,46 +662,29 @@ function getPositionAtDistance(
 }
 
 /**
- * Find the minimum distance from connection point where all indicators
- * are at least MIN_INDICATOR_SEPARATION apart from each other
+ * Determine the indicator placement fraction based on track configuration.
+ * Case 1: Track has switches at both ends -> 40%
+ * Case 2: Track has switch at one end only -> 100% (far end)
+ * Case 3: Track leads to another track that has a switch -> 66%
  */
-function findOptimalIndicatorDistance(curveInfos: (CurveInfo | null)[]): number {
-  const validInfos = curveInfos.filter((info): info is CurveInfo => info !== null);
-
-  // If only one connection, use minimum distance
-  if (validInfos.length < 2) {
-    return INDICATOR_STEP_SIZE;
+function getIndicatorFraction(info: CurveInfo): number {
+  if (info.farEndHasSwitch) {
+    // Case 1: Both ends are switches - place at 40%
+    return INDICATOR_FRACTION_SHARED_TRACK;
+  } else if (info.farEndNextTrackHasSwitch) {
+    // Case 3: Next track after this one has a switch - place at 66%
+    return INDICATOR_FRACTION_CONSECUTIVE_TRACKS;
+  } else {
+    // Case 2: Only our end is a switch - place at far end (100%)
+    return INDICATOR_FRACTION_SINGLE_SWITCH;
   }
-
-  // Search for minimum distance where all pairs are separated enough
-  for (let distance = INDICATOR_STEP_SIZE; distance <= MAX_INDICATOR_DISTANCE; distance += INDICATOR_STEP_SIZE) {
-    const positions = validInfos.map(info => getPositionAtDistance(info, distance));
-
-    if (allPairsSeparated(positions, MIN_INDICATOR_SEPARATION)) {
-      return distance;
-    }
-  }
-
-  // If we couldn't find separation, use max distance
-  return MAX_INDICATOR_DISTANCE;
 }
 
 /**
- * Check if all pairs of positions are at least minSeparation apart
+ * Get the indicator distance for a specific curve based on its configuration
  */
-function allPairsSeparated(
-  positions: { x: number; z: number }[],
-  minSeparation: number
-): boolean {
-  for (let i = 0; i < positions.length; i++) {
-    for (let j = i + 1; j < positions.length; j++) {
-      const dx = positions[i].x - positions[j].x;
-      const dz = positions[i].z - positions[j].z;
-      const dist = Math.sqrt(dx * dx + dz * dz);
-      if (dist < minSeparation) {
-        return false;
-      }
-    }
-  }
-  return true;
+function getIndicatorDistanceForCurve(info: CurveInfo): number {
+  const fraction = getIndicatorFraction(info);
+  return Math.min(info.curveLength * fraction, MAX_INDICATOR_DISTANCE);
 }
+

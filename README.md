@@ -80,35 +80,15 @@ See [publish/macos/README.md](publish/macos/README.md) for detailed build and di
 
 ### Debian/Ubuntu Linux
 
-#### Prerequisites
-
-Install Node.js:
-```bash
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt-get install -y nodejs
-```
-
-Install Rust:
-```bash
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source $HOME/.cargo/env
-```
-
-Install Tauri dependencies:
-```bash
-sudo apt update
-sudo apt install -y libwebkit2gtk-4.0-dev build-essential curl wget file \
-    libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
-```
-
-#### Option 1: Install from .deb Package
+#### Option 1: Install from .deb Package (Recommended)
 
 1. Download the latest `.deb` file from the [Releases](https://github.com/YOUR_USERNAME/tren/releases) page
 2. Install:
    ```bash
-   sudo dpkg -i tren_*.deb
-   sudo apt-get install -f  # Install any missing dependencies
+   sudo apt install ./tren_*.deb
    ```
+
+That's it! The package declares its dependencies (GTK3, WebKitGTK, etc.) and apt installs them automatically.
 
 #### Option 2: Run AppImage (No Installation Required)
 
@@ -121,7 +101,23 @@ sudo apt install -y libwebkit2gtk-4.0-dev build-essential curl wget file \
 
 #### Building from Source (Linux)
 
+Building from source requires Node.js, Rust, and development libraries:
+
 ```bash
+# Install Node.js
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt-get install -y nodejs
+
+# Install Rust
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source $HOME/.cargo/env
+
+# Install build dependencies
+sudo apt update
+sudo apt install -y libwebkit2gtk-4.0-dev build-essential curl wget file \
+    libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+
+# Clone and build
 git clone https://github.com/YOUR_USERNAME/tren.git
 cd tren
 npm install

@@ -2,7 +2,7 @@
  * Layout Builder - transforms AST into placed track pieces
  */
 
-import { parse, Statement, PieceStatement, NewStatement, ReferenceStatement, LoopCloseStatement, TitleStatement, DescriptionStatement, MingapStatement, SpliceStatement, RandomStatement, RangeValue } from './parser';
+import { parse, Statement, PieceStatement, NewStatement, ReferenceStatement, LoopCloseStatement, TitleStatement, DescriptionStatement, MingapStatement, SpliceStatement, RandomStatement, MaxTrainsStatement } from './parser';
 import { Layout, TrackPiece, Vec3, vec2, ConnectionPointDef, RangeValue as TypeRangeValue } from '../core/types';
 import { getArchetype, registerRuntimeArchetype } from '../core/archetypes';
 import type { TrackArchetype } from '../core/archetypes';
@@ -39,6 +39,7 @@ interface BuilderState {
   descriptions: string[];
   minGap?: number;
   randomSwitches?: boolean;
+  maxTrains?: number;
   pendingSplices: SpliceInfo[];
 }
 
@@ -104,6 +105,7 @@ class LayoutBuilder {
         : undefined,
       minGap: this.state.minGap,
       randomSwitches: this.state.randomSwitches,
+      maxTrains: this.state.maxTrains,
       pieces: this.state.pieces,
     };
   }
@@ -134,6 +136,9 @@ class LayoutBuilder {
       case 'random':
         this.processRandom(stmt);
         break;
+      case 'maxTrains':
+        this.processMaxTrains(stmt);
+        break;
       case 'splice':
         this.processSplice(stmt);
         break;
@@ -157,6 +162,10 @@ class LayoutBuilder {
 
   private processRandom(_stmt: RandomStatement): void {
     this.state.randomSwitches = true;
+  }
+
+  private processMaxTrains(stmt: MaxTrainsStatement): void {
+    this.state.maxTrains = stmt.value;
   }
 
   private processSplice(stmt: SpliceStatement): void {

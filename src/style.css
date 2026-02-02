@@ -39,6 +39,14 @@ html, body {
   background: #357abd;
 }
 
+#toolbar button.active {
+  background: #2ecc71;
+}
+
+#toolbar button.active:hover {
+  background: #27ae60;
+}
+
 #help-link {
   color: #8cb4d8;
   text-decoration: none;

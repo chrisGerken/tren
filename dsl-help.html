@@ -127,8 +127,10 @@ str          # This is a comment</code></pre>
     <pre><code>title My Railroad          # Layout name
 description A test layout  # Description text
 mingap 2                   # Minimum gap between trains (inches, default 1)
-random                     # Switches change randomly when trains pass</code></pre>
+random                     # Switches change randomly when trains pass
+max trains 5               # Limit to at most 5 trains on the layout</code></pre>
     <p>The <code>random</code> statement enables automatic switch changes after each train passes, creating varied autonomous behavior ideal for demonstrations or computer art.</p>
+    <p>The <code>max trains</code> statement limits the number of trains that can exist simultaneously (default: 5). Generators will not spawn new trains when the limit is reached. Trains destroyed by bins free up slots for new trains.</p>
   </div>
 
   <div class="section">
@@ -143,9 +145,9 @@ crvl         # Place a left curve (22" radius default)</code></pre>
     <h3>Piece Codes</h3>
     <table>
       <tr><th>Code</th><th>Description</th></tr>
-      <tr><td><code>str</code>, <code>str9</code>, <code>str6</code>, <code>str3</code>, <code>str15</code></td><td>Straight sections</td></tr>
-      <tr><td><code>crv</code>, <code>crvl</code>, <code>crvl18</code>, <code>crvl22</code>, <code>crvl24</code></td><td>Left curves</td></tr>
-      <tr><td><code>crvr</code>, <code>crvr18</code>, <code>crvr22</code>, <code>crvr24</code></td><td>Right curves</td></tr>
+      <tr><td><code>str</code>, <code>str9</code>, <code>str6</code>, <code>str3</code>, <code>str15</code></td><td>Straight sections (<code>str</code> = <code>str9</code>, 9" length)</td></tr>
+      <tr><td><code>crv</code>, <code>crvl</code>, <code>crvl18</code>, <code>crvl22</code>, <code>crvl24</code></td><td>Left curves (<code>crv</code>/<code>crvl</code> = <code>crvl22</code>, 22" radius, 22.5&deg; arc)</td></tr>
+      <tr><td><code>crvr</code>, <code>crvr18</code>, <code>crvr22</code>, <code>crvr24</code></td><td>Right curves (<code>crvr</code> = <code>crvr22</code>, 22" radius, 22.5&deg; arc)</td></tr>
       <tr><td><code>x90</code>, <code>x45</code></td><td>Crossings</td></tr>
       <tr><td><code>bump</code></td><td>Buffer stop</td></tr>
       <tr><td><code>ph</code>, <code>placeholder</code></td><td>Zero-length junction point</td></tr>

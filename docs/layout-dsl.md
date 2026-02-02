@@ -57,6 +57,24 @@ When `random` is present:
 
 This mode is ideal for computer art, demonstrations, or passive observation without user interaction.
 
+### Maximum Trains
+
+The `max trains` statement limits the number of trains that can exist on the layout simultaneously:
+
+```
+max trains 5                  # Allow at most 5 trains
+max trains 10                 # Allow at most 10 trains
+```
+
+When `max trains` is set:
+- Generators will not spawn new trains when the layout already has the maximum number
+- When a train is destroyed (e.g., enters a bin), generators can spawn again
+- If multiple generators try to spawn simultaneously, the count may briefly exceed the limit (this is acceptable)
+- Useful for preventing overcrowding on busy layouts
+- Works well with `random` mode for controlled chaos
+
+**Default**: 5 trains. Specify a higher number for busier layouts.
+
 ### Statement Separators
 
 Multiple statements can be placed on one line, separated by semicolons. Semicolons are not required after the last or only statement on a line.
@@ -187,9 +205,9 @@ Use archetype codes to specify track pieces. See [Track Dimensions](track-dimens
 
 | Code | Description |
 |------|-------------|
-| `str`, `str9`, `str6`, `str3`, `str15` | Straight sections |
-| `crv`, `crvl`, `crvl18`, `crvl22`, `crvl24` | Left curves |
-| `crvr`, `crvr18`, `crvr22`, `crvr24` | Right curves |
+| `str`, `str9`, `str6`, `str3`, `str15` | Straight sections (`str` = `str9`, 9" length) |
+| `crv`, `crvl`, `crvl18`, `crvl22`, `crvl24` | Left curves (`crv`/`crvl` = `crvl22`, 22" radius, 22.5° arc) |
+| `crvr`, `crvr18`, `crvr22`, `crvr24` | Right curves (`crvr` = `crvr22`, 22" radius, 22.5° arc) |
 | `x90`, `x45` | Crossings |
 | `bump` | Buffer stop |
 | `flex` | Flex track |

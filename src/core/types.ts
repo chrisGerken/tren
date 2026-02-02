@@ -54,6 +54,7 @@ export interface Layout {
   description?: string;  // Layout description (concatenated from all description statements)
   minGap?: number;       // Minimum following distance between trains (default: 1 inch)
   randomSwitches?: boolean;  // If true, switches randomly change when trains pass
+  maxTrains?: number;    // Maximum number of trains allowed on the layout at once
   pieces: TrackPiece[];
 }
 

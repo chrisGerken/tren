@@ -1,0 +1,15 @@
+
+str * 2
+
+crvl * 4
+
+str * 2
+
+crvl * 4
+
+str * 2
+
+crvl * 5
+
+str * 3
+
