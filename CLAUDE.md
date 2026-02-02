@@ -56,6 +56,10 @@ The placeholder provides a pure junction point. Use `out.piece` syntax to build 
 
 **Visual indicators:** Blue circle = explicit connection; Yellow circle = auto-connected (toggle to show all blue); Green dot = selected route; Red dot = unselected routes. Click red dot to switch routes.
 
+## Flex Connect
+
+The `flex connect $point1 $point2` statement creates custom track pieces to bridge gaps that can't be closed with standard pieces. It automatically calculates a curve+straight or straight+curve combination. Useful for closing almost-complete loops where endpoints don't align with standard pieces.
+
 ## Train Movement
 
 Trains are ordered car lists (consists). The primary cab (first cab in train) controls speed and direction. Each car maintains its own position along the track section, querying the spline for position and tangent each frame. Cars transition between sections independently when crossing boundaries.

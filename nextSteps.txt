@@ -1,9 +1,1 @@
-1) Change the cab rendering to be the same size rectangle, but with the front of the cab being a truncated, rounded triangle and the rear of the cab simply being rounded
-
-2) the color for a car should be randomly chosen from dark red, dark blue, dark green, dark purple and dark orange. The odds of a given color being chosen are equal except that the color of the previous car, if any, should be twice the probability of other colors.
-
-3) add a new statement to the layout specification dsl: random. The presence of the random statement makes a switch change its selected track to a random selection whenever a train passes over the switch. The idea is to be able to provide an interesting set of train interactions and behavior without user interaction, such as for computer art.  When random is specified, selected track indicators are still displayed and functional.
-
-4) In the folder named publish, create a folder named "MacOS" to contain a build package suitable for deployemnt on MacOS using brew.  In the readme.md file in the root directory add a section called "Installation" and add a subsection with instructions on how to install the package on MacOS, preferably having brew install all necessary prerequisites. There should be an instruction on how to install brew, if need be.
-
-5) Create a second folder in /publish, called debian, for installation into a linux debian environment. Create the install package and documentation in the Installaction section of readme.md
+1) I'd like a button labelled "Random" mext to the "Import Layout" button. Clicking the "Random" button will toggle the random setting. The user can use the random statement in the layout specification or can omit the random statement and click the Random button latter.  Once the random status is "on" then clicking the "Random" button will turn the setting to off so that the user has control of the switches by clicking on the switch's visual  indicators

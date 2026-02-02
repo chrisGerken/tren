@@ -1,6 +1,8 @@
+# Layout demonstrating flex connect feature
+# The layout forms an almost-complete loop that can't be closed with standard pieces
 
-str * 2
-
+after: str
+str
 crvl * 4
 
 str * 2
@@ -11,5 +13,8 @@ str * 2
 
 crvl * 5
 
-str * 3
+str * 2
+before: str
 
+# Use flex connect to bridge the gap with custom curve+straight pieces
+flex connect $before.out $after.in
