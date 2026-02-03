@@ -63,9 +63,11 @@ Trains automatically regulate their speed to prevent collisions:
 - Normal braking: 12 inches/second² (comfortable slow-down)
 - Emergency braking: 24 inches/second² (hard stop)
 
-**Safe following distance**: Calculated based on current speed and the speed of the train ahead. At minimum, trains maintain a gap specified by the layout's `mingap` setting (default 1 inch, configurable via DSL). The following distance increases with speed to allow for braking.
+**Lock ahead configuration**: Trains use connection point locking for collision prevention. The `lockahead` DSL statement configures how far ahead trains scan and how many connection points they must lock:
+- `distance N` - Minimum distance (in inches) to scan ahead (default: 10)
+- `count N` - Minimum connection points to lock before proceeding (default: 2)
 
-**Look-ahead distance**: Trains scan up to 48 inches ahead (adjustable). This distance follows the track path, including through curves and switch selections.
+Example: `lockahead distance 15 count 3`
 
 ## Train as a Consist
 
@@ -125,11 +127,14 @@ The leading car continuously scans ahead to acquire locks:
 
 ### Lock Release
 
-The trailing car releases locks as it clears connection points:
+Locks are released only when the LAST car of the train clears a piece:
 
-1. Calculate which points the train currently straddles (any car overlapping the point)
-2. Calculate which points are in the look-ahead set
-3. Release locks that are no longer straddled AND not in the look-ahead set
+1. Build set of piece IDs that have ANY car on them (occupied pieces)
+2. Keep locks on ALL connection points of occupied pieces
+3. Keep locks on all points in the look-ahead set
+4. Release locks only for pieces where no car is present AND not in look-ahead
+
+**Key design decision:** The system keeps locks on entire pieces (all their connection points), not just specific straddled points. This ensures the cab passing a connection point doesn't release it prematurely while trailing cars are still on that piece.
 
 ### Speed Regulation
 

@@ -7,15 +7,29 @@ import { TrackPiece, Layout, Connection } from '../core/types';
 import { getArchetype, TrackArchetype } from '../core/archetypes';
 import { TrackScene } from './scene';
 
-// Track colors
-const TRACK_COLOR = 0x8B4513;  // Brown
-const CONNECTION_POINT_COLOR = 0x0066cc;  // Blue
-const AUTO_CONNECT_COLOR = 0xffcc00;  // Yellow for auto-connected points
+// Track colors (hex values with RGB equivalents)
+const RAIL_COLOR = 0x5c4033;  // Silver (R:192, G:192, B:192)    0xc0c0c0
+const TIE_COLOR = 0x5c4033;  // Dark wood brown (R:92, G:64, B:51)
+const BALLAST_COLOR = 0xd8d8c8;  // Light gray (R:216, G:216, B:200)
+const ROADBED_COLOR = 0xc8b8a0;  // Light tan (R:200, G:184, B:160)
+const CONNECTION_POINT_UNLOCKED_COLOR = 0xffffff;  // White for unlocked
+const CONNECTION_POINT_LOCKED_COLOR = 0xff0000;  // Red for locked
 const GENERATOR_COLOR = 0x22aa22;  // Green
 const BIN_COLOR = 0xcc2222;  // Red
 const BUMPER_COLOR = 0x444444;  // Dark gray
 const SWITCH_SELECTED_COLOR = 0x00ff00;  // Bright green for selected route
 const SWITCH_UNSELECTED_COLOR = 0xff0000;  // Red for unselected routes
+
+// Track dimensions (in inches - model scale)
+const RAIL_GAUGE = 1.045;  // Distance between rails
+const RAIL_RADIUS = 0.08;  // Rail thickness
+const TIE_WIDTH = 1.45;  // Tie length (perpendicular to track)
+const TIE_HEIGHT = 0.15;  // Tie height (visible in top-down)
+const TIE_DEPTH = 0.25;  // Tie thickness along track direction
+const TIE_SPACING = 1.0;  // Distance between ties
+const BALLAST_WIDTH = 2.0;  // Width of gravel bed
+const ROADBED_WIDTH = 2.4;  // Width of raised dirt surface
+const ROADBED_HEIGHT = 0.1;  // Height of roadbed above ground
 
 // Set to true to show simplified debug view
 const DEBUG_MODE = false;
@@ -26,6 +40,10 @@ const DEBUG_LOGGING = false;
 // Track selected routes for virtual switches
 // Key: "pieceId.pointName", Value: index of selected connection (0-based)
 const selectedRoutes = new Map<string, number>();
+
+// Store connection point meshes for dynamic color updates
+// Key: "pieceId.pointName", Value: THREE.Mesh
+const connectionPointMeshes = new Map<string, THREE.Mesh>();
 
 /**
  * Get or initialize the selected route by full key
@@ -63,10 +81,29 @@ export function getSelectedRoutes(): Map<string, number> {
 }
 
 /**
+ * Update connection point colors and visibility based on lock state and labels toggle
+ * @param lockedPoints - Set of connection point IDs that are currently locked
+ * @param visible - Whether connection points should be visible (tied to Labels toggle)
+ */
+export function updateConnectionPointColors(lockedPoints: Set<string>, visible: boolean): void {
+  for (const [id, mesh] of connectionPointMeshes) {
+    mesh.visible = visible;
+    if (visible) {
+      const material = mesh.material as THREE.MeshBasicMaterial;
+      const isLocked = lockedPoints.has(id);
+      material.color.setHex(isLocked ? CONNECTION_POINT_LOCKED_COLOR : CONNECTION_POINT_UNLOCKED_COLOR);
+    }
+  }
+}
+
+/**
  * Render a complete layout
  */
 export function renderLayout(scene: TrackScene, layout: Layout): void {
   scene.clearLayout();
+
+  // Clear connection point mesh references
+  connectionPointMeshes.clear();
 
   // Build a map for quick piece lookup
   const pieceMap = new Map<string, TrackPiece>();
@@ -130,7 +167,7 @@ function renderTrackPieceDebug(piece: TrackPiece, archetype: TrackArchetype): TH
       new THREE.Vector3(outWorld.x, 0.2, outWorld.z),
     ];
     const geometry = new THREE.BufferGeometry().setFromPoints(points);
-    const material = new THREE.LineBasicMaterial({ color: TRACK_COLOR, linewidth: 2 });
+    const material = new THREE.LineBasicMaterial({ color: RAIL_COLOR, linewidth: 2 });
     const line = new THREE.Line(geometry, material);
     group.add(line);
   }
@@ -194,30 +231,32 @@ function renderTrackPiece(
       }
     }
   }
+  // Render connection points for visible pieces only (skip gen/bin - they have invisible internal sections)
+  // Connection points start hidden and are shown when Labels toggle is on
   if (!isGenOrBin) {
     for (const cp of archetype.connectionPoints) {
       const worldPos = toWorld({ x: cp.position.x, y: 0, z: cp.position.z });
-      // Check if this point has auto-connections
+      // Create connection point ID for tracking
+      const connectionPointId = `${piece.id}.${cp.name}`;
       const connections = piece.connections.get(cp.name) || [];
-      const hasAutoConnect = connections.some(c => c.isAutoConnect);
-      const cpMesh = renderConnectionPointWorld(worldPos, hasAutoConnect);
+      const cpMesh = renderConnectionPointWorld(worldPos, connectionPointId);
       group.add(cpMesh);
 
       // Render switch indicators if this is a virtual switch (multiple connections)
       // Skip if random mode is on (hideIndicators)
       if (DEBUG_LOGGING) console.log(`  ${piece.id}.${cp.name}: ${connections.length} connections`);
       if (connections.length > 1 && !hideIndicators) {
-        const switchIndicators = renderSwitchIndicators(
-          piece,
-          cp.name,
-          worldPos,
-          connections,
-          pieceMap
-        );
-        for (const indicator of switchIndicators) {
-          group.add(indicator);
-        }
+      const switchIndicators = renderSwitchIndicators(
+        piece,
+        cp.name,
+        worldPos,
+        connections,
+        pieceMap
+      );
+      for (const indicator of switchIndicators) {
+        group.add(indicator);
       }
+    }
     }
   }
 
@@ -239,42 +278,220 @@ function renderTrackPiece(
 }
 
 /**
- * Render a track section as a tube - points already in world coordinates
+ * Render a track section with rails, ties, ballast, and roadbed - points already in world coordinates
+ * Returns a Group containing all track components
  */
-function renderTrackSectionWorld(worldPoints: THREE.Vector3[]): THREE.Mesh {
+function renderTrackSectionWorld(worldPoints: THREE.Vector3[]): THREE.Group {
+  const trackGroup = new THREE.Group();
+
   // Create spline curve
   const curve = new THREE.CatmullRomCurve3(worldPoints);
-
-  // Create tube geometry
-  const tubeRadius = 0.2;  // Track width in inches
+  const curveLength = curve.getLength();
   const tubularSegments = Math.max(16, worldPoints.length * 8);
-  const radialSegments = 8;
 
-  const geometry = new THREE.TubeGeometry(curve, tubularSegments, tubeRadius, radialSegments, false);
-  const material = new THREE.MeshStandardMaterial({
-    color: TRACK_COLOR,
-    roughness: 0.7,
-    metalness: 0.1,
+  // Materials
+  const railMaterial = new THREE.MeshStandardMaterial({
+    color: RAIL_COLOR,
+    roughness: 0.5,
+    metalness: 0.2,
   });
 
-  const mesh = new THREE.Mesh(geometry, material);
-  mesh.position.y = 0.2; // Slightly above ground
+  const tieMaterial = new THREE.MeshStandardMaterial({
+    color: TIE_COLOR,
+    roughness: 0.9,
+    metalness: 0.0,
+  });
 
-  return mesh;
+  const ballastMaterial = new THREE.MeshStandardMaterial({
+    color: BALLAST_COLOR,
+    roughness: 1.0,
+    metalness: 0.0,
+  });
+
+  const roadbedMaterial = new THREE.MeshStandardMaterial({
+    color: ROADBED_COLOR,
+    roughness: 0.9,
+    metalness: 0.0,
+  });
+
+  // 1. Render raised roadbed (lowest layer - brown dirt surface)
+  const roadbedGeometry = createExtrudedPathGeometry(curve, tubularSegments, ROADBED_WIDTH, ROADBED_HEIGHT);
+  const roadbedMesh = new THREE.Mesh(roadbedGeometry, roadbedMaterial);
+  roadbedMesh.position.y = 0.01;  // Just above ground
+  trackGroup.add(roadbedMesh);
+
+  // 2. Render gravel ballast (on top of roadbed)
+  const ballastGeometry = createExtrudedPathGeometry(curve, tubularSegments, BALLAST_WIDTH, 0.08);
+  const ballastMesh = new THREE.Mesh(ballastGeometry, ballastMaterial);
+  ballastMesh.position.y = ROADBED_HEIGHT + 0.02;
+  trackGroup.add(ballastMesh);
+
+  // 3. Render wooden ties
+  const tieGeometry = new THREE.BoxGeometry(TIE_DEPTH, TIE_HEIGHT, TIE_WIDTH);
+  const numTies = Math.floor(curveLength / TIE_SPACING);
+
+  for (let i = 0; i <= numTies; i++) {
+    const t = i / Math.max(numTies, 1);
+    const point = curve.getPointAt(t);
+    const tangent = curve.getTangentAt(t);
+
+    const tieMesh = new THREE.Mesh(tieGeometry, tieMaterial);
+    tieMesh.position.set(point.x, ROADBED_HEIGHT + 0.08 + TIE_HEIGHT / 2, point.z);
+
+    // Rotate tie to be perpendicular to track direction
+    // The tie's long axis (Z) should be perpendicular to the tangent
+    const angle = Math.atan2(-tangent.z, tangent.x);
+    tieMesh.rotation.y = angle;
+
+    trackGroup.add(tieMesh);
+  }
+
+  // 4. Render the two rails (highest layer)
+  const halfGauge = RAIL_GAUGE / 2;
+
+  // Generate offset curves for left and right rails
+  const leftRailPoints: THREE.Vector3[] = [];
+  const rightRailPoints: THREE.Vector3[] = [];
+  const railSamples = tubularSegments;
+
+  for (let i = 0; i <= railSamples; i++) {
+    const t = i / railSamples;
+    const point = curve.getPointAt(t);
+    const tangent = curve.getTangentAt(t);
+
+    // Perpendicular direction (in XZ plane) - tangent is normalized
+    const perpX = -tangent.z;
+    const perpZ = tangent.x;
+
+    // Offset points for left and right rails
+    leftRailPoints.push(new THREE.Vector3(
+      point.x + perpX * halfGauge,
+      point.y,
+      point.z + perpZ * halfGauge
+    ));
+    rightRailPoints.push(new THREE.Vector3(
+      point.x - perpX * halfGauge,
+      point.y,
+      point.z - perpZ * halfGauge
+    ));
+  }
+
+  // Create rail curves and tube geometries
+  const leftRailCurve = new THREE.CatmullRomCurve3(leftRailPoints);
+  const rightRailCurve = new THREE.CatmullRomCurve3(rightRailPoints);
+
+  const leftRailGeometry = new THREE.TubeGeometry(leftRailCurve, tubularSegments, RAIL_RADIUS, 6, false);
+  const rightRailGeometry = new THREE.TubeGeometry(rightRailCurve, tubularSegments, RAIL_RADIUS, 6, false);
+
+  const leftRailMesh = new THREE.Mesh(leftRailGeometry, railMaterial);
+  const rightRailMesh = new THREE.Mesh(rightRailGeometry, railMaterial);
+
+  // Position rails on top of ties
+  const railY = ROADBED_HEIGHT + 0.08 + TIE_HEIGHT + RAIL_RADIUS;
+  leftRailMesh.position.y = railY;
+  rightRailMesh.position.y = railY;
+
+  trackGroup.add(leftRailMesh);
+  trackGroup.add(rightRailMesh);
+
+  return trackGroup;
+}
+
+/**
+ * Create an extruded geometry that follows a path curve
+ * Used for roadbed and ballast which are flat rectangular cross-sections
+ */
+function createExtrudedPathGeometry(
+  curve: THREE.CatmullRomCurve3,
+  segments: number,
+  width: number,
+  height: number
+): THREE.BufferGeometry {
+  const halfWidth = width / 2;
+  const vertices: number[] = [];
+  const indices: number[] = [];
+
+  // Generate vertices along the path
+  for (let i = 0; i <= segments; i++) {
+    const t = i / segments;
+    const point = curve.getPointAt(t);
+    const tangent = curve.getTangentAt(t);
+
+    // Perpendicular direction (in XZ plane)
+    const perpX = -tangent.z;
+    const perpZ = tangent.x;
+
+    // Four corners of the cross-section at this point
+    // Bottom left
+    vertices.push(
+      point.x + perpX * halfWidth,
+      0,
+      point.z + perpZ * halfWidth
+    );
+    // Bottom right
+    vertices.push(
+      point.x - perpX * halfWidth,
+      0,
+      point.z - perpZ * halfWidth
+    );
+    // Top right
+    vertices.push(
+      point.x - perpX * halfWidth,
+      height,
+      point.z - perpZ * halfWidth
+    );
+    // Top left
+    vertices.push(
+      point.x + perpX * halfWidth,
+      height,
+      point.z + perpZ * halfWidth
+    );
+  }
+
+  // Generate indices for the faces
+  for (let i = 0; i < segments; i++) {
+    const base = i * 4;
+
+    // Top face (visible from above) - vertices 3, 2 and next 3, 2
+    indices.push(base + 3, base + 2, base + 6);
+    indices.push(base + 3, base + 6, base + 7);
+
+    // Left side face
+    indices.push(base + 0, base + 3, base + 7);
+    indices.push(base + 0, base + 7, base + 4);
+
+    // Right side face
+    indices.push(base + 2, base + 1, base + 5);
+    indices.push(base + 2, base + 5, base + 6);
+
+    // Bottom face (usually not visible)
+    indices.push(base + 0, base + 4, base + 5);
+    indices.push(base + 0, base + 5, base + 1);
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+
+  return geometry;
 }
 
 /**
  * Render a connection point as a small sphere at world position
  * @param worldPos - Position in world coordinates
- * @param isAutoConnect - True if this point has auto-connections (yellow) vs explicit (blue)
+ * @param connectionPointId - ID in format "pieceId.pointName" for tracking
  */
-function renderConnectionPointWorld(worldPos: THREE.Vector3, isAutoConnect: boolean = false): THREE.Mesh {
+function renderConnectionPointWorld(worldPos: THREE.Vector3, connectionPointId: string): THREE.Mesh {
   const geometry = new THREE.SphereGeometry(0.25, 16, 16);
-  const color = isAutoConnect ? AUTO_CONNECT_COLOR : CONNECTION_POINT_COLOR;
-  const material = new THREE.MeshBasicMaterial({ color });
+  // Start with unlocked color (white) - will be updated dynamically
+  const material = new THREE.MeshBasicMaterial({ color: CONNECTION_POINT_UNLOCKED_COLOR });
 
   const mesh = new THREE.Mesh(geometry, material);
   mesh.position.set(worldPos.x, 0.5, worldPos.z);
+
+  // Store reference for dynamic updates
+  connectionPointMeshes.set(connectionPointId, mesh);
 
   return mesh;
 }

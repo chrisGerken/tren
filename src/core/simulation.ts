@@ -73,7 +73,7 @@ export class Simulation {
   // Cached resolved frequencies per generator (for range support)
   private resolvedFrequencies: Map<string, number> = new Map();
   // Lock manager for connection point locking
-  private lockManager: LockManager = new LockManager();
+  private lockManager: LockManager;
 
   constructor(
     layout: Layout,
@@ -83,6 +83,11 @@ export class Simulation {
     this.layout = layout;
     this.selectedRoutes = selectedRoutes;
     this.onUpdate = onUpdate;
+    // Initialize lock manager with layout's lock ahead configuration
+    this.lockManager = new LockManager(
+      layout.lockAheadDistance ?? 10,
+      layout.lockAheadCount ?? 2
+    );
   }
 
   /**
@@ -106,6 +111,17 @@ export class Simulation {
       this.animationId = null;
     }
     if (DEBUG_LOGGING) console.log('Simulation stopped');
+  }
+
+  /**
+   * Get all currently locked connection point IDs
+   */
+  getLockedPoints(): Set<string> {
+    const locked = new Set(this.lockManager.getAllLockedPoints().keys());
+    if (locked.size > 0 && DEBUG_LOGGING) {
+      console.log('Locked points:', Array.from(locked));
+    }
+    return locked;
   }
 
   /**

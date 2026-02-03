@@ -49,19 +49,20 @@ export class TrackScene {
     this.renderer.setPixelRatio(window.devicePixelRatio);
     container.appendChild(this.renderer.domElement);
 
-    // Create CSS2D renderer for labels
+    // Create CSS2D renderer for labels (hidden by default)
     this.labelRenderer = new CSS2DRenderer();
     this.labelRenderer.setSize(container.clientWidth, container.clientHeight);
     this.labelRenderer.domElement.style.position = 'absolute';
     this.labelRenderer.domElement.style.top = '0';
     this.labelRenderer.domElement.style.pointerEvents = 'none';
+    this.labelRenderer.domElement.style.display = 'none';
     container.appendChild(this.labelRenderer.domElement);
 
-    // Add lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    // Add lighting (brighter for better color visibility)
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
     this.scene.add(ambientLight);
 
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.6);
     directionalLight.position.set(50, 100, 50);
     this.scene.add(directionalLight);
 
@@ -73,14 +74,22 @@ export class TrackScene {
     this.trainGroup = new THREE.Group();
     this.scene.add(this.trainGroup);
 
-    // Create group for labels
+    // Create group for labels (hidden by default)
     this.labelGroup = new THREE.Group();
+    this.labelGroup.visible = false;
     this.scene.add(this.labelGroup);
 
-    // Add grid helper for reference
-    const gridHelper = new THREE.GridHelper(200, 20, 0xcccccc, 0xe0e0e0);
-    gridHelper.rotation.x = 0; // Already horizontal
-    this.scene.add(gridHelper);
+    // Add grass ground plane
+    const groundGeometry = new THREE.PlaneGeometry(1000, 1000);
+    const groundMaterial = new THREE.MeshStandardMaterial({
+      color: 0x4a7c39,  // Grass green (R:74, G:124, B:57)
+      roughness: 0.9,
+      metalness: 0.0,
+    });
+    const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+    ground.rotation.x = -Math.PI / 2;  // Lay flat
+    ground.position.y = -0.01;  // Slightly below track
+    this.scene.add(ground);
 
     // Initialize raycaster for click detection
     this.raycaster = new THREE.Raycaster();

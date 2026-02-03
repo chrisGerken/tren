@@ -12,7 +12,7 @@ export type Statement =
   | LoopCloseStatement
   | TitleStatement
   | DescriptionStatement
-  | MingapStatement
+  | LockAheadStatement
   | SpliceStatement
   | RandomStatement
   | MaxTrainsStatement
@@ -74,9 +74,10 @@ export interface DescriptionStatement {
   line: number;
 }
 
-export interface MingapStatement {
-  type: 'mingap';
-  value: number;
+export interface LockAheadStatement {
+  type: 'lockAhead';
+  distance?: number;  // Lock ahead distance in inches (default: 10)
+  count?: number;     // Minimum connection points to lock (default: 2)
   line: number;
 }
 
@@ -150,8 +151,8 @@ class Parser {
       case TokenType.DESCRIPTION:
         return this.parseDescriptionStatement();
 
-      case TokenType.MINGAP:
-        return this.parseMingapStatement();
+      case TokenType.LOCKAHEAD:
+        return this.parseLockAheadStatement();
 
       case TokenType.RANDOM:
         return this.parseRandomStatement();
@@ -303,13 +304,30 @@ class Parser {
     return { type: 'description', text, line: token.line };
   }
 
-  private parseMingapStatement(): MingapStatement {
-    const token = this.advance(); // consume 'mingap'
-    let value = 1; // default
-    if (this.check(TokenType.NUMBER)) {
-      value = parseFloat(this.advance().value);
+  private parseLockAheadStatement(): LockAheadStatement {
+    const token = this.advance(); // consume 'lockahead'
+    let distance: number | undefined;
+    let count: number | undefined;
+
+    // Parse modifiers in any order: distance N, count N
+    while (this.check(TokenType.DISTANCE) || this.check(TokenType.COUNT) || this.check(TokenType.NUMBER)) {
+      if (this.check(TokenType.DISTANCE)) {
+        this.advance(); // consume 'distance'
+        if (this.check(TokenType.NUMBER)) {
+          distance = parseFloat(this.advance().value);
+        }
+      } else if (this.check(TokenType.COUNT)) {
+        this.advance(); // consume 'count'
+        if (this.check(TokenType.NUMBER)) {
+          count = parseInt(this.advance().value, 10);
+        }
+      } else if (this.check(TokenType.NUMBER)) {
+        // Bare number defaults to distance for backward compatibility
+        distance = parseFloat(this.advance().value);
+      }
     }
-    return { type: 'mingap', value, line: token.line };
+
+    return { type: 'lockAhead', distance, count, line: token.line };
   }
 
   private parseRandomStatement(): RandomStatement {

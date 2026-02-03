@@ -124,11 +124,12 @@ str          # This is a comment</code></pre>
 
     <h3>Layout Settings</h3>
     <p>Configure simulation behavior:</p>
-    <pre><code>title My Railroad          # Layout name
-description A test layout  # Description text
-mingap 2                   # Minimum gap between trains (inches, default 1)
-random                     # Switches change randomly when trains pass
-max trains 5               # Limit to at most 5 trains on the layout</code></pre>
+    <pre><code>title My Railroad              # Layout name
+description A test layout      # Description text
+lockahead distance 15 count 3  # Lock ahead: 15 inches, 3 connection points
+random                         # Switches change randomly when trains pass
+max trains 5                   # Limit to at most 5 trains on the layout</code></pre>
+    <p>The <code>lockahead</code> statement configures collision prevention: <code>distance N</code> sets how far ahead to scan (default 10 inches), <code>count N</code> sets minimum connection points to lock (default 2).</p>
     <p>The <code>random</code> statement enables automatic switch changes after each train passes, creating varied autonomous behavior ideal for demonstrations or computer art.</p>
     <p>The <code>max trains</code> statement limits the number of trains that can exist simultaneously (default: 5). Generators will not spawn new trains when the limit is reached. Trains destroyed by bins free up slots for new trains.</p>
   </div>
@@ -318,8 +319,11 @@ bump</code></pre>
       <tr><td>Red circle</td><td>Bin (train sink)</td></tr>
       <tr><td>Green dot (small)</td><td>Selected route at virtual switch</td></tr>
       <tr><td>Red dot (small)</td><td>Unselected route at virtual switch (click to select)</td></tr>
+      <tr><td>White sphere (small)</td><td>Connection point - unlocked (only visible when Labels is on)</td></tr>
+      <tr><td>Red sphere (small)</td><td>Connection point - locked by a train (only visible when Labels is on)</td></tr>
       <tr><td>Text label</td><td>Labeled piece (from <code>label: piece</code> syntax)</td></tr>
     </table>
+    <p><strong>Note:</strong> Connection point spheres (white/red) are only visible when the Labels button is active. Generator and bin pieces do not show connection point indicators.</p>
 
     <h3>Switch Interaction</h3>
     <p>At virtual switches (where multiple tracks connect to one point), click any route indicator to select that route. Trains will follow the selected route (green indicator).</p>
@@ -372,7 +376,7 @@ str x 4
       <tr><th>Button</th><th>Function</th></tr>
       <tr><td><strong>Import Layout</strong></td><td>Open a layout file (.txt or .layout)</td></tr>
       <tr><td><strong>Random</strong></td><td>Toggle random switch mode (trains choose routes randomly)</td></tr>
-      <tr><td><strong>Labels</strong></td><td>Toggle track label visibility</td></tr>
+      <tr><td><strong>Labels</strong></td><td>Toggle track labels AND connection point indicators (white=unlocked, red=locked)</td></tr>
     </table>
     <p>Active buttons are highlighted. You can also paste layout text directly into the window.</p>
   </div>

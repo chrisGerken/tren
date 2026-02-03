@@ -68,7 +68,7 @@ Trains are ordered car lists (consists). The primary cab (first cab in train) co
 
 **Route memory:** Each train remembers which route it took at each switch. All cars in the train follow the same route, even if the switch is changed while the train is crossing.
 
-**Collision prevention:** Trains have desired speed (from generator) and current speed (actual). Trains look ahead along the track and automatically slow down when approaching another train, maintaining safe following distance. They accelerate back to desired speed when clear. Minimum gap is configurable via `mingap` DSL statement (default 1 inch).
+**Collision prevention:** Trains use connection point locking. Each train locks connection points ahead before proceeding. If a point is already locked by another train, the approaching train stops and waits. Configure via `lockahead distance N count M` DSL statement (default: 10 inches, 2 points).
 
 **Train limits:** The `max trains N` DSL statement limits the number of trains that can exist simultaneously (default: 5). Generators will not spawn new trains when the layout already has N trains. Once a train is destroyed (e.g., enters a bin), generators can spawn again.
 

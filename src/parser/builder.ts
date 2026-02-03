@@ -2,7 +2,7 @@
  * Layout Builder - transforms AST into placed track pieces
  */
 
-import { parse, Statement, PieceStatement, NewStatement, ReferenceStatement, LoopCloseStatement, TitleStatement, DescriptionStatement, MingapStatement, SpliceStatement, RandomStatement, MaxTrainsStatement, FlexConnectStatement } from './parser';
+import { parse, Statement, PieceStatement, NewStatement, ReferenceStatement, LoopCloseStatement, TitleStatement, DescriptionStatement, LockAheadStatement, SpliceStatement, RandomStatement, MaxTrainsStatement, FlexConnectStatement } from './parser';
 import { Layout, TrackPiece, Vec3, vec2, ConnectionPointDef, RangeValue as TypeRangeValue } from '../core/types';
 import { getArchetype, registerRuntimeArchetype } from '../core/archetypes';
 import type { TrackArchetype } from '../core/archetypes';
@@ -56,7 +56,8 @@ interface BuilderState {
   nextPieceId: number;
   title?: string;
   descriptions: string[];
-  minGap?: number;
+  lockAheadDistance?: number;
+  lockAheadCount?: number;
   randomSwitches?: boolean;
   maxTrains?: number;
   pendingSplices: SpliceInfo[];
@@ -127,7 +128,8 @@ class LayoutBuilder {
       description: this.state.descriptions.length > 0
         ? this.state.descriptions.join(' ')
         : undefined,
-      minGap: this.state.minGap,
+      lockAheadDistance: this.state.lockAheadDistance,
+      lockAheadCount: this.state.lockAheadCount,
       randomSwitches: this.state.randomSwitches,
       maxTrains: this.state.maxTrains,
       pieces: this.state.pieces,
@@ -154,8 +156,8 @@ class LayoutBuilder {
       case 'description':
         this.processDescription(stmt);
         break;
-      case 'mingap':
-        this.processMingap(stmt);
+      case 'lockAhead':
+        this.processLockAhead(stmt);
         break;
       case 'random':
         this.processRandom(stmt);
@@ -183,8 +185,13 @@ class LayoutBuilder {
     this.state.descriptions.push(stmt.text);
   }
 
-  private processMingap(stmt: MingapStatement): void {
-    this.state.minGap = stmt.value;
+  private processLockAhead(stmt: LockAheadStatement): void {
+    if (stmt.distance !== undefined) {
+      this.state.lockAheadDistance = stmt.distance;
+    }
+    if (stmt.count !== undefined) {
+      this.state.lockAheadCount = stmt.count;
+    }
   }
 
   private processRandom(_stmt: RandomStatement): void {

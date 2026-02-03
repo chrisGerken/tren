@@ -15,11 +15,11 @@ const CAB_COLOR = 0xffff00;   // Yellow for cabs (engines)
 
 // Car colors - pastel variants for rolling stock
 const CAR_COLORS = [
-  0xf1948a,   // Pastel red
-  0x85c1e9,   // Pastel blue
-  0x82e0aa,   // Pastel green
-  0xc39bd3,   // Pastel purple
-  0xf8c471,   // Pastel orange
+  0xff0000,   // Pastel red     0xf1948a
+  0x0000ff,   // Pastel blue    0x85c1e9
+  0x00ff00,   // Pastel green   0x82e0aa
+  0xff00ff,   // Pastel purple  0xc39bd3
+  0xffff00,   // Pastel orange  0xf8c471
 ];
 
 // Track the last car color index for weighted random selection during spawning
@@ -226,8 +226,8 @@ function getMaterial(color: number): THREE.MeshStandardMaterial {
   if (!material) {
     material = new THREE.MeshStandardMaterial({
       color,
-      roughness: 0.7,
-      metalness: 0.3,
+      roughness: 0.5,
+      metalness: 0.1,
     });
     materialCache.set(color, material);
   }

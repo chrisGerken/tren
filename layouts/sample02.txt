@@ -1,4 +1,8 @@
-max trains 5
+title More loops and switches
+description Slight more complex example with more loops and switches
+
+max trains 7
+lockahead distance 17 count 6
 
 random
 

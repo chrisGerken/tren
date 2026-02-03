@@ -23,7 +23,7 @@ import {
 import { getArchetype } from './archetypes';
 
 // Debug logging
-const DEBUG_LOGGING = false;
+const DEBUG_LOGGING = true;  // TEMP: Enable to debug lock acquisition
 
 /**
  * Create a connection point ID from piece ID and point name
@@ -49,6 +49,7 @@ export function parseConnectionPointId(id: ConnectionPointId): { pieceId: string
 export interface LockAcquisitionResult {
   success: boolean;
   acquired: ConnectionPointId[];
+  requested: ConnectionPointId[];  // All points that were in the look-ahead (for keepPoints)
   blocked?: ConnectionPointId;
   blockingTrainId?: string;
 }
@@ -63,9 +64,14 @@ export class LockManager {
   // Per-train lock tracking for efficient operations
   private trainStates: Map<string, TrainLockState> = new Map();
 
-  // Configuration
-  readonly minLockDistance: number = 10;  // inches
-  readonly minLockCount: number = 2;      // connection points
+  // Configuration (can be set via constructor)
+  readonly minLockDistance: number;  // inches
+  readonly minLockCount: number;     // connection points
+
+  constructor(minLockDistance: number = 10, minLockCount: number = 2) {
+    this.minLockDistance = minLockDistance;
+    this.minLockCount = minLockCount;
+  }
 
   /**
    * Get or create train lock state
@@ -124,6 +130,7 @@ export class LockManager {
         return {
           success: false,
           acquired,
+          requested: [],  // Will be filled in by acquireLeadingLocks
           blocked: point,
           blockingTrainId: existingLock.trainId,
         };
@@ -143,7 +150,7 @@ export class LockManager {
       }
     }
 
-    return { success: true, acquired };
+    return { success: true, acquired, requested: [] };  // requested filled by acquireLeadingLocks
   }
 
   /**
@@ -194,7 +201,8 @@ export class LockManager {
     const leadCar = train.cars[0];
     const piece = layout.pieces.find(p => p.id === leadCar.currentPieceId);
     if (!piece) {
-      return { success: false, acquired: [] };
+      if (DEBUG_LOGGING) console.log(`acquireLeadingLocks: No piece found for ${leadCar.currentPieceId}`);
+      return { success: false, acquired: [], requested: [] };
     }
 
     const pointsToLock: ConnectionPointId[] = [];
@@ -228,11 +236,21 @@ export class LockManager {
       distanceOnCurrent = Math.max(0, leadCar.distanceAlongSection);
     }
 
+    if (DEBUG_LOGGING) {
+      console.log(`acquireLeadingLocks: train=${train.id}, leadCar on ${currentPieceId}, ` +
+        `entryPoint=${leadCar.entryPoint}, travelDir=${travelDirection}, exitPoint=${exitPoint}, ` +
+        `sectionLen=${sectionLength.toFixed(1)}, distAlong=${leadCar.distanceAlongSection.toFixed(1)}, ` +
+        `distOnCurrent=${distanceOnCurrent.toFixed(1)}`);
+    }
+
     // Add current piece's exit point
     pointsToLock.push(connectionPointId(currentPieceId, exitPoint));
 
     // Scan ahead
     let safetyCounter = 0;
+    if (DEBUG_LOGGING) {
+      console.log(`  Scan ahead: minDist=${this.minLockDistance}, minCount=${this.minLockCount}`);
+    }
     while (
       (distanceCovered < this.minLockDistance || pointsToLock.length < this.minLockCount) &&
       safetyCounter < 30
@@ -253,8 +271,15 @@ export class LockManager {
         travelDirection
       );
 
+      if (DEBUG_LOGGING) {
+        console.log(`  Loop ${safetyCounter}: from ${currentPieceId}.${exitPoint}, ` +
+          `nextSection=${nextSection ? `${nextSection.pieceId}.${nextSection.entryPoint}` : 'null'}, ` +
+          `distCovered=${distanceCovered.toFixed(1)}, points=${pointsToLock.length}`);
+      }
+
       if (!nextSection) {
         // Dead end - we've collected what we can
+        if (DEBUG_LOGGING) console.log(`  Dead end at ${currentPieceId}.${exitPoint}`);
         break;
       }
 
@@ -291,8 +316,19 @@ export class LockManager {
       distanceOnCurrent = getSectionLength(nextPiece, 0);
     }
 
+    if (DEBUG_LOGGING) {
+      console.log(`  Final pointsToLock (${pointsToLock.length}): ${pointsToLock.join(', ')}`);
+    }
+
     // Try to acquire all locks in order
-    return this.tryAcquireLocks(train.id, pointsToLock, simulationTime);
+    const result = this.tryAcquireLocks(train.id, pointsToLock, simulationTime);
+    // Add the full requested list so releaseTrailingLocks knows what to keep
+    result.requested = pointsToLock;
+    if (DEBUG_LOGGING) {
+      console.log(`  Lock result: success=${result.success}, acquired=${result.acquired.length}, ` +
+        `blocked=${result.blocked || 'none'}`);
+    }
+    return result;
   }
 
   /**
@@ -333,7 +369,7 @@ export class LockManager {
 
   /**
    * Release locks for connection points the train has cleared
-   * Keeps locks that are still straddled or in the look-ahead set
+   * Keeps locks on pieces where any car is present, plus look-ahead locks
    */
   releaseTrailingLocks(
     train: Train,
@@ -343,40 +379,44 @@ export class LockManager {
   ): void {
     const trainState = this.getTrainState(train.id);
 
-    // Calculate currently straddled points
-    const straddledPoints = new Set(this.calculateStraddledPoints(train, layout));
+    // Build set of piece IDs that have any car on them
+    const occupiedPieceIds = new Set<string>();
+    for (const car of train.cars) {
+      occupiedPieceIds.add(car.currentPieceId);
+    }
 
-    // Acquire look-ahead locks (side effect only, result not needed here)
-    this.acquireLeadingLocks(
+    // Build set of points we need to keep
+    const keepPoints = new Set<ConnectionPointId>();
+
+    // Keep ALL connection points of pieces that have any car on them
+    // This ensures we don't release locks until the LAST car clears the piece
+    for (const pieceId of occupiedPieceIds) {
+      const piece = layout.pieces.find(p => p.id === pieceId);
+      if (!piece) continue;
+      const archetype = getArchetype(piece.archetypeCode);
+      if (!archetype) continue;
+      for (const cp of archetype.connectionPoints) {
+        keepPoints.add(connectionPointId(pieceId, cp.name));
+      }
+    }
+
+    // Acquire look-ahead locks and add them to keepPoints
+    const lookAheadResult = this.acquireLeadingLocks(
       train,
       layout,
       selectedRoutes,
       simulationTime
     );
-
-    // Build set of points we need to keep
-    const keepPoints = new Set<ConnectionPointId>();
-    for (const point of straddledPoints) {
+    // Keep ALL points in the look-ahead path (not just newly acquired)
+    for (const point of lookAheadResult.requested) {
       keepPoints.add(point);
     }
-    // Note: lookAheadResult.acquired are already in heldLocks if successful
 
     // Release locks that are no longer needed
     const toRelease: ConnectionPointId[] = [];
     for (const point of trainState.heldLocks) {
       if (!keepPoints.has(point)) {
-        // Check if this point is in the look-ahead path
-        // For now, we keep all locks that were successfully acquired
-        // They'll be released when the trailing car clears them
-        const parsed = parseConnectionPointId(point);
-        const piece = layout.pieces.find(p => p.id === parsed.pieceId);
-        if (piece) {
-          // Only release if no car is on this piece
-          const anyCarOnPiece = train.cars.some(c => c.currentPieceId === parsed.pieceId);
-          if (!anyCarOnPiece) {
-            toRelease.push(point);
-          }
-        }
+        toRelease.push(point);
       }
     }
 

@@ -1,1 +1,2 @@
-1) I'd like a button labelled "Random" mext to the "Import Layout" button. Clicking the "Random" button will toggle the random setting. The user can use the random statement in the layout specification or can omit the random statement and click the Random button latter.  Once the random status is "on" then clicking the "Random" button will turn the setting to off so that the user has control of the switches by clicking on the switch's visual  indicators
+
+

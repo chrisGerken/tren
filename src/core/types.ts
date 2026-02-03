@@ -52,7 +52,8 @@ export interface TrackPiece {
 export interface Layout {
   title?: string;        // Layout title for UI (default: "Simulador de Tren")
   description?: string;  // Layout description (concatenated from all description statements)
-  minGap?: number;       // Minimum following distance between trains (default: 1 inch)
+  lockAheadDistance?: number;  // Lock ahead distance in inches (default: 10)
+  lockAheadCount?: number;     // Minimum connection points to lock (default: 2)
   randomSwitches?: boolean;  // If true, switches randomly change when trains pass
   maxTrains?: number;    // Maximum number of trains allowed on the layout at once
   pieces: TrackPiece[];

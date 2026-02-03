@@ -15,7 +15,9 @@ export enum TokenType {
   LOOP_CLOSE = 'LOOP_CLOSE',   // >
   TITLE = 'TITLE',             // title keyword
   DESCRIPTION = 'DESCRIPTION', // description keyword
-  MINGAP = 'MINGAP',           // mingap keyword (minimum following distance)
+  LOCKAHEAD = 'LOCKAHEAD',     // lockahead keyword (lock ahead configuration)
+  DISTANCE = 'DISTANCE',       // distance keyword (for lockahead)
+  COUNT = 'COUNT',             // count keyword (for lockahead)
   DEGREES = 'DEGREES',         // degrees keyword (for new statement)
   OFFSET = 'OFFSET',           // offset keyword (for new statement)
   BASE = 'BASE',               // base keyword (for new statement)
@@ -251,9 +253,29 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
         return tokens; // Done with this statement
       }
 
-      if (value === 'mingap') {
+      if (value === 'lockahead') {
         tokens.push({
-          type: TokenType.MINGAP,
+          type: TokenType.LOCKAHEAD,
+          value: value,
+          line: lineNum,
+          column: startPos + 1,
+        });
+        continue;
+      }
+
+      if (value === 'distance') {
+        tokens.push({
+          type: TokenType.DISTANCE,
+          value: value,
+          line: lineNum,
+          column: startPos + 1,
+        });
+        continue;
+      }
+
+      if (value === 'count') {
+        tokens.push({
+          type: TokenType.COUNT,
           value: value,
           line: lineNum,
           column: startPos + 1,

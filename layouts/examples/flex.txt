@@ -1,5 +1,5 @@
-# Layout demonstrating flex connect feature
-# The layout forms an almost-complete loop that can't be closed with standard pieces
+title Sample with flex connect
+description How to fill a non-standard gap between two tracks
 
 after: str
 str

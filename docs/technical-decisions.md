@@ -303,6 +303,33 @@ Set any of these to `true` to enable the respective logging.
 
 ## Rendering Details
 
+### Traditional Track Appearance
+
+Track is rendered with realistic components visible from the top-down view:
+
+**Four-layer rendering (bottom to top):**
+1. **Roadbed** - Brown dirt raised surface (2.4" wide, 0.1" high)
+2. **Ballast** - Gray gravel bed on top of roadbed (2.0" wide, 0.08" high)
+3. **Ties** - Wooden cross-ties perpendicular to track (1.4" × 0.25" × 0.15", spaced 1.0" apart)
+4. **Rails** - Two parallel steel rails (0.7" gauge, 0.04" radius tubes)
+
+**Design decisions:**
+- Uses extruded path geometry for roadbed and ballast (flat rectangular cross-section following spline)
+- Ties are individual BoxGeometry meshes positioned along the spline at regular intervals
+- Rails are TubeGeometry following offset curves on either side of the center spline
+- Perpendicular direction computed from spline tangent for proper tie and rail orientation on curves
+
+**Materials:**
+- Rails: Steel gray (0x4a4a4a), metallic (0.8), low roughness (0.3)
+- Ties: Dark wood brown (0x5c4033), non-metallic, high roughness (0.9)
+- Ballast: Grayish gravel (0x8b8b7a), non-metallic, maximum roughness (1.0)
+- Roadbed: Brown dirt (0x6b5b4f), non-metallic, high roughness (0.9)
+
+**Implementation:**
+- `renderTrackSectionWorld()` returns a `THREE.Group` containing all track components
+- `createExtrudedPathGeometry()` generates custom BufferGeometry for roadbed/ballast
+- Rail offset curves are computed by sampling center spline and offsetting perpendicular to tangent
+
 **Bumper rotation:**
 - Bumper bar must be perpendicular to track direction at the endpoint
 - Rotation is calculated from the tangent of the last two spline points
@@ -404,13 +431,17 @@ Trains use **connection point locking** instead of distance-based speed regulati
 - `tryAcquireLocks()`: Acquire locks in order, stop if blocked
 - `releaseLock()`: Release a specific lock
 - `releaseAllLocks()`: Release all locks for a train (on removal)
-- `acquireLeadingLocks()`: Scan ahead and acquire locks
-- `releaseTrailingLocks()`: Release locks the train has cleared
+- `acquireLeadingLocks()`: Scan ahead and acquire locks, returns both `acquired` (newly locked) and `requested` (all look-ahead points)
+- `releaseTrailingLocks()`: Release locks only when the LAST car clears the piece (keeps locks on all connection points of pieces occupied by any car)
 - `isJunctionLocked()`: Check if a switch can be changed
 
-**Configuration constants:**
-- `minLockDistance`: 10 inches (minimum look-ahead distance)
-- `minLockCount`: 2 connection points (minimum locks to proceed)
+**Configuration (via `lockahead` DSL statement):**
+- `minLockDistance`: Minimum look-ahead distance (default: 10 inches)
+- `minLockCount`: Minimum connection points to lock (default: 2)
+
+Example: `lockahead distance 15 count 3`
+
+**Other constants:**
 - `ACCELERATION`: 6 inches/sec² (speed-up when locks acquired)
 - `EMERGENCY_BRAKING`: 24 inches/sec² (deceleration when blocked)
 
@@ -420,7 +451,7 @@ Trains use **connection point locking** instead of distance-based speed regulati
 3. Get next piece via `getNextSection()` (respects switch selection)
 4. Add entry point of next piece
 5. Accumulate distance (zero-length pieces contribute 0)
-6. Repeat until distance ≥ 10 inches AND points ≥ 2
+6. Repeat until distance ≥ minLockDistance AND points ≥ minLockCount
 7. Try to acquire all points in order; if any blocked, stop and wait
 
 **Spawn blocking:**
@@ -446,6 +477,19 @@ Trains use **connection point locking** instead of distance-based speed regulati
 - Only lock connection points on the route being used
 - `in1`/`out1` for one track, `in2`/`out2` for other
 - Trains on different routes can cross simultaneously
+
+**Lock release timing:**
+- Locks are kept on ALL connection points of pieces that have ANY car on them
+- This ensures the cab passing a connection point doesn't release it prematurely
+- Only when the LAST car of the train clears a piece are its connection points released
+- Look-ahead locks are also retained (using `requested` list from `acquireLeadingLocks`)
+
+**LockAcquisitionResult structure:**
+- `success`: Whether all requested locks were acquired
+- `acquired`: Points that were newly locked (not already held)
+- `requested`: ALL points in the look-ahead scan (used by `releaseTrailingLocks` to know what to keep)
+- `blocked`: The point where acquisition failed (if any)
+- `blockingTrainId`: Which train holds the blocking lock
 
 ## Random Switch Mode
 
@@ -587,18 +631,31 @@ After all pieces and flex connects are processed, auto-connect scans for connect
 
 ## UI: Labels Toggle
 
-The Labels button toggles visibility of track piece labels in the viewport.
+The Labels button toggles visibility of track piece labels and connection point indicators in the viewport.
 
 **Implementation:**
 - Labels use CSS2DRenderer (DOM elements positioned in 3D space)
 - CSS2D elements don't respect Three.js group visibility
 - Fix: Toggle `labelRenderer.domElement.style.display` directly
-- Button shows "active" state when labels are visible (default)
+- Button shows "active" state when labels are visible
+- Labels are hidden by default
 
 **Label rendering:**
 - Labels are positioned offset from piece center, perpendicular to track direction
 - Offset distance: 2 inches
 - Style: white background, monospace font, 11px, 1px border
+
+**Connection point visibility:**
+- Connection points are small spheres at track piece endpoints
+- Visibility is tied to the Labels toggle (hidden by default)
+- When visible: white = unlocked, red = locked by a train
+- Connection points for gen/bin pieces are NOT rendered (their internal track is invisible)
+- This prevents the viewport from scaling to include off-screen generator connection points
+
+**updateConnectionPointColors(lockedPoints, visible):**
+- Called every frame during simulation
+- Sets mesh visibility based on Labels toggle state
+- When visible, updates color based on lock state
 
 ## Open Questions
 

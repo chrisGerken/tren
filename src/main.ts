@@ -5,7 +5,7 @@
 import { open } from '@tauri-apps/api/dialog';
 import { readTextFile } from '@tauri-apps/api/fs';
 import { TrackScene } from './renderer/scene';
-import { renderLayout, setSelectedRouteByKey, getSelectedRoutes } from './renderer/track-renderer';
+import { renderLayout, setSelectedRouteByKey, getSelectedRoutes, updateConnectionPointColors } from './renderer/track-renderer';
 import { renderTrains } from './renderer/train-renderer';
 import { buildLayout } from './parser/builder';
 import { Simulation } from './core/simulation';
@@ -67,10 +67,12 @@ function startSimulation(layout: Layout): void {
 
   // Create new simulation
   simulation = new Simulation(layout, getSelectedRoutes(), () => {
-    // Update callback - render trains
+    // Update callback - render trains and update connection point colors
     if (simulation) {
       const trainGroup = renderTrains(simulation.getTrains());
       scene.updateTrains(trainGroup);
+      // Update connection point colors based on lock state (only visible when Labels are on)
+      updateConnectionPointColors(simulation.getLockedPoints(), scene.getLabelsVisible());
       scene.render();
     }
   });
@@ -206,8 +208,7 @@ function toggleLabels(): void {
 
 if (labelsBtn) {
   labelsBtn.addEventListener('click', toggleLabels);
-  // Labels are visible by default, so mark button as active
-  labelsBtn.classList.add('active');
+  // Labels are hidden by default
 }
 
 // Initial render

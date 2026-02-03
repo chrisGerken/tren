@@ -29,16 +29,21 @@ description Created for testing virtual switches.
 
 Multiple description statements are allowed and will be concatenated with spaces.
 
-### Minimum Gap
+### Lock Ahead
 
-The `mingap` statement sets the minimum following distance between trains (in inches):
+The `lockahead` statement configures how far ahead trains look and lock connection points for collision prevention:
 
 ```
-mingap 1.5                    # Trains maintain 1.5 inch gap
-mingap 0.5                    # Very close following (for tight layouts)
+lockahead distance 15         # Look ahead 15 inches (default: 10)
+lockahead count 3             # Lock at least 3 connection points (default: 2)
+lockahead distance 20 count 4 # Set both parameters
 ```
 
-**Default**: 1 inch. This is the closest trains will get when following each other. Lower values allow tighter packing but require faster reaction times.
+**Parameters:**
+- `distance N` - Minimum distance (in inches) to scan ahead for connection points to lock
+- `count N` - Minimum number of connection points to acquire before proceeding
+
+**Defaults**: distance 10 inches, count 2 connection points. Higher values provide more safety margin but may cause trains to stop earlier. Lower values allow tighter operation but increase collision risk on complex track.
 
 ### Random Switch Mode
 
