@@ -335,9 +335,10 @@ Track is rendered with realistic components visible from the top-down view:
 - Rotation is calculated from the tangent of the last two spline points
 - The angle is negated when applied to `mesh.rotation.y` because Three.js Y rotation convention (clockwise from above) is opposite to our coordinate system (counter-clockwise)
 
-**Generator/Bin visuals:**
+**Generator/Bin/Tunnel visuals:**
 - Generator: green circle, radius 1.5 inches
 - Bin: red circle, radius 1.5 inches
+- Tunnel: Two dark gray bracket shapes ([ ]) facing opposite directions, 3" wide × 0.8" deep × 1.5" tall. Each bracket opens toward the visible track (outside the tunnel). Uses ExtrudeGeometry with a custom Shape.
 
 **Generator internal track:**
 - Generator has a 50" internal track section (invisible, like a tunnel)
@@ -656,6 +657,109 @@ The Labels button toggles visibility of track piece labels and connection point 
 - Called every frame during simulation
 - Sets mesh visibility based on Labels toggle state
 - When visible, updates color based on lock state
+
+## Pan/Zoom Controls
+
+The viewport supports pan and zoom for navigating large layouts using Three.js MapControls.
+
+**Implementation (`src/renderer/scene.ts`):**
+- Uses `MapControls` from `three/examples/jsm/controls/MapControls.js`
+- Designed for 2D top-down navigation (map-like interface)
+
+**Configuration:**
+```typescript
+this.controls = new MapControls(this.camera, this.renderer.domElement);
+this.controls.enableRotate = false;      // Lock to top-down view
+this.controls.enableDamping = true;      // Smooth movement
+this.controls.dampingFactor = 0.1;
+this.controls.screenSpacePanning = true; // Pan in screen space
+this.controls.minZoom = 0.1;             // Max zoom out (10%)
+this.controls.maxZoom = 10;              // Max zoom in (10x)
+```
+
+**User controls:**
+| Action | Input |
+|--------|-------|
+| Pan | Left-click drag OR right-click drag |
+| Zoom | Mouse wheel scroll |
+| Touch pan | Two-finger drag |
+| Touch zoom | Pinch gesture |
+
+**Design decisions:**
+- MapControls chosen over OrbitControls because it's designed for 2D map navigation
+- Rotation disabled to maintain top-down view
+- Damping enabled for smooth, inertial movement
+- `fitToLayout()` still auto-fits camera on layout load; user can then pan/zoom from there
+- Controls update called in render loop for damping animation
+
+## Tunnel Rendering and Visibility
+
+Tunnels hide track and trains that pass through them, with bracket-shaped portals marking the entrances.
+
+**Visual appearance:**
+- Two dark gray bracket shapes ([ ]) at tunnel position
+- Brackets face opposite directions (one for each portal)
+- Dimensions: 4.2" wide × 0.8" deep × 1.5" tall
+- Brackets are perpendicular to track direction
+- Color: 0x4a4a4a (dark gray)
+
+**Implementation (`src/renderer/track-renderer.ts`):**
+```typescript
+function renderTunnelWorld(piece: TrackPiece): THREE.Group {
+  // Create bracket shape using THREE.Shape
+  // Extrude to create 3D geometry
+  // Position and rotate two brackets facing opposite directions
+}
+```
+
+**Tunnel section marking (`src/parser/builder.ts`):**
+- `markTunnelSections()` identifies pieces between tunnel pairs
+- Algorithm: From each tunnel's 'out', traverse connections
+- Mark pieces as `inTunnel: true` until reaching another tunnel
+- Uses recursive `findTunnelPath()` with backtracking
+
+**Visibility control:**
+- Track pieces with `piece.inTunnel === true` are not rendered
+- Cars/cabs on `inTunnel` pieces have `visible: false`
+- Simulation still runs; trains just become invisible while in tunnel
+- Only track between two tunnels is hidden; isolated tunnels don't hide anything
+
+**DSL usage:**
+```
+str x 3
+tun          # First portal
+str x 5      # Hidden track
+tun          # Second portal
+str x 3
+```
+
+## Loop Close Syntax
+
+The `>` operator supports two equivalent syntaxes for closing loops:
+
+**Supported formats:**
+```
+> point.$label          # e.g., > in.$start
+> $label.point          # e.g., > $start.in
+```
+
+**Implementation (`src/parser/parser.ts`):**
+```typescript
+private parseLoopClose(): LoopCloseStatement {
+  // Check first token to determine format
+  if (this.check(TokenType.IDENTIFIER)) {
+    // Format 1: > point.$label
+  } else if (this.check(TokenType.LABEL_REF)) {
+    // Format 2: > $label.point
+  }
+}
+```
+
+**Design decisions:**
+- Both formats produce identical `LoopCloseStatement` AST nodes
+- Parser detects format by checking if first token is IDENTIFIER or LABEL_REF
+- Maintains backward compatibility with existing layouts
+- Consistent with `$label.point` syntax used elsewhere in DSL
 
 ## Open Questions
 

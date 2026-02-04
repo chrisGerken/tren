@@ -123,6 +123,9 @@ class LayoutBuilder {
     // Detect auto-connections
     this.detectAutoConnections();
 
+    // Mark pieces that are inside tunnels
+    this.markTunnelSections();
+
     return {
       title: this.state.title || 'Simulador de Tren',
       description: this.state.descriptions.length > 0
@@ -1678,5 +1681,94 @@ class LayoutBuilder {
         }
       }
     }
+  }
+
+  /**
+   * Mark pieces that are inside tunnels.
+   * A piece is inside a tunnel if it's between two tunnel pieces.
+   * We find tunnel pairs by traversing from each tunnel's 'out' and checking
+   * if we reach another tunnel before hitting a dead end or looping back.
+   */
+  private markTunnelSections(): void {
+    // Find all tunnel pieces
+    const tunnelPieces = this.state.pieces.filter(p =>
+      p.archetypeCode === 'tun' || p.archetypeCode === 'tunnel'
+    );
+
+    // Track which tunnels have been used as "exit" tunnels
+    const usedAsExit = new Set<string>();
+
+    // For each tunnel that hasn't been used as an exit, try to find a path to another tunnel
+    for (const tunnel of tunnelPieces) {
+      if (usedAsExit.has(tunnel.id)) continue;
+
+      // Traverse from this tunnel's 'out' connection
+      const pathPieces: string[] = [];
+      const exitTunnel = this.findTunnelPath(tunnel.id, 'out', pathPieces, new Set<string>());
+
+      // Only mark pieces if we found another tunnel (forming a tunnel pair)
+      if (exitTunnel && exitTunnel !== tunnel.id) {
+        usedAsExit.add(exitTunnel);
+        // Mark all pieces in the path as inTunnel
+        for (const pieceId of pathPieces) {
+          const piece = this.state.pieces.find(p => p.id === pieceId);
+          if (piece) {
+            piece.inTunnel = true;
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Traverse from a tunnel's connection point to find another tunnel.
+   * Returns the ID of the exit tunnel if found, null otherwise.
+   * Populates pathPieces with the IDs of pieces along the path.
+   */
+  private findTunnelPath(
+    pieceId: string,
+    fromPoint: string,
+    pathPieces: string[],
+    visited: Set<string>
+  ): string | null {
+    const piece = this.state.pieces.find(p => p.id === pieceId);
+    if (!piece) return null;
+
+    // Get connections from this point
+    const connections = piece.connections.get(fromPoint);
+    if (!connections || connections.length === 0) return null;
+
+    for (const conn of connections) {
+      // Skip if already visited
+      const visitKey = `${conn.pieceId}.${conn.pointName}`;
+      if (visited.has(visitKey)) continue;
+      visited.add(visitKey);
+
+      const connectedPiece = this.state.pieces.find(p => p.id === conn.pieceId);
+      if (!connectedPiece) continue;
+
+      // If we hit another tunnel, we found the exit
+      if (connectedPiece.archetypeCode === 'tun' || connectedPiece.archetypeCode === 'tunnel') {
+        return connectedPiece.id;
+      }
+
+      // Add this piece to the path and continue traversal
+      pathPieces.push(conn.pieceId);
+
+      // Continue traversal from the opposite connection point
+      const oppositePoint = conn.pointName === 'in' ? 'out' :
+                           conn.pointName === 'out' ? 'in' :
+                           conn.pointName === 'in1' ? 'out1' :
+                           conn.pointName === 'out1' ? 'in1' :
+                           conn.pointName === 'in2' ? 'out2' : 'in2';
+
+      const result = this.findTunnelPath(conn.pieceId, oppositePoint, pathPieces, visited);
+      if (result) return result;
+
+      // If this path didn't lead to a tunnel, remove piece from path (backtrack)
+      pathPieces.pop();
+    }
+
+    return null;
   }
 }

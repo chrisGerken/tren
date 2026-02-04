@@ -404,14 +404,18 @@ Use the `>` operator to connect the current piece back to a labeled piece, closi
 
 ```
 > point.$label          # Connect current out to $label.point
+> $label.point          # Same effect, alternative syntax
 ```
 
-The `>` operator connects the current piece's default output to the specified connection point on a labeled piece. This completes a circuit without placing a new piece.
+Both syntaxes are equivalent and connect the current piece's default output to the specified connection point on a labeled piece. This completes a circuit without placing a new piece.
 
 ```
 start: str
 crvl x 16               # Full circle of curves
 > in.$start             # Close the loop: connect back to start's input
+
+# Or equivalently:
+> $start.in             # Same result using alternative syntax
 ```
 
 ## Splice

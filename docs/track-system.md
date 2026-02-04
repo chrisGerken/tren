@@ -293,7 +293,7 @@ Trains appear from `source`, travel along the straights, and are removed at the 
 - **Sections**: 0 (zero-length)
 - **Connection Points**: `in`, `out` (same position, opposite directions)
 - **Collision Points**: None
-- **Visual**: Small icon indicating tunnel entrance/exit
+- **Visual**: Two square bracket shapes ([ ]) facing opposite directions, slightly wider than the track (3" wide), forming a tunnel portal. Each bracket is open toward the visible track outside the tunnel.
 
 A tunnel is a zero-length piece that toggles visibility of track and trains. It provides a display simplification that allows tracks to appear to go "underground" without simulating actual elevation changes.
 

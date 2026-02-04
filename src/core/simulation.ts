@@ -427,6 +427,9 @@ export class Simulation {
     } else if (archetype.code === 'bin') {
       // Car entered bin - hide it
       car.visible = false;
+    } else if (piece.inTunnel) {
+      // Car is inside a tunnel section - hide it
+      car.visible = false;
     } else {
       // Regular track - car is visible
       car.visible = true;

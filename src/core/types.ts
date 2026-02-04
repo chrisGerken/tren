@@ -46,6 +46,7 @@ export interface TrackPiece {
   label?: string;         // Optional label for references
   connections: Map<string, Connection[]>;  // Connection point name -> connected pieces
   genConfig?: GeneratorConfig;  // Generator configuration (only for 'gen' pieces)
+  inTunnel?: boolean;     // True if piece is inside a tunnel (between tunnel pieces)
 }
 
 /** Layout (root container) */

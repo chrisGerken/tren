@@ -4,6 +4,7 @@
 
 import * as THREE from 'three';
 import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
+import { MapControls } from 'three/examples/jsm/controls/MapControls.js';
 
 // Callback type for switch indicator clicks
 // routeKey format: "pieceId.pointName.direction" (e.g., "piece_5.out.fwd")
@@ -14,6 +15,7 @@ export class TrackScene {
   camera: THREE.OrthographicCamera;
   renderer: THREE.WebGLRenderer;
   labelRenderer: CSS2DRenderer;
+  controls: MapControls;
   private container: HTMLElement;
   private trackGroup: THREE.Group;
   private trainGroup: THREE.Group;
@@ -95,6 +97,15 @@ export class TrackScene {
     this.raycaster = new THREE.Raycaster();
     this.mouse = new THREE.Vector2();
 
+    // Initialize MapControls for pan/zoom
+    this.controls = new MapControls(this.camera, this.renderer.domElement);
+    this.controls.enableRotate = false;      // Lock to top-down view
+    this.controls.enableDamping = true;      // Smooth movement
+    this.controls.dampingFactor = 0.1;
+    this.controls.screenSpacePanning = true; // Pan in screen space
+    this.controls.minZoom = 0.1;             // Max zoom out (see more)
+    this.controls.maxZoom = 10;              // Max zoom in (see less)
+
     // Handle click events for switch indicators
     this.renderer.domElement.addEventListener('click', (event) => this.onClick(event));
 
@@ -152,6 +163,7 @@ export class TrackScene {
   }
 
   render(): void {
+    this.controls.update();  // Update controls for damping
     this.renderer.render(this.scene, this.camera);
     this.labelRenderer.render(this.scene, this.camera);
   }
@@ -281,9 +293,14 @@ export class TrackScene {
     this.camera.right = viewWidth / 2;
     this.camera.top = viewHeight / 2;
     this.camera.bottom = -viewHeight / 2;
+    this.camera.zoom = 1;  // Reset zoom when fitting to layout
 
     this.camera.position.set(center.x, 100, center.z);
     this.camera.lookAt(center.x, 0, center.z);
     this.camera.updateProjectionMatrix();
+
+    // Update controls target to center of layout
+    this.controls.target.set(center.x, 0, center.z);
+    this.controls.update();
   }
 }

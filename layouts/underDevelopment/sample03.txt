@@ -1,0 +1,52 @@
+title Larger System
+description Several small layouts connected by one large loop
+
+max trains 10
+lockahead distance 10 count 4
+
+# gen cabs 1-2 cars 2-10 every 10 speed 7-16
+
+
+#
+# Main loop
+#
+start: str * 19
+out1: str
+
+crvl * 4
+
+in1: str
+str * 3
+
+crvl
+out2: crvl
+crvl * 2
+
+str * 20
+
+crvl
+out3: crvl
+crvl * 2
+
+str * 4
+
+
+crvl
+out4: crvl
+crvl * 2
+
+
+#
+#  Small layout 1
+#
+
+new
+$out1.out
+
+str * 3
+
+
+new 
+str * 3
+> $in1.in
+

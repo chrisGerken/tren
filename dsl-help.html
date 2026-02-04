@@ -244,10 +244,11 @@ in.crvl       # Attach crvl's IN to current point (normal)</code></pre>
 
   <div class="section">
     <h2>Closing Loops</h2>
-    <p>Use the <code>&gt;</code> operator to close a loop:</p>
+    <p>Use the <code>&gt;</code> operator to close a loop. Both syntaxes are equivalent:</p>
     <pre><code>start: str
 crvl x 16               # Full circle of curves
-> in.$start             # Close loop: connect to start's input</code></pre>
+> in.$start             # Close loop: connect to start's input
+> $start.in             # Same effect, alternative syntax</code></pre>
   </div>
 
   <div class="section">

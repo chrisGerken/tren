@@ -451,21 +451,42 @@ class Parser {
   private parseLoopClose(): LoopCloseStatement {
     const startToken = this.advance(); // consume '>'
 
-    // Expect: point.$label
-    if (!this.check(TokenType.IDENTIFIER)) {
-      throw new Error(`Expected connection point after ">" at line ${startToken.line}`);
-    }
-    const point = this.advance().value;
+    // Support two formats:
+    // 1. > point.$label  (e.g., > in.$start)
+    // 2. > $label.point  (e.g., > $in1.in)
 
-    if (!this.check(TokenType.DOT)) {
-      throw new Error(`Expected "." after connection point in loop close at line ${startToken.line}`);
-    }
-    this.advance(); // consume dot
+    let point: string;
+    let label: string;
 
-    if (!this.check(TokenType.LABEL_REF)) {
-      throw new Error(`Expected $label after "." in loop close at line ${startToken.line}`);
+    if (this.check(TokenType.IDENTIFIER)) {
+      // Format 1: > point.$label
+      point = this.advance().value;
+
+      if (!this.check(TokenType.DOT)) {
+        throw new Error(`Expected "." after connection point in loop close at line ${startToken.line}`);
+      }
+      this.advance(); // consume dot
+
+      if (!this.check(TokenType.LABEL_REF)) {
+        throw new Error(`Expected $label after "." in loop close at line ${startToken.line}`);
+      }
+      label = this.advance().value;
+    } else if (this.check(TokenType.LABEL_REF)) {
+      // Format 2: > $label.point
+      label = this.advance().value;
+
+      if (!this.check(TokenType.DOT)) {
+        throw new Error(`Expected "." after $${label} in loop close at line ${startToken.line}`);
+      }
+      this.advance(); // consume dot
+
+      if (!this.check(TokenType.IDENTIFIER)) {
+        throw new Error(`Expected connection point after "$${label}." in loop close at line ${startToken.line}`);
+      }
+      point = this.advance().value;
+    } else {
+      throw new Error(`Expected connection point reference after ">" at line ${startToken.line}`);
     }
-    const label = this.advance().value;
 
     return { type: 'loopClose', point, label, line: startToken.line };
   }
