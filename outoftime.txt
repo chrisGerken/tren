@@ -1,0 +1,4 @@
+1) If you are in the middle of a list of tasks and some are not completed then write enough information to resumeTasks.txt so that you can continue performing the task in the next session when I type "perform tasks in resumeTasks.txt"
+
+2) Update all .md and .html files ass appropriate with design and implementation decisions during this session so that the conterxt is ready to load for the next session
+
