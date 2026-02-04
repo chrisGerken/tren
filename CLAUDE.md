@@ -60,6 +60,10 @@ The placeholder provides a pure junction point. Use `out.piece` syntax to build 
 
 The `flex connect $point1 $point2` statement creates custom track pieces to bridge gaps that can't be closed with standard pieces. It automatically calculates a curve+straight or straight+curve combination. Useful for closing almost-complete loops where endpoints don't align with standard pieces.
 
+## Cross Connect
+
+The `cross connect $label1 $label2` statement creates a shared lockable point where two track pieces physically cross. Unlike built-in crossings (x90, x45), the original track pieces remain unchanged—only a shared lock is added at the intersection. Only one train can occupy the intersection at a time; others stop and wait.
+
 ## Train Movement
 
 Trains are ordered car lists (consists). The primary cab (first cab in train) controls speed and direction. Each car maintains its own position along the track section, querying the spline for position and tangent each frame. Cars transition between sections independently when crossing boundaries.

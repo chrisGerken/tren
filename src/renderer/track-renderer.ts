@@ -260,6 +260,21 @@ function renderTrackPiece(
       }
     }
     }
+
+    // Render internal connection points (cross connect intersections)
+    if (piece.internalConnectionPoints) {
+      for (const icp of piece.internalConnectionPoints) {
+        // Internal connection points store world position, but we need to negate Z for screen
+        const screenPos = new THREE.Vector3(
+          icp.worldPosition.x,
+          0,
+          -icp.worldPosition.z
+        );
+        const icpMesh = renderConnectionPointWorld(screenPos, icp.id);
+        group.add(icpMesh);
+        if (DEBUG_LOGGING) console.log(`  Internal connection point ${icp.id} at (${icp.worldPosition.x.toFixed(1)}, ${icp.worldPosition.z.toFixed(1)})`);
+      }
+    }
   }
 
   // Special rendering for generator/bin
@@ -487,7 +502,7 @@ function createExtrudedPathGeometry(
 /**
  * Render a connection point as a small sphere at world position
  * @param worldPos - Position in world coordinates
- * @param connectionPointId - ID in format "pieceId.pointName" for tracking
+ * @param connectionPointId - ID in format "pieceId.pointName" or internal point ID for tracking
  */
 function renderConnectionPointWorld(worldPos: THREE.Vector3, connectionPointId: string): THREE.Mesh {
   const geometry = new THREE.SphereGeometry(0.25, 16, 16);
@@ -496,6 +511,8 @@ function renderConnectionPointWorld(worldPos: THREE.Vector3, connectionPointId: 
 
   const mesh = new THREE.Mesh(geometry, material);
   mesh.position.set(worldPos.x, 0.5, worldPos.z);
+  // Start hidden - visibility controlled by Labels toggle via updateConnectionPointColors
+  mesh.visible = false;
 
   // Store reference for dynamic updates
   connectionPointMeshes.set(connectionPointId, mesh);

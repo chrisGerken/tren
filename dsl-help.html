@@ -301,9 +301,41 @@ bump</code></pre>
     <ol>
       <li>Parse all statements</li>
       <li>Build regular track pieces</li>
+      <li>Process splices</li>
+      <li>Process cross connects</li>
       <li>Process flex connects (create bridge pieces)</li>
       <li>Auto-connect adjacent pieces</li>
     </ol>
+  </div>
+
+  <div class="section">
+    <h2>Cross Connect</h2>
+    <p>The <code>cross connect</code> statement creates a shared lockable point where two track pieces physically cross. Only one train can occupy the intersection at a time.</p>
+    <pre><code>cross connect $label1 $label2</code></pre>
+
+    <h3>How It Works</h3>
+    <ul>
+      <li>Finds where the two tracks intersect geometrically</li>
+      <li>Adds a shared lock at the intersection point</li>
+      <li>Trains must acquire the lock to pass through</li>
+      <li>If another train holds the lock, the approaching train stops</li>
+      <li>Original track pieces remain unchanged (no splitting)</li>
+    </ul>
+
+    <h3>Example</h3>
+    <pre><code># Two tracks that cross
+gen ; str x 3 ; one: str x 10 ; str x 3 ; bin
+
+new 45
+gen ; str x 3 ; two: str x 10 ; str x 3 ; bin
+
+cross connect $one $two</code></pre>
+
+    <h3>Difference from x90/x45 Crossings</h3>
+    <p>Built-in crossings (<code>x90</code>, <code>x45</code>) are single pieces with two independent paths—trains can pass simultaneously. Cross connect works on any two existing pieces and uses locking to prevent simultaneous passage.</p>
+
+    <h3>Error Handling</h3>
+    <p>If the tracks don't actually intersect geometrically, a warning is logged and no lock is created. The layout continues to work normally.</p>
   </div>
 
   <div class="section">

@@ -761,6 +761,59 @@ private parseLoopClose(): LoopCloseStatement {
 - Maintains backward compatibility with existing layouts
 - Consistent with `$label.point` syntax used elsewhere in DSL
 
+## Cross Connect (Track Intersections)
+
+The `cross connect` statement creates a shared lockable point where two track pieces physically cross, ensuring only one train can occupy the intersection at a time.
+
+**DSL syntax:**
+```
+cross connect $label1 $label2
+```
+
+**Design decisions:**
+- Original track pieces remain unchanged (no splitting, no new pieces created)
+- A shared "intersection lock" is added as metadata to both pieces
+- The lock ID is shared between both pieces: `cross_{piece1.id}_{piece2.id}`
+- Each piece stores the t parameter (0-1) indicating where on the spline the intersection occurs
+- Trains must acquire the intersection lock to pass through; if another train holds it, the train stops
+
+**Implementation:**
+
+1. **Types (`src/core/types.ts`):**
+   - `IntersectionLock` interface: `{ lockId: string; t: number; worldPosition: Vec3 }`
+   - `TrackPiece.intersectionLocks?: IntersectionLock[]` array
+
+2. **Builder (`src/parser/builder.ts`):**
+   - `performCrossConnect()`: Finds intersection, adds lock metadata to both pieces
+   - `findSplineIntersection()`: Transforms splines to world coordinates, tests all segment pairs
+   - `lineSegmentIntersection()`: Line segment intersection using Cramer's rule
+
+3. **Lock Manager (`src/core/lock-manager.ts`):**
+   - `tryAcquireIntersectionLock()`: Acquire lock using shared lock ID
+   - `isIntersectionLockedByOther()`: Check if another train holds the lock
+   - `releaseIntersectionLock()`: Release the lock
+
+4. **Simulation (`src/core/simulation.ts`):**
+   - `checkIntersectionLocks()`: Before moving, check if any car is near an intersection and acquire lock
+   - `releaseIntersectionLocks()`: After moving, release locks for cars that have passed through
+   - Intersection margin: CAR_LENGTH + 1 inch on each side of intersection point
+
+**Intersection detection algorithm:**
+1. Transform both pieces' spline points to world coordinates
+2. For each segment pair (one from each piece), test for line segment intersection
+3. Return intersection point and t parameters for both splines
+4. Accept intersections within full segment range (t in [0, 1])
+
+**Why not create crossing pieces:**
+- User requirement: keep original track topology unchanged
+- Simpler implementation: no track splitting, no runtime archetypes needed
+- Lock-based approach handles collision prevention without modifying track graph
+
+**Difference from x90/x45 crossings:**
+- Built-in crossings (x90, x45) are single pieces with two sections and four connection points
+- Cross connect works on any two existing pieces at arbitrary angles
+- Cross connect uses intersection locking; built-in crossings allow simultaneous passage on different tracks
+
 ## Open Questions
 
 These will be addressed in user scenario discussions:

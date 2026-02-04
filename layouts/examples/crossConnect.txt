@@ -1,0 +1,29 @@
+title Sample with flex connect
+description How to fill a non-standard gap between two tracks
+
+
+max trains 6
+gen cabs 1-2  cars 2-4  every 10
+
+str
+crvl
+crvr
+
+str
+in1: str
+str
+one: str
+str * 2
+
+crvr * 12
+
+str * 2
+two: str
+str * 2
+
+crvl * 9
+in2: crvl
+
+flex connect $in2.out $in1.in
+
+cross connect $one $two

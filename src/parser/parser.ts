@@ -16,7 +16,8 @@ export type Statement =
   | SpliceStatement
   | RandomStatement
   | MaxTrainsStatement
-  | FlexConnectStatement;
+  | FlexConnectStatement
+  | CrossConnectStatement;
 
 export interface NewStatement {
   type: 'new';
@@ -108,6 +109,13 @@ export interface FlexConnectStatement {
   line: number;
 }
 
+export interface CrossConnectStatement {
+  type: 'crossConnect';
+  label1: string;
+  label2: string;
+  line: number;
+}
+
 /**
  * Parse DSL text into an array of statements
  */
@@ -162,6 +170,9 @@ class Parser {
 
       case TokenType.FLEX:
         return this.parseFlexConnectStatement();
+
+      case TokenType.CROSS:
+        return this.parseCrossConnectStatement();
 
       case TokenType.SPLICE:
         return this.parseSpliceStatement();
@@ -378,6 +389,34 @@ class Parser {
       point1Name: ref1.point,
       point2Label: ref2.label,
       point2Name: ref2.point,
+      line: token.line,
+    };
+  }
+
+  private parseCrossConnectStatement(): CrossConnectStatement {
+    const token = this.advance(); // consume 'cross'
+
+    // Expect 'connect' keyword
+    if (this.check(TokenType.CONNECT)) {
+      this.advance(); // consume 'connect'
+    }
+
+    // Parse first label reference: $label
+    if (!this.check(TokenType.LABEL_REF)) {
+      throw new Error(`Expected $label after 'cross connect' at line ${token.line}`);
+    }
+    const label1 = this.advance().value;
+
+    // Parse second label reference: $label
+    if (!this.check(TokenType.LABEL_REF)) {
+      throw new Error(`Expected second $label in 'cross connect' at line ${token.line}`);
+    }
+    const label2 = this.advance().value;
+
+    return {
+      type: 'crossConnect',
+      label1,
+      label2,
       line: token.line,
     };
   }

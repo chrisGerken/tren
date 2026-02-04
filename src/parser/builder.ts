@@ -2,7 +2,7 @@
  * Layout Builder - transforms AST into placed track pieces
  */
 
-import { parse, Statement, PieceStatement, NewStatement, ReferenceStatement, LoopCloseStatement, TitleStatement, DescriptionStatement, LockAheadStatement, SpliceStatement, RandomStatement, MaxTrainsStatement, FlexConnectStatement } from './parser';
+import { parse, Statement, PieceStatement, NewStatement, ReferenceStatement, LoopCloseStatement, TitleStatement, DescriptionStatement, LockAheadStatement, SpliceStatement, RandomStatement, MaxTrainsStatement, FlexConnectStatement, CrossConnectStatement } from './parser';
 import { Layout, TrackPiece, Vec3, vec2, ConnectionPointDef, RangeValue as TypeRangeValue } from '../core/types';
 import { getArchetype, registerRuntimeArchetype } from '../core/archetypes';
 import type { TrackArchetype } from '../core/archetypes';
@@ -38,6 +38,12 @@ interface FlexSolution {
   D2: Vec3;
 }
 
+interface CrossConnectInfo {
+  label1: string;
+  label2: string;
+  line: number;
+}
+
 interface Segment {
   pieces: TrackPiece[];
   startPosition: Vec3;
@@ -62,6 +68,7 @@ interface BuilderState {
   maxTrains?: number;
   pendingSplices: SpliceInfo[];
   pendingFlexConnects: FlexConnectInfo[];
+  pendingCrossConnects: CrossConnectInfo[];
 }
 
 /**
@@ -101,6 +108,7 @@ class LayoutBuilder {
       descriptions: [],
       pendingSplices: [],
       pendingFlexConnects: [],
+      pendingCrossConnects: [],
     };
   }
 
@@ -116,6 +124,9 @@ class LayoutBuilder {
 
     // Process pending splices (before auto-connect)
     this.processPendingSplices();
+
+    // Process pending cross connects (before flex connects and auto-connect)
+    this.processPendingCrossConnects();
 
     // Process pending flex connects (before auto-connect)
     this.processPendingFlexConnects();
@@ -174,6 +185,9 @@ class LayoutBuilder {
       case 'flexConnect':
         this.processFlexConnect(stmt);
         break;
+      case 'crossConnect':
+        this.processCrossConnect(stmt);
+        break;
     }
   }
 
@@ -224,6 +238,15 @@ class LayoutBuilder {
       point1Name: stmt.point1Name || 'out',
       point2Label: stmt.point2Label,
       point2Name: stmt.point2Name || 'in',
+      line: stmt.line,
+    });
+  }
+
+  private processCrossConnect(stmt: CrossConnectStatement): void {
+    // Collect for post-processing (after all pieces are placed)
+    this.state.pendingCrossConnects.push({
+      label1: stmt.label1,
+      label2: stmt.label2,
       line: stmt.line,
     });
   }
@@ -618,6 +641,222 @@ class LayoutBuilder {
     for (const flexConnect of this.state.pendingFlexConnects) {
       this.performFlexConnect(flexConnect);
     }
+  }
+
+  /**
+   * Process all pending cross connect statements.
+   * Creates crossing pieces where two tracks intersect.
+   */
+  private processPendingCrossConnects(): void {
+    if (this.state.pendingCrossConnects.length > 0) {
+      console.log(`Processing ${this.state.pendingCrossConnects.length} cross connects`);
+    }
+    for (const crossConnect of this.state.pendingCrossConnects) {
+      this.performCrossConnect(crossConnect);
+    }
+  }
+
+  /**
+   * Create a cross connection where two track pieces intersect.
+   * Both tracks remain unchanged but share a lockable internal connection point at the intersection.
+   * Only one train can occupy the intersection at a time.
+   */
+  private performCrossConnect(info: CrossConnectInfo): void {
+    // Validate: labels must be different
+    if (info.label1 === info.label2) {
+      throw new Error(`Cross connect requires two different tracks at line ${info.line}`);
+    }
+
+    // Get the two labeled pieces
+    const piece1 = this.state.labeledPieces.get(info.label1);
+    const piece2 = this.state.labeledPieces.get(info.label2);
+
+    if (!piece1) {
+      throw new Error(`Unknown label '${info.label1}' in cross connect at line ${info.line}`);
+    }
+    if (!piece2) {
+      throw new Error(`Unknown label '${info.label2}' in cross connect at line ${info.line}`);
+    }
+
+    // Find intersection point
+    const intersection = this.findSplineIntersection(piece1, piece2);
+    if (!intersection) {
+      console.warn(`No intersection found between $${info.label1} and $${info.label2} at line ${info.line}`);
+      return;
+    }
+
+    // Calculate section lengths to convert t to distance
+    const length1 = this.calculateSectionLength(piece1);
+    const length2 = this.calculateSectionLength(piece2);
+
+    const distance1 = intersection.t1 * length1;
+    const distance2 = intersection.t2 * length2;
+
+    console.log(`Cross connect at line ${info.line}:`);
+    console.log(`  Intersection at (${intersection.worldPos.x.toFixed(2)}, ${intersection.worldPos.z.toFixed(2)})`);
+    console.log(`  piece1: t=${intersection.t1.toFixed(3)}, length=${length1.toFixed(1)}, distance=${distance1.toFixed(1)}`);
+    console.log(`  piece2: t=${intersection.t2.toFixed(3)}, length=${length2.toFixed(1)}, distance=${distance2.toFixed(1)}`);
+
+    // Create shared connection point ID for this intersection
+    const sharedPointId = `cross_${piece1.id}_${piece2.id}`;
+
+    // Add internal connection point to piece1
+    if (!piece1.internalConnectionPoints) {
+      piece1.internalConnectionPoints = [];
+    }
+    piece1.internalConnectionPoints.push({
+      id: sharedPointId,
+      t: intersection.t1,
+      distance: distance1,
+      worldPosition: { ...intersection.worldPos },
+    });
+
+    // Add internal connection point to piece2 (same ID - shared point)
+    if (!piece2.internalConnectionPoints) {
+      piece2.internalConnectionPoints = [];
+    }
+    piece2.internalConnectionPoints.push({
+      id: sharedPointId,
+      t: intersection.t2,
+      distance: distance2,
+      worldPosition: { ...intersection.worldPos },
+    });
+
+    console.log(`  Created shared internal connection point: ${sharedPointId}`);
+  }
+
+  /**
+   * Calculate the length of a track piece's section 0 (main track).
+   */
+  private calculateSectionLength(piece: TrackPiece): number {
+    const archetype = getArchetype(piece.archetypeCode);
+    if (!archetype || archetype.sections.length === 0) return 0;
+
+    const section = archetype.sections[0];
+    if (section.splinePoints.length < 2) return 0;
+
+    // Transform to world and sum segment lengths
+    let totalLength = 0;
+    let prevPoint: Vec3 | null = null;
+
+    for (const p of section.splinePoints) {
+      const rotated = this.rotatePoint(p, piece.rotation);
+      const worldPoint: Vec3 = {
+        x: piece.position.x + rotated.x,
+        y: 0,
+        z: piece.position.z + rotated.z,
+      };
+
+      if (prevPoint) {
+        const dx = worldPoint.x - prevPoint.x;
+        const dz = worldPoint.z - prevPoint.z;
+        totalLength += Math.sqrt(dx * dx + dz * dz);
+      }
+      prevPoint = worldPoint;
+    }
+
+    return totalLength;
+  }
+
+  /**
+   * Find where two track pieces' splines intersect.
+   * Returns the intersection parameters (t1, t2) and world position, or null if no intersection.
+   */
+  private findSplineIntersection(
+    piece1: TrackPiece,
+    piece2: TrackPiece
+  ): { t1: number; t2: number; worldPos: Vec3 } | null {
+    const arch1 = getArchetype(piece1.archetypeCode);
+    const arch2 = getArchetype(piece2.archetypeCode);
+
+    // Only check section 0 of each piece (main track section)
+    if (arch1.sections.length === 0 || arch2.sections.length === 0) return null;
+
+    const section1 = arch1.sections[0];
+    const section2 = arch2.sections[0];
+
+    if (section1.splinePoints.length < 2 || section2.splinePoints.length < 2) return null;
+
+    // Transform spline points to world coordinates
+    const world1 = section1.splinePoints.map(p => {
+      const rotated = this.rotatePoint(p, piece1.rotation);
+      return { x: piece1.position.x + rotated.x, y: 0, z: piece1.position.z + rotated.z };
+    });
+
+    const world2 = section2.splinePoints.map(p => {
+      const rotated = this.rotatePoint(p, piece2.rotation);
+      return { x: piece2.position.x + rotated.x, y: 0, z: piece2.position.z + rotated.z };
+    });
+
+    // Check each pair of segments for intersection
+    const segments1 = world1.length - 1;
+    const segments2 = world2.length - 1;
+
+    for (let i = 0; i < segments1; i++) {
+      const p1 = world1[i];
+      const p2 = world1[i + 1];
+
+      for (let j = 0; j < segments2; j++) {
+        const p3 = world2[j];
+        const p4 = world2[j + 1];
+
+        // Line segment intersection
+        const result = this.lineSegmentIntersection(p1, p2, p3, p4);
+        if (result) {
+          // Calculate global t parameters
+          const t1 = (i + result.s) / segments1;
+          const t2 = (j + result.t) / segments2;
+
+          return {
+            t1,
+            t2,
+            worldPos: result.point,
+          };
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Check if two line segments intersect.
+   * Returns the intersection point and parameters (s, t) if they do, null otherwise.
+   */
+  private lineSegmentIntersection(
+    p1: Vec3,
+    p2: Vec3,
+    p3: Vec3,
+    p4: Vec3
+  ): { s: number; t: number; point: Vec3 } | null {
+    // Segment 1: P1 + s*(P2-P1), s in [0,1]
+    // Segment 2: P3 + t*(P4-P3), t in [0,1]
+    const d1x = p2.x - p1.x;
+    const d1z = p2.z - p1.z;
+    const d2x = p4.x - p3.x;
+    const d2z = p4.z - p3.z;
+
+    const det = d1x * d2z - d1z * d2x;
+    if (Math.abs(det) < 0.0001) return null; // Parallel or collinear
+
+    const dx = p3.x - p1.x;
+    const dz = p3.z - p1.z;
+
+    const s = (dx * d2z - dz * d2x) / det;
+    const t = (dx * d1z - dz * d1x) / det;
+
+    // Check if intersection is within both segments (allow full range)
+    if (s < 0 || s > 1 || t < 0 || t > 1) return null;
+
+    return {
+      s,
+      t,
+      point: {
+        x: p1.x + s * d1x,
+        y: 0,
+        z: p1.z + s * d1z,
+      },
+    };
   }
 
   /**

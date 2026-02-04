@@ -347,7 +347,7 @@ export class Simulation {
    */
   private updateTrains(deltaTime: number): void {
     for (const train of this.trains) {
-      // Step 1: Try to acquire leading locks
+      // Step 1: Try to acquire leading locks (includes internal connection points)
       const lockResult = this.lockManager.acquireLeadingLocks(
         train,
         this.layout,

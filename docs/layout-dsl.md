@@ -587,10 +587,79 @@ Flex connect statements are processed in a specific order relative to other layo
 
 1. **Parse**: All statements are parsed into an AST
 2. **Build pieces**: Regular track pieces are placed
-3. **Process flex connects**: Custom bridge pieces are created and connected
-4. **Auto-connect**: Adjacent pieces with opposite directions are connected
+3. **Process splices**: Track pieces are split where needed
+4. **Process cross connects**: Intersection locks are added
+5. **Process flex connects**: Custom bridge pieces are created and connected
+6. **Auto-connect**: Adjacent pieces with opposite directions are connected
 
 This order ensures that flex connect pieces are properly integrated with the rest of the layout before auto-connect runs.
+
+## Cross Connect
+
+The `cross connect` statement creates a shared lockable point where two track pieces physically cross each other. This ensures only one train can occupy the intersection at a time.
+
+### Syntax
+
+```
+cross connect $label1 $label2
+```
+
+Where:
+- `$label1` - Label of the first track piece
+- `$label2` - Label of the second track piece
+
+Both pieces must be labeled track pieces that physically intersect in world space.
+
+### How It Works
+
+1. The system finds where the two track pieces' splines intersect geometrically
+2. A shared "intersection lock" is added to both pieces at the intersection point
+3. When a train approaches the intersection, it must acquire the lock
+4. If another train holds the lock, the approaching train stops and waits
+5. When all cars of a train pass through the intersection, the lock is released
+
+### Example
+
+```
+# Circular track
+gen cabs 1 cars 3 speed 8 every 15
+str x 3
+one: str x 10
+str x 3
+crvl x 4
+str x 3
+two: str x 10
+str x 3
+crvl x 4
+
+# Mark the intersection
+cross connect $one $two
+```
+
+If `$one` and `$two` physically cross in world space, trains will stop to wait for each other at the intersection.
+
+### Key Points
+
+- **Original pieces unchanged**: Unlike splice, cross connect does not split or modify the track pieces
+- **Shared lock**: Both pieces share the same lock ID at the intersection point
+- **Automatic detection**: The intersection point is calculated geometrically from the track splines
+- **Collision prevention**: Only one train can occupy the intersection at a time
+
+### Difference from Crossings (x90, x45)
+
+Built-in crossing pieces (`x90`, `x45`) are single track pieces with two independent paths. Trains on different paths can pass through simultaneously.
+
+Cross connect works on any two existing pieces and uses locking to prevent simultaneous passage. Use cross connect when:
+- You have existing track pieces that happen to cross
+- You want mutual exclusion at the intersection
+- The crossing angle isn't 90° or 45°
+
+### Error Handling
+
+If the two labeled pieces don't actually intersect geometrically:
+- A warning is logged to the console
+- The layout continues to work normally (no lock is created)
+- Trains will pass through without stopping
 
 ## Auto-Connect
 

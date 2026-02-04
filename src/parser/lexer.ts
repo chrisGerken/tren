@@ -32,6 +32,7 @@ export enum TokenType {
   TRAINS = 'TRAINS',           // trains keyword (for max trains)
   FLEX = 'FLEX',               // flex keyword (for flex connect)
   CONNECT = 'CONNECT',         // connect keyword (for flex connect)
+  CROSS = 'CROSS',             // cross keyword (for cross connect)
   EOF = 'EOF',
 }
 
@@ -416,6 +417,16 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
       if (value === 'connect') {
         tokens.push({
           type: TokenType.CONNECT,
+          value: value,
+          line: lineNum,
+          column: startPos + 1,
+        });
+        continue;
+      }
+
+      if (value === 'cross') {
+        tokens.push({
+          type: TokenType.CROSS,
           value: value,
           line: lineNum,
           column: startPos + 1,

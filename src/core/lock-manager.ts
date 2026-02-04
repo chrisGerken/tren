@@ -243,6 +243,21 @@ export class LockManager {
         `distOnCurrent=${distanceOnCurrent.toFixed(1)}`);
     }
 
+    // Check for internal connection points on current piece ahead of lead car
+    if (currentPiece.internalConnectionPoints) {
+      for (const icp of currentPiece.internalConnectionPoints) {
+        const isAhead = travelDirection === 'forward'
+          ? icp.distance > leadCar.distanceAlongSection
+          : icp.distance < leadCar.distanceAlongSection;
+        if (isAhead) {
+          pointsToLock.push(icp.id);
+          if (DEBUG_LOGGING) {
+            console.log(`  Adding internal point ${icp.id} at distance ${icp.distance.toFixed(1)}`);
+          }
+        }
+      }
+    }
+
     // Add current piece's exit point
     pointsToLock.push(connectionPointId(currentPieceId, exitPoint));
 
@@ -293,21 +308,41 @@ export class LockManager {
       currentPieceId = nextSection.pieceId;
       currentPiece = nextPiece;
 
-      // Determine exit point for next piece
+      // Determine exit point and travel direction for next piece
       const nextArchetype = getArchetype(nextPiece.archetypeCode);
+      let nextTravelForward = true; // Will we traverse this piece forward (in->out)?
       if (nextArchetype && (nextArchetype.code === 'x90' || nextArchetype.code === 'x45')) {
         // Crossing - stay on same track number
         if (nextSection.entryPoint === 'in1') {
           exitPoint = 'out1';
+          nextTravelForward = true;
         } else if (nextSection.entryPoint === 'out1') {
           exitPoint = 'in1';
+          nextTravelForward = false;
         } else if (nextSection.entryPoint === 'in2') {
           exitPoint = 'out2';
+          nextTravelForward = true;
         } else {
           exitPoint = 'in2';
+          nextTravelForward = false;
         }
       } else {
         exitPoint = getOppositePoint(nextSection.entryPoint);
+        nextTravelForward = isInPoint(nextSection.entryPoint);
+      }
+
+      // Add internal connection points on this piece (all of them, since we traverse the whole piece)
+      if (nextPiece.internalConnectionPoints) {
+        // Sort by distance in travel direction
+        const sortedIcps = [...nextPiece.internalConnectionPoints].sort((a, b) =>
+          nextTravelForward ? a.distance - b.distance : b.distance - a.distance
+        );
+        for (const icp of sortedIcps) {
+          pointsToLock.push(icp.id);
+          if (DEBUG_LOGGING) {
+            console.log(`  Adding internal point ${icp.id} on piece ${currentPieceId}`);
+          }
+        }
       }
 
       // Add exit point of this piece
@@ -333,6 +368,7 @@ export class LockManager {
 
   /**
    * Calculate all connection points the train is currently straddling
+   * (includes both endpoint connection points and internal connection points)
    */
   calculateStraddledPoints(train: Train, layout: Layout): ConnectionPointId[] {
     const straddled = new Set<ConnectionPointId>();
@@ -351,7 +387,7 @@ export class LockManager {
       const carFront = car.distanceAlongSection + carHalfLength;
       const carRear = car.distanceAlongSection - carHalfLength;
 
-      // Check each connection point
+      // Check each endpoint connection point
       for (const cp of archetype.connectionPoints) {
         // 'in' points are at distance 0, 'out' points at sectionLength
         const cpDistance = isInPoint(cp.name) ? 0 : sectionLength;
@@ -360,6 +396,16 @@ export class LockManager {
         // For zero-length pieces (sectionLength=0), both in and out are at 0
         if (carRear <= cpDistance && carFront >= cpDistance) {
           straddled.add(connectionPointId(piece.id, cp.name));
+        }
+      }
+
+      // Check internal connection points
+      if (piece.internalConnectionPoints) {
+        for (const icp of piece.internalConnectionPoints) {
+          // Car straddles internal point if it spans across the point's distance
+          if (carRear <= icp.distance && carFront >= icp.distance) {
+            straddled.add(icp.id);
+          }
         }
       }
     }
@@ -397,6 +443,12 @@ export class LockManager {
       if (!archetype) continue;
       for (const cp of archetype.connectionPoints) {
         keepPoints.add(connectionPointId(pieceId, cp.name));
+      }
+      // Also keep internal connection points on occupied pieces
+      if (piece.internalConnectionPoints) {
+        for (const icp of piece.internalConnectionPoints) {
+          keepPoints.add(icp.id);
+        }
       }
     }
 

@@ -102,7 +102,8 @@ export function updateCarWorldPosition(car: Car, layout: Layout): void {
   const piece = layout.pieces.find(p => p.id === car.currentPieceId);
   if (!piece) return;
 
-  const result = getPositionOnSection(piece, 0, car.distanceAlongSection);
+  const sectionIndex = getSectionIndexForEntry(car.entryPoint);
+  const result = getPositionOnSection(piece, sectionIndex, car.distanceAlongSection);
   if (result) {
     car.worldPosition = result.position;
     car.rotation = result.rotation;
@@ -121,6 +122,17 @@ export function isInPoint(pointName: string): boolean {
  */
 export function isOutPoint(pointName: string): boolean {
   return pointName === 'out' || pointName === 'out1' || pointName === 'out2';
+}
+
+/**
+ * Determine the section index for a given entry point.
+ * For crossings: in1/out1 -> section 0, in2/out2 -> section 1
+ * For regular pieces: always section 0
+ */
+export function getSectionIndexForEntry(entryPoint: string | undefined): number {
+  if (!entryPoint) return 0;
+  if (entryPoint === 'in2' || entryPoint === 'out2') return 1;
+  return 0; // 'in', 'out', 'in1', 'out1' all use section 0
 }
 
 /**
@@ -282,7 +294,8 @@ export function moveCar(
   let piece = layout.pieces.find(p => p.id === car.currentPieceId);
   if (!piece) return;
 
-  let sectionLength = getSectionLength(piece, 0);
+  let sectionIndex = getSectionIndexForEntry(car.entryPoint);
+  let sectionLength = getSectionLength(piece, sectionIndex);
 
   // For zero-length pieces (placeholder, etc.), immediately transition to next piece
   // Exit via the OPPOSITE of entry point to maintain direction
@@ -320,7 +333,8 @@ export function moveCar(
     car.entryPoint = nextSection.entryPoint;
     piece = layout.pieces.find(p => p.id === car.currentPieceId);
     if (!piece) return;
-    sectionLength = getSectionLength(piece, 0);
+    sectionIndex = getSectionIndexForEntry(car.entryPoint);
+    sectionLength = getSectionLength(piece, sectionIndex);
   }
 
   // Handle overflow (moving past end of section - forward direction)
@@ -343,7 +357,8 @@ export function moveCar(
 
     const newPiece = layout.pieces.find(p => p.id === nextSection.pieceId);
     if (newPiece) {
-      const newSectionLength = getSectionLength(newPiece, 0);
+      const newSectionIndex = getSectionIndexForEntry(nextSection.entryPoint);
+      const newSectionLength = getSectionLength(newPiece, newSectionIndex);
       if (isOutPoint(nextSection.entryPoint)) {
         // Entering from 'out' end - we're at the end, going backwards on this piece
         car.distanceAlongSection = newSectionLength - overflow;
@@ -374,7 +389,8 @@ export function moveCar(
 
     const nextPiece = layout.pieces.find(p => p.id === nextSection.pieceId);
     if (nextPiece) {
-      const nextSectionLength = getSectionLength(nextPiece, 0);
+      const nextSectionIndex = getSectionIndexForEntry(nextSection.entryPoint);
+      const nextSectionLength = getSectionLength(nextPiece, nextSectionIndex);
       if (nextSectionLength === 0) {
         // Don't transition into zero-length piece going backward
         car.distanceAlongSection = 0;

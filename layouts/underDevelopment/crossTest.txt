@@ -1,0 +1,23 @@
+title Cross Connect Test
+description Two diagonal tracks that cross in the middle
+
+# First diagonal track - goes from lower-left to upper-right
+# Angle 45 degrees
+new 45
+gen cabs 1 cars 3 speed 8 every 15
+str x 5
+track1: str x 10
+str x 5
+bin
+
+# Second diagonal track - goes from upper-left to lower-right
+# Angle -45 degrees (315)
+# Positioned to cross track1 in the middle
+new 315
+gen cabs 1 cars 3 speed 6 every 20
+str x 5
+track2: str x 10
+str x 5
+bin
+
+cross connect $track1 $track2

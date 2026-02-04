@@ -37,6 +37,14 @@ export interface Connection {
   isAutoConnect?: boolean;  // True if this was auto-detected rather than explicit
 }
 
+/** Internal connection point (not at piece endpoint) */
+export interface InternalConnectionPoint {
+  id: string;             // Unique ID shared between intersecting pieces (e.g., "cross_piece1_piece2")
+  t: number;              // Position along spline (0-1), converted to distance for locking
+  distance: number;       // Distance along section in inches (computed from t * sectionLength)
+  worldPosition: Vec3;    // World coordinates of the point
+}
+
 /** Placed track piece instance */
 export interface TrackPiece {
   id: string;
@@ -47,6 +55,7 @@ export interface TrackPiece {
   connections: Map<string, Connection[]>;  // Connection point name -> connected pieces
   genConfig?: GeneratorConfig;  // Generator configuration (only for 'gen' pieces)
   inTunnel?: boolean;     // True if piece is inside a tunnel (between tunnel pieces)
+  internalConnectionPoints?: InternalConnectionPoint[];  // Connection points along the track (not at endpoints)
 }
 
 /** Layout (root container) */
