@@ -220,6 +220,7 @@ Use archetype codes to specify track pieces. See [Track Dimensions](track-dimens
 | `gen`, `generator` | Train source (see Generator Syntax below) |
 | `bin` | Train sink (trains removed) |
 | `tun`, `tunnel` | Visibility toggle (hide track/trains) |
+| `sem`, `semaphore` | Manual signal (see Semaphore Syntax below) |
 
 ### Generator Syntax
 
@@ -260,6 +261,34 @@ When a range is specified:
 - For `speed`: a random **real number** is chosen (continuous between endpoints)
 
 Each train spawned by the generator gets its own random values, so trains from the same generator may have different speeds, car counts, etc.
+
+### Semaphore Syntax
+
+Semaphores are manual signal points where you can control train traffic by clicking to lock/unlock the signal:
+
+```
+sem                           # Place a semaphore (signal point)
+semaphore                     # Same as sem (alias)
+signal: sem                   # Labeled semaphore
+```
+
+**Behavior:**
+- **Green dot** (unlocked): Trains can pass through
+- **Red dot** (locked): Trains stop and wait
+
+**Interaction:**
+- Click the green dot to lock the semaphore (turns red, trains stop)
+- Click the red dot to unlock the semaphore (turns green, trains can pass)
+
+**Visual appearance:**
+- A colored status dot (green or red) inside a circle outline
+- The circle is the same size as generator/bin circles
+- Starts in the unlocked (green) state
+
+**Use cases:**
+- Manual traffic control at junctions
+- Creating "holding points" where you can accumulate trains
+- Simulating station stops or signal blocks
 
 ### Repetition
 
@@ -901,3 +930,4 @@ See [Connection Points](connection-points.md) for complete connection point defi
 | `ph`, `tun` | `in`, `out` | `in` | `out` |
 | `gen` | `in`, `out` | `in` | `out` |
 | `bin` | `in`, `out` | `in` | `out` |
+| `sem` | `in`, `out` | `in` | `out` |

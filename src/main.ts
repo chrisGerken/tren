@@ -5,7 +5,7 @@
 import { open } from '@tauri-apps/api/dialog';
 import { readTextFile } from '@tauri-apps/api/fs';
 import { TrackScene } from './renderer/scene';
-import { renderLayout, setSelectedRouteByKey, getSelectedRoutes, updateConnectionPointColors } from './renderer/track-renderer';
+import { renderLayout, setSelectedRouteByKey, getSelectedRoutes, updateConnectionPointColors, updateSemaphoreColor } from './renderer/track-renderer';
 import { renderTrains } from './renderer/train-renderer';
 import { buildLayout } from './parser/builder';
 import { Simulation } from './core/simulation';
@@ -48,6 +48,31 @@ scene.setSwitchClickCallback((routeKey, connectionIndex) => {
   } else {
     if (DEBUG_LOGGING) console.log('currentLayout is null!');
   }
+});
+
+// Set up semaphore click callback
+scene.setSemaphoreClickCallback((pieceId) => {
+  if (DEBUG_LOGGING) console.log(`Semaphore click callback: ${pieceId}`);
+
+  if (!currentLayout) return;
+
+  // Find the semaphore piece
+  const piece = currentLayout.pieces.find(p => p.id === pieceId);
+  if (!piece || !piece.semaphoreConfig) {
+    if (DEBUG_LOGGING) console.log(`Semaphore piece ${pieceId} not found or has no config`);
+    return;
+  }
+
+  // Toggle the locked state
+  piece.semaphoreConfig.locked = !piece.semaphoreConfig.locked;
+
+  // Update the visual
+  updateSemaphoreColor(pieceId, piece.semaphoreConfig.locked);
+
+  const state = piece.semaphoreConfig.locked ? 'LOCKED (red)' : 'UNLOCKED (green)';
+  setStatus(`Semaphore ${pieceId}: ${state}`);
+
+  scene.render();
 });
 
 function setStatus(message: string): void {

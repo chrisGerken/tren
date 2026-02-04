@@ -155,6 +155,7 @@ crvl         # Place a left curve (22" radius default)</code></pre>
       <tr><td><code>gen</code>, <code>generator</code></td><td>Train source (see Generator Syntax below)</td></tr>
       <tr><td><code>bin</code></td><td>Train sink (removes trains)</td></tr>
       <tr><td><code>tun</code>, <code>tunnel</code></td><td>Visibility toggle</td></tr>
+      <tr><td><code>sem</code>, <code>semaphore</code></td><td>Manual signal (see Semaphore Syntax below)</td></tr>
     </table>
 
     <h3>Repetition</h3>
@@ -180,6 +181,20 @@ gen cabs 2 cars 3 speed 6 every 15    # Full specification</code></pre>
 gen speed 6-24                # Random speed (real number)
 gen every 10-30               # Random spawn interval</code></pre>
     <p>Integer parameters (<code>cabs</code>, <code>cars</code>, <code>every</code>) get random integers. <code>speed</code> gets a random real number. Each spawned train gets its own random values.</p>
+
+    <h3>Semaphore Syntax</h3>
+    <p>Semaphores are manual signal points where you can control train traffic:</p>
+    <pre><code>sem                           # Place a semaphore
+semaphore                     # Same as sem (alias)
+signal: sem                   # Labeled semaphore</code></pre>
+    <p><strong>Visual appearance:</strong> A colored status dot inside a circle outline (same size as gen/bin).</p>
+    <p><strong>Colors:</strong></p>
+    <ul>
+      <li><strong>Green dot</strong> = Unlocked (trains can pass)</li>
+      <li><strong>Red dot</strong> = Locked (trains stop and wait)</li>
+    </ul>
+    <p><strong>Interaction:</strong> Click the dot to toggle between locked and unlocked. Semaphores start unlocked (green).</p>
+    <p><strong>Use cases:</strong> Manual traffic control, creating holding points, simulating station stops.</p>
   </div>
 
   <div class="section">
@@ -350,6 +365,8 @@ cross connect $one $two</code></pre>
       <tr><td>Yellow dot</td><td>Auto-connected point</td></tr>
       <tr><td>Green circle</td><td>Generator (train source)</td></tr>
       <tr><td>Red circle</td><td>Bin (train sink)</td></tr>
+      <tr><td>Green dot in circle</td><td>Semaphore - unlocked (click to lock)</td></tr>
+      <tr><td>Red dot in circle</td><td>Semaphore - locked (click to unlock)</td></tr>
       <tr><td>Green dot (small)</td><td>Selected route at virtual switch</td></tr>
       <tr><td>Red dot (small)</td><td>Unselected route at virtual switch (click to select)</td></tr>
       <tr><td>White sphere (small)</td><td>Connection point - unlocked (only visible when Labels is on)</td></tr>
@@ -373,6 +390,7 @@ cross connect $one $two</code></pre>
       <tr><td><code>ph</code>, <code>tun</code></td><td><code>in</code>, <code>out</code></td><td><code>in</code></td><td><code>out</code></td></tr>
       <tr><td><code>gen</code></td><td><code>in</code>, <code>out</code></td><td><code>in</code></td><td><code>out</code></td></tr>
       <tr><td><code>bin</code></td><td><code>in</code>, <code>out</code></td><td><code>in</code></td><td><code>out</code></td></tr>
+      <tr><td><code>sem</code></td><td><code>in</code>, <code>out</code></td><td><code>in</code></td><td><code>out</code></td></tr>
     </table>
   </div>
 

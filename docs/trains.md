@@ -149,6 +149,20 @@ When a train has sufficient locks:
 
 Switches cannot be changed while a train's connection point is locked at that junction. This prevents derailments from switching while a train is crossing.
 
+### Semaphore Blocking
+
+Semaphores provide manual lock control over track sections. When a semaphore is locked (red):
+- Its connection points are treated as blocked
+- Trains cannot acquire locks on a blocked semaphore
+- Approaching trains decelerate and stop before the semaphore
+- The train waits until the user clicks to unlock (turn green)
+
+When a semaphore is unlocked (green):
+- Trains can acquire locks normally and pass through
+- The semaphore behaves like any other zero-length piece (tunnel, placeholder)
+
+See [Layout DSL - Semaphore Syntax](layout-dsl.md#semaphore-syntax) for DSL details.
+
 ### Same-Track Following
 
 When a faster train approaches a slower train ahead:

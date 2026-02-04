@@ -814,6 +814,77 @@ cross connect $label1 $label2
 - Cross connect works on any two existing pieces at arbitrary angles
 - Cross connect uses intersection locking; built-in crossings allow simultaneous passage on different tracks
 
+## Semaphore (Manual Signal)
+
+The semaphore is a zero-length track piece that provides manual lock control, allowing users to stop and start train traffic by clicking.
+
+**DSL syntax:**
+```
+signal: sem              # Labeled semaphore
+semaphore                # Unlabeled (using alias)
+```
+
+**Design decisions:**
+- Zero-length piece like tunnel and placeholder (no visible track, just a control point)
+- Starts in unlocked (green) state - trains pass through freely
+- Click to toggle: green → red (locked, trains stop), red → green (unlocked)
+- Integrates with existing connection point locking system
+- Visual: colored dot inside an unfilled circle (same size as gen/bin indicators)
+
+**Why zero-length:**
+- Semaphore is a control point, not a track section
+- Trains don't "travel through" the semaphore - they either pass or stop
+- Zero-length simplifies placement: insert anywhere in track sequence
+- Consistent with other control pieces (tunnel, placeholder)
+
+**Implementation:**
+
+1. **Types (`src/core/types.ts`):**
+   - `SemaphoreConfig` interface: `{ locked: boolean }`
+   - `TrackPiece.semaphoreConfig?: SemaphoreConfig`
+
+2. **Archetype (`src/core/archetypes.ts`):**
+   - Code: `sem`, alias: `semaphore`
+   - Zero-length sections array
+   - Two connection points: `in` and `out` at position (0,0)
+
+3. **Builder (`src/parser/builder.ts`):**
+   - Initializes `semaphoreConfig: { locked: false }` for `sem` pieces
+   - No special parsing needed - uses standard archetype code handling
+
+4. **Rendering (`src/renderer/track-renderer.ts`):**
+   - `renderSemaphoreWorld()`: Creates dot (sphere) inside ring (torus)
+   - Ring: radius 1.5" (same as gen/bin), dark gray color
+   - Dot: radius 0.6", green (unlocked) or red (locked)
+   - Meshes cached in `semaphoreMeshes` Map for color updates
+   - `updateSemaphoreColor()`: Updates dot color on state change
+
+5. **Click handling (`src/renderer/scene.ts`, `src/main.ts`):**
+   - Dot mesh has `userData: { isSemaphore: true, pieceId }`
+   - `setSemaphoreClickCallback()` registers handler
+   - Click toggles `semaphoreConfig.locked` and updates visual
+
+6. **Lock integration (`src/core/lock-manager.ts`, `src/core/simulation.ts`):**
+   - `isBlockedBySemaphore()`: Checks if connection point belongs to locked semaphore
+   - `tryAcquireLocks()`: Fails if any point is semaphore-blocked
+   - `getLockedPoints()`: Includes semaphore-blocked points in locked set
+
+**Train behavior at semaphore:**
+- Train approaches, lock manager tries to acquire semaphore's connection points
+- If semaphore is locked (red): `isBlockedBySemaphore()` returns true, train stops
+- Train waits until user clicks to unlock
+- When unlocked (green): locks can be acquired, train proceeds
+
+**Visual indicators:**
+- Green dot: Unlocked - trains can pass
+- Red dot: Locked - trains stop and wait
+- Ring: Always dark gray, provides visual boundary
+
+**Difference from switches:**
+- Switches choose between routes; semaphores block/allow a single route
+- Switches are automatic (train picks route); semaphores require manual control
+- Switch indicators are along the track; semaphore indicator is at the piece location
+
 ## Open Questions
 
 These will be addressed in user scenario discussions:

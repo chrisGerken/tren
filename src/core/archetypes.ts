@@ -247,6 +247,19 @@ const archetypes: TrackArchetype[] = [
     ],
   },
 
+  // Semaphore (manual lock control point)
+  // Zero-length track with one connection point (in and out refer to same point)
+  // Starts unlocked (green), can be clicked to toggle lock state
+  {
+    code: 'sem',
+    aliases: ['semaphore'],
+    sections: [],
+    connectionPoints: [
+      { name: 'in', position: vec2(0, 0), direction: vec2(-1, 0), sectionIndices: [] },
+      { name: 'out', position: vec2(0, 0), direction: vec2(1, 0), sectionIndices: [] },
+    ],
+  },
+
   // 90° Crossing
   {
     code: 'x90',

@@ -4,6 +4,9 @@
  * Trains lock connection points ahead of the leading car and release them
  * as the trailing car clears. A train cannot proceed unless it holds locks
  * on enough track ahead.
+ *
+ * Also handles semaphore blocking - when a semaphore is locked, trains cannot
+ * pass through its connection points.
  */
 
 import {
@@ -101,6 +104,23 @@ export class LockManager {
   }
 
   /**
+   * Check if a connection point is blocked by a locked semaphore
+   * @param point - Connection point ID (e.g., "piece_5.in")
+   * @param layout - The layout to check for semaphores
+   */
+  isBlockedBySemaphore(point: ConnectionPointId, layout: Layout): boolean {
+    const parsed = parseConnectionPointId(point);
+    const piece = layout.pieces.find(p => p.id === parsed.pieceId);
+
+    // Check if this piece is a semaphore and is locked
+    if (piece?.semaphoreConfig?.locked) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
    * Get all locks held by a train
    */
   getTrainLocks(trainId: string): Set<ConnectionPointId> {
@@ -110,16 +130,32 @@ export class LockManager {
   /**
    * Try to acquire locks on a list of connection points in order
    * Returns success if all locks acquired, or blocked point if failed
+   * @param layout - Optional layout for checking semaphore blocks
    */
   tryAcquireLocks(
     trainId: string,
     points: ConnectionPointId[],
-    simulationTime: number
+    simulationTime: number,
+    layout?: Layout
   ): LockAcquisitionResult {
     const acquired: ConnectionPointId[] = [];
     const trainState = this.getTrainState(trainId);
 
     for (const point of points) {
+      // Check if blocked by a locked semaphore
+      if (layout && this.isBlockedBySemaphore(point, layout)) {
+        if (DEBUG_LOGGING) {
+          console.log(`Train ${trainId} blocked at ${point} by locked semaphore`);
+        }
+        return {
+          success: false,
+          acquired,
+          requested: [],  // Will be filled in by acquireLeadingLocks
+          blocked: point,
+          blockingTrainId: 'semaphore',
+        };
+      }
+
       // Check if already locked by another train
       const existingLock = this.locks.get(point);
       if (existingLock && existingLock.trainId !== trainId) {
@@ -355,8 +391,8 @@ export class LockManager {
       console.log(`  Final pointsToLock (${pointsToLock.length}): ${pointsToLock.join(', ')}`);
     }
 
-    // Try to acquire all locks in order
-    const result = this.tryAcquireLocks(train.id, pointsToLock, simulationTime);
+    // Try to acquire all locks in order (pass layout for semaphore checks)
+    const result = this.tryAcquireLocks(train.id, pointsToLock, simulationTime, layout);
     // Add the full requested list so releaseTrailingLocks knows what to keep
     result.requested = pointsToLock;
     if (DEBUG_LOGGING) {

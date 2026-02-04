@@ -366,6 +366,13 @@ class LayoutBuilder {
         };
       }
 
+      // Apply semaphore config for 'sem' pieces
+      if (archetype.code === 'sem' && i === 0) {
+        piece.semaphoreConfig = {
+          locked: false,  // Start unlocked (green)
+        };
+      }
+
       this.state.pieces.push(piece);
       this.state.currentSegment.pieces.push(piece);
       this.state.currentPiece = piece;

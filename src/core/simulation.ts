@@ -115,9 +115,20 @@ export class Simulation {
 
   /**
    * Get all currently locked connection point IDs
+   * Includes both train-locked points and semaphore-blocked points
    */
   getLockedPoints(): Set<string> {
     const locked = new Set(this.lockManager.getAllLockedPoints().keys());
+
+    // Add semaphore-blocked connection points
+    for (const piece of this.layout.pieces) {
+      if (piece.semaphoreConfig?.locked) {
+        // Add both 'in' and 'out' connection points for locked semaphores
+        locked.add(`${piece.id}.in`);
+        locked.add(`${piece.id}.out`);
+      }
+    }
+
     if (locked.size > 0 && DEBUG_LOGGING) {
       console.log('Locked points:', Array.from(locked));
     }

@@ -20,6 +20,9 @@ const BUMPER_COLOR = 0x444444;  // Dark gray
 const TUNNEL_COLOR = 0x4a4a4a;  // Dark gray for tunnel portal
 const SWITCH_SELECTED_COLOR = 0x00ff00;  // Bright green for selected route
 const SWITCH_UNSELECTED_COLOR = 0xff0000;  // Red for unselected routes
+const SEMAPHORE_UNLOCKED_COLOR = 0x00ff00;  // Green for unlocked (open)
+const SEMAPHORE_LOCKED_COLOR = 0xff0000;    // Red for locked (blocked)
+const SEMAPHORE_RING_COLOR = 0x333333;      // Dark gray for the circle outline
 
 // Track dimensions (in inches - model scale)
 const RAIL_GAUGE = 1.045;  // Distance between rails
@@ -45,6 +48,10 @@ const selectedRoutes = new Map<string, number>();
 // Store connection point meshes for dynamic color updates
 // Key: "pieceId.pointName", Value: THREE.Mesh
 const connectionPointMeshes = new Map<string, THREE.Mesh>();
+
+// Store semaphore meshes for click handling and color updates
+// Key: pieceId, Value: { dot: THREE.Mesh, ring: THREE.Mesh }
+const semaphoreMeshes = new Map<string, { dot: THREE.Mesh; ring: THREE.Mesh }>();
 
 /**
  * Get or initialize the selected route by full key
@@ -98,6 +105,19 @@ export function updateConnectionPointColors(lockedPoints: Set<string>, visible: 
 }
 
 /**
+ * Update a semaphore's visual state
+ * @param pieceId - The piece ID of the semaphore
+ * @param locked - Whether the semaphore is now locked
+ */
+export function updateSemaphoreColor(pieceId: string, locked: boolean): void {
+  const meshes = semaphoreMeshes.get(pieceId);
+  if (meshes) {
+    const material = meshes.dot.material as THREE.MeshBasicMaterial;
+    material.color.setHex(locked ? SEMAPHORE_LOCKED_COLOR : SEMAPHORE_UNLOCKED_COLOR);
+  }
+}
+
+/**
  * Render a complete layout
  */
 export function renderLayout(scene: TrackScene, layout: Layout): void {
@@ -105,6 +125,8 @@ export function renderLayout(scene: TrackScene, layout: Layout): void {
 
   // Clear connection point mesh references
   connectionPointMeshes.clear();
+  // Clear semaphore mesh references
+  semaphoreMeshes.clear();
 
   // Build a map for quick piece lookup
   const pieceMap = new Map<string, TrackPiece>();
@@ -294,6 +316,11 @@ function renderTrackPiece(
     for (const mesh of tunnelMeshes) {
       group.add(mesh);
     }
+  } else if (archetype.code === 'sem' || archetype.code === 'semaphore') {
+    const worldPos = toWorld({ x: 0, y: 0, z: 0 });
+    const locked = piece.semaphoreConfig?.locked ?? false;
+    const semaphoreGroup = renderSemaphoreWorld(worldPos, piece.id, locked);
+    group.add(semaphoreGroup);
   }
 
   return group;
@@ -552,6 +579,47 @@ function renderBinWorld(worldPos: THREE.Vector3): THREE.Mesh {
   mesh.position.set(worldPos.x, 0.5, worldPos.z);
 
   return mesh;
+}
+
+/**
+ * Render semaphore as a green/red dot inside a circle outline at world position
+ * @param worldPos - Position in world coordinates
+ * @param pieceId - The piece ID for tracking clicks
+ * @param locked - Whether the semaphore is locked (red) or unlocked (green)
+ */
+function renderSemaphoreWorld(worldPos: THREE.Vector3, pieceId: string, locked: boolean): THREE.Group {
+  const group = new THREE.Group();
+
+  // Create the circle outline (ring) - same size as gen/bin (radius 1.5)
+  const ringGeometry = new THREE.RingGeometry(1.3, 1.5, 32);
+  const ringMaterial = new THREE.MeshBasicMaterial({
+    color: SEMAPHORE_RING_COLOR,
+    side: THREE.DoubleSide,
+  });
+  const ringMesh = new THREE.Mesh(ringGeometry, ringMaterial);
+  ringMesh.rotation.x = -Math.PI / 2;
+  ringMesh.position.set(worldPos.x, 0.55, worldPos.z);
+  group.add(ringMesh);
+
+  // Create the status dot (smaller, inside the ring) - similar to switch indicators
+  const dotGeometry = new THREE.SphereGeometry(0.6, 16, 16);
+  const dotColor = locked ? SEMAPHORE_LOCKED_COLOR : SEMAPHORE_UNLOCKED_COLOR;
+  const dotMaterial = new THREE.MeshBasicMaterial({ color: dotColor });
+  const dotMesh = new THREE.Mesh(dotGeometry, dotMaterial);
+  dotMesh.position.set(worldPos.x, 0.7, worldPos.z);
+
+  // Store metadata for click handling
+  dotMesh.userData = {
+    isSemaphore: true,
+    pieceId: pieceId,
+  };
+
+  group.add(dotMesh);
+
+  // Store meshes for later updates
+  semaphoreMeshes.set(pieceId, { dot: dotMesh, ring: ringMesh });
+
+  return group;
 }
 
 /**

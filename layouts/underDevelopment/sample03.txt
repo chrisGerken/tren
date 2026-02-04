@@ -1,10 +1,9 @@
 title Larger System
 description Several small layouts connected by one large loop
 
-max trains 10
+max trains 5
 lockahead distance 10 count 4
 
-# gen cabs 1-2 cars 2-10 every 10 speed 7-16
 
 
 #
@@ -28,7 +27,8 @@ str * 20
 
 crvl
 out3: crvl
-crvl * 2
+crvl 
+in3:  crvl
 
 str * 4
 
@@ -49,7 +49,7 @@ str
 s1: str
 crvr
 str * 7
-# semaphore
+sem
 h1: str
 crvl
 str * 5
@@ -61,7 +61,7 @@ $s1.out
 s2: str
 crvr
 str * 7
-# semaphore
+sem
 str
 crvl
 
@@ -71,7 +71,7 @@ $s2.out
 s3: str
 crvr
 str * 7
-# semaphore
+sem
 str
 crvl
 
@@ -80,9 +80,19 @@ $s3.out
 s4: str
 crvr
 str * 7
-# semaphore
+sem
 str
 crvl
+
+#
+# Generator
+#
+
+new
+gen cabs 1-2 cars 2-20 every 20-40 speed 6-16
+str
+str
+> $in3.in
 
 #
 # right set
@@ -115,16 +125,23 @@ flex connect $on1.out $east3.in
 
 new
 $out1.out
-
 str * 2
 x1_1: str
-crvr18 * 8
-str * 2
+crvr18 * 7
+tunnel
+crvr18
+str 
+tunnel
+crvl18 * 13
+clover2: crvl18
 
-new 
+new
+clover1: str 
+str
 x1_2: str
-str * 8
+str * 2
 > $in1.in
 
 cross connect $x1_1  $x1_2
+flex connect $clover2.out $clover1.in
 

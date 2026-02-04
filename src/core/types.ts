@@ -54,6 +54,7 @@ export interface TrackPiece {
   label?: string;         // Optional label for references
   connections: Map<string, Connection[]>;  // Connection point name -> connected pieces
   genConfig?: GeneratorConfig;  // Generator configuration (only for 'gen' pieces)
+  semaphoreConfig?: SemaphoreConfig;  // Semaphore configuration (only for 'sem' pieces)
   inTunnel?: boolean;     // True if piece is inside a tunnel (between tunnel pieces)
   internalConnectionPoints?: InternalConnectionPoint[];  // Connection points along the track (not at endpoints)
 }
@@ -115,6 +116,11 @@ export interface GeneratorConfig {
   frequency?: number | RangeValue; // Seconds between trains (undefined = one-shot)
   lastSpawnTime: number;           // Simulation time of last spawn
   enabled: boolean;                // Whether generator is active
+}
+
+/** Semaphore configuration - manual lock control point */
+export interface SemaphoreConfig {
+  locked: boolean;                 // True = red (blocked), false = green (open)
 }
 
 /** Helper to create a Vec3 */

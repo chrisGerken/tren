@@ -1,0 +1,20 @@
+# Semaphore Test Layout
+# Tests the new semaphore (manual signal) feature
+#
+# Click the green dot to lock the semaphore (turns red, trains stop)
+# Click the red dot to unlock (turns green, trains can pass)
+
+title Semaphore Test
+
+# Main line with semaphore
+gen cabs 1 cars 3 speed 8 every 6
+str x 3
+signal: sem         # This is the semaphore - click the dot to toggle
+str x 3
+bin
+
+# Alternative route (no semaphore - trains always pass)
+new degrees 180 offset 50
+gen cabs 1 cars 3 speed 8 every 8
+str x 8
+bin

@@ -10,6 +10,9 @@ import { MapControls } from 'three/examples/jsm/controls/MapControls.js';
 // routeKey format: "pieceId.pointName.direction" (e.g., "piece_5.out.fwd")
 export type SwitchClickCallback = (routeKey: string, connectionIndex: number) => void;
 
+// Callback type for semaphore clicks
+export type SemaphoreClickCallback = (pieceId: string) => void;
+
 export class TrackScene {
   scene: THREE.Scene;
   camera: THREE.OrthographicCamera;
@@ -23,6 +26,7 @@ export class TrackScene {
   private raycaster: THREE.Raycaster;
   private mouse: THREE.Vector2;
   private onSwitchClick?: SwitchClickCallback;
+  private onSemaphoreClick?: SemaphoreClickCallback;
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -121,6 +125,13 @@ export class TrackScene {
   }
 
   /**
+   * Set callback for semaphore clicks
+   */
+  setSemaphoreClickCallback(callback: SemaphoreClickCallback): void {
+    this.onSemaphoreClick = callback;
+  }
+
+  /**
    * Handle click events
    */
   private onClick(event: MouseEvent): void {
@@ -135,12 +146,18 @@ export class TrackScene {
     // Find intersections with track group
     const intersects = this.raycaster.intersectObjects(this.trackGroup.children, true);
 
-    // Check if we clicked a switch indicator
+    // Check if we clicked a switch indicator or semaphore
     for (const intersect of intersects) {
       const userData = intersect.object.userData;
       if (userData && userData.isSwitchIndicator) {
         if (this.onSwitchClick) {
           this.onSwitchClick(userData.routeKey, userData.connectionIndex);
+        }
+        break;
+      }
+      if (userData && userData.isSemaphore) {
+        if (this.onSemaphoreClick) {
+          this.onSemaphoreClick(userData.pieceId);
         }
         break;
       }
