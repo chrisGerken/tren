@@ -1,5 +1,5 @@
-1) Build all release artifacts - including the .dmg file - under the /publish folder
+1) Update all .md and .html files ass appropriate with design and implementation decisions during this session so that the conterxt is ready to load for the next session
 
-2) Update all .md and .html files ass appropriate with design and implementation decisions during this session so that the conterxt is ready to load for the next session
+2) Build all release artifacts - including the .dmg file - under the /publish folder
 
 3) Commit work
