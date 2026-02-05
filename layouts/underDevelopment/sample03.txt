@@ -17,13 +17,12 @@ crvl * 4
 in1: str
 str
 east3: str
-str
+out2: str
 
-crvl
-out2: crvl
-crvl * 2
+crvl * 4
 
-str * 20
+in2: str
+str * 19
 
 crvl
 out3: crvl
@@ -144,4 +143,20 @@ str * 2
 
 cross connect $x1_1  $x1_2
 flex connect $clover2.out $clover1.in
+
+
+#
+# Small layout 2
+#
+
+new
+$out2.out
+crvr * 4
+
+crvl * 12
+
+new
+crvr * 4
+> $in2.in
+
 
