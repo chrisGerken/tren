@@ -712,6 +712,13 @@ function renderTunnelWorld(piece: TrackPiece): THREE.Group {
 }
 ```
 
+**Z-flip rotation correction:**
+- Bracket rotation must account for the Z-flip used in screen coordinates
+- The piece rotation is effectively negated when applied to bracket rotation
+- `bracket1.rotation.z = Math.PI + piece.rotation` (opens toward track 'in' side)
+- `bracket2.rotation.z = piece.rotation` (opens toward track 'out' side)
+- Without this correction, tunnels appear mirrored relative to track direction on curves
+
 **Tunnel section marking (`src/parser/builder.ts`):**
 - `markTunnelSections()` identifies pieces between tunnel pairs
 - Algorithm: From each tunnel's 'out', traverse connections
@@ -813,6 +820,25 @@ cross connect $label1 $label2
 - Built-in crossings (x90, x45) are single pieces with two sections and four connection points
 - Cross connect works on any two existing pieces at arbitrary angles
 - Cross connect uses intersection locking; built-in crossings allow simultaneous passage on different tracks
+
+**Edge cases handled:**
+
+1. **Curve pieces**: Curves have multiple spline segments (7 points). The intersection algorithm tests all segment pairs, correctly finding intersections on curved tracks.
+
+2. **Zero-length pieces** (semaphore, placeholder): Zero-length pieces have no spline (`sections: []`). The algorithm handles these as points:
+   - If one piece is zero-length: Check if its position lies on the other piece's spline (within 0.5" tolerance)
+   - If both are zero-length: Check if they're at the same position (within 0.5" tolerance)
+   - The internal connection point gets `t: 0.5` and `distance: 0`
+   - Trains lock the shared point BEFORE entering, so instant transitions through zero-length pieces work correctly
+
+3. **T-shape intersections**: When one track ends at another track's middle (perpendicular T-junction), the line segment intersection algorithm finds the intersection at t=1.0 for the ending track. The full range [0, 1] is used for both segment parameters.
+
+4. **Tunnels**: Tunnel pieces (`tun`) should NOT be used in cross connects because they're visibility markers, not physical track. The implementation will find no intersection since tunnels have empty sections.
+
+**Why zero-length handling matters:**
+- Semaphores at crossings can control traffic flow at intersections
+- Placeholders can mark junction points where tracks cross
+- The shared lock prevents simultaneous passage regardless of piece type
 
 ## Semaphore (Manual Signal)
 

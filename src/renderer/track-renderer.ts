@@ -675,11 +675,12 @@ function renderTunnelWorld(piece: TrackPiece): THREE.Mesh[] {
   // and open toward the visible track on each side
 
   // Bracket 1: Opens toward -X (the 'in' side, toward visible track before tunnel)
+  // Note: piece.rotation is negated to account for Z-flip in screen coordinates
   const bracket1 = new THREE.Mesh(geometry, material);
   bracket1.rotation.order = 'YXZ';  // Apply Y rotation first
   bracket1.rotation.y = Math.PI / 2;   // Rotate 90° so bracket spans across track
   bracket1.rotation.x = -Math.PI / 2;  // Lay flat (extrusion goes up)
-  bracket1.rotation.z = Math.PI - piece.rotation;  // Open toward -X, apply piece rotation
+  bracket1.rotation.z = Math.PI + piece.rotation;  // Open toward -X, apply piece rotation (negated for Z-flip)
   bracket1.position.set(piece.position.x, 0, -piece.position.z);
   meshes.push(bracket1);
 
@@ -688,7 +689,7 @@ function renderTunnelWorld(piece: TrackPiece): THREE.Mesh[] {
   bracket2.rotation.order = 'YXZ';
   bracket2.rotation.y = Math.PI / 2;   // Rotate 90° so bracket spans across track
   bracket2.rotation.x = -Math.PI / 2;  // Lay flat
-  bracket2.rotation.z = -piece.rotation;  // Open toward +X, apply piece rotation
+  bracket2.rotation.z = piece.rotation;  // Open toward +X, apply piece rotation (negated for Z-flip)
   bracket2.position.set(piece.position.x, 0, -piece.position.z);
   meshes.push(bracket2);
 

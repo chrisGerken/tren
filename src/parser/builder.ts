@@ -768,6 +768,11 @@ class LayoutBuilder {
   /**
    * Find where two track pieces' splines intersect.
    * Returns the intersection parameters (t1, t2) and world position, or null if no intersection.
+   *
+   * Handles three cases:
+   * 1. Both pieces have splines - find line segment intersection
+   * 2. One piece is zero-length - find if its position lies on the other's spline
+   * 3. Both zero-length - check if they're at the same position
    */
   private findSplineIntersection(
     piece1: TrackPiece,
@@ -776,13 +781,61 @@ class LayoutBuilder {
     const arch1 = getArchetype(piece1.archetypeCode);
     const arch2 = getArchetype(piece2.archetypeCode);
 
-    // Only check section 0 of each piece (main track section)
-    if (arch1.sections.length === 0 || arch2.sections.length === 0) return null;
+    const hasSpline1 = arch1.sections.length > 0 && arch1.sections[0].splinePoints.length >= 2;
+    const hasSpline2 = arch2.sections.length > 0 && arch2.sections[0].splinePoints.length >= 2;
 
+    // Case 1: Both have splines - standard intersection
+    if (hasSpline1 && hasSpline2) {
+      return this.findSplineSplineIntersection(piece1, piece2, arch1, arch2);
+    }
+
+    // Case 2: piece1 is zero-length point, piece2 has spline
+    if (!hasSpline1 && hasSpline2) {
+      const point1 = { x: piece1.position.x, y: 0, z: piece1.position.z };
+      const result = this.findPointOnSpline(point1, piece2, arch2);
+      if (result) {
+        return { t1: 0.5, t2: result.t, worldPos: point1 };
+      }
+      return null;
+    }
+
+    // Case 3: piece2 is zero-length point, piece1 has spline
+    if (hasSpline1 && !hasSpline2) {
+      const point2 = { x: piece2.position.x, y: 0, z: piece2.position.z };
+      const result = this.findPointOnSpline(point2, piece1, arch1);
+      if (result) {
+        return { t1: result.t, t2: 0.5, worldPos: point2 };
+      }
+      return null;
+    }
+
+    // Case 4: Both zero-length - check if same position
+    const dist = Math.sqrt(
+      Math.pow(piece1.position.x - piece2.position.x, 2) +
+      Math.pow(piece1.position.z - piece2.position.z, 2)
+    );
+    if (dist < 0.5) {
+      return {
+        t1: 0.5,
+        t2: 0.5,
+        worldPos: { x: piece1.position.x, y: 0, z: piece1.position.z },
+      };
+    }
+
+    return null;
+  }
+
+  /**
+   * Find where two splines intersect (both pieces have track sections).
+   */
+  private findSplineSplineIntersection(
+    piece1: TrackPiece,
+    piece2: TrackPiece,
+    arch1: ReturnType<typeof getArchetype>,
+    arch2: ReturnType<typeof getArchetype>
+  ): { t1: number; t2: number; worldPos: Vec3 } | null {
     const section1 = arch1.sections[0];
     const section2 = arch2.sections[0];
-
-    if (section1.splinePoints.length < 2 || section2.splinePoints.length < 2) return null;
 
     // Transform spline points to world coordinates
     const world1 = section1.splinePoints.map(p => {
@@ -821,6 +874,58 @@ class LayoutBuilder {
           };
         }
       }
+    }
+
+    return null;
+  }
+
+  /**
+   * Find if a point lies on a piece's spline (within tolerance).
+   * Returns the t parameter if found, null otherwise.
+   */
+  private findPointOnSpline(
+    point: Vec3,
+    piece: TrackPiece,
+    archetype: ReturnType<typeof getArchetype>
+  ): { t: number; distance: number } | null {
+    const TOLERANCE = 0.5; // inches
+
+    const section = archetype.sections[0];
+    const worldPoints = section.splinePoints.map(p => {
+      const rotated = this.rotatePoint(p, piece.rotation);
+      return { x: piece.position.x + rotated.x, y: 0, z: piece.position.z + rotated.z };
+    });
+
+    const segments = worldPoints.length - 1;
+    let bestT = -1;
+    let bestDist = Infinity;
+
+    for (let i = 0; i < segments; i++) {
+      const p1 = worldPoints[i];
+      const p2 = worldPoints[i + 1];
+
+      // Find closest point on segment to the target point
+      const dx = p2.x - p1.x;
+      const dz = p2.z - p1.z;
+      const len2 = dx * dx + dz * dz;
+
+      let segT = 0;
+      if (len2 > 0.0001) {
+        segT = Math.max(0, Math.min(1, ((point.x - p1.x) * dx + (point.z - p1.z) * dz) / len2));
+      }
+
+      const closestX = p1.x + segT * dx;
+      const closestZ = p1.z + segT * dz;
+      const dist = Math.sqrt(Math.pow(point.x - closestX, 2) + Math.pow(point.z - closestZ, 2));
+
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestT = (i + segT) / segments;
+      }
+    }
+
+    if (bestDist <= TOLERANCE) {
+      return { t: bestT, distance: bestDist };
     }
 
     return null;
