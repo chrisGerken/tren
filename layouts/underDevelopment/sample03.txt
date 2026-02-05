@@ -1,11 +1,13 @@
 title Larger System
 description Several small layouts connected by one large loop
 
-max trains 5
+max trains 8
 lockahead distance 10 count 4
 
-
-
+18  22  24
+def crvr15  right  radius 15  arc 22.5
+def crvr20  right  radius 20  arc 22.5
+def crvr26  right  radius 26  arc 22.5
 #
 # Main loop
 #
@@ -22,19 +24,17 @@ out2: str
 crvl * 4
 
 in2: str
-str * 19
+str * 15
+out3: str
+str * 3
 
-crvl
-out3: crvl
-crvl 
+crvl * 3
 in3:  crvl
-
 str * 4
 
 
-crvl
 out4: crvl
-crvl * 2
+crvl * 3
 
 
 #
@@ -88,7 +88,7 @@ crvl
 #
 
 new
-gen cabs 1-2 cars 2-20 every 20-40 speed 6-16
+gen cabs 1-2 black cars 2-20 every 20-40 speed 12-16
 str
 str
 > $in3.in
@@ -159,4 +159,23 @@ new
 crvr * 4
 > $in2.in
 
+#
+# Small layout 3
+#
 
+new
+$out3.out 
+crvr26 * 8
+crvr24 * 8
+crvr22 * 8
+crvr20 * 8
+crvr18 * 8
+crvr15 * 8
+str3
+tunnel
+str * 3
+tunnel
+str * 2
+crvl * 5
+ramp3: crvl
+flex connect $ramp3.out $out4.in
