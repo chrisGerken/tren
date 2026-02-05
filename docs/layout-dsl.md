@@ -80,6 +80,53 @@ When `max trains` is set:
 
 **Default**: 5 trains. Specify a higher number for busier layouts.
 
+### Custom Track Pieces (Define)
+
+The `define` statement creates custom curve or straight track pieces for use throughout the layout:
+
+```
+define <name> <direction> radius <r> arc <a>    # For curves
+define <name> straight length <l>                # For straights
+def <name> left radius 18 arc 45                 # Short form (curve)
+def <name> s length 12                           # Short form (straight)
+```
+
+**Parameters:**
+- `<name>` - A unique identifier for the custom piece (cannot be an existing keyword)
+- `<direction>` - One of: `left`/`l`, `right`/`r`, or `straight`/`s`
+- `radius <r>` - Curve radius in inches (required for curves)
+- `arc <a>` - Curve arc angle in degrees (required for curves)
+- `length <l>` - Straight length in inches (required for straights)
+
+**For curves (left/right):**
+- `radius` and `arc` are required
+- `length` is not allowed
+- Creates a `crvl` or `crvr` archetype with the specified geometry
+
+**For straights:**
+- `length` is required
+- `radius` and `arc` are not allowed
+- Creates a `str` archetype with the specified length
+
+**Examples:**
+```
+# Define a tight 45-degree left curve
+define tight_left left radius 12 arc 45
+
+# Define a wide 22.5-degree right curve
+def wide_right r radius 30 arc 22.5
+
+# Define a short straight piece
+define short_str straight length 4.5
+
+# Use the custom pieces
+tight_left x 4        # Four tight curves (180 degrees)
+wide_right x 8        # Eight wide curves (180 degrees)
+short_str x 2         # Two short straights
+```
+
+Once defined, custom pieces can be used anywhere standard pieces are used, including with repetition (`x N`) and labels.
+
 ### Statement Separators
 
 Multiple statements can be placed on one line, separated by semicolons. Semicolons are not required after the last or only statement on a line.

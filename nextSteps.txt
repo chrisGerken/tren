@@ -2,4 +2,6 @@
 
 --------------------
 
-2) 
+2) Define a new statement in the layout specification DSL: define (or def for short) that allows for the definition of custom curve and straight pieces that will be used many times in the layout (but only after the custom archetype name is defined). The full form is "define <name> <direction> radius r arc a length l" where name can be any single token string not already a reserved word, direction is one of left, right or straight (or l, r or s, respectively, for short), radius, arc and length are constants and r, a and l are real numbers (3, 4.5, etc.). If direction is left or right then the defined archetype will be a crvl or crvr, respectively, and the keywords radius and arc are required as are the values r and a. For curves, the length and l tokens are not allowed. If direction is straight, then the archetype is a straight piece of length l and the tokens arc, radius, r and a are not allowed. Once defined, the archetype name can be used anywhere the crv* and str* archetypes can be used.
+
+

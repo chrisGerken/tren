@@ -17,7 +17,8 @@ export type Statement =
   | RandomStatement
   | MaxTrainsStatement
   | FlexConnectStatement
-  | CrossConnectStatement;
+  | CrossConnectStatement
+  | DefineStatement;
 
 export interface NewStatement {
   type: 'new';
@@ -117,6 +118,19 @@ export interface CrossConnectStatement {
   line: number;
 }
 
+/** Direction for custom archetype definition */
+export type DefineDirection = 'left' | 'right' | 'straight';
+
+export interface DefineStatement {
+  type: 'define';
+  name: string;                // Custom archetype name
+  direction: DefineDirection;  // 'left', 'right', or 'straight'
+  radius?: number;             // Curve radius (required for left/right)
+  arc?: number;                // Curve arc angle in degrees (required for left/right)
+  length?: number;             // Straight length (required for straight)
+  line: number;
+}
+
 /**
  * Parse DSL text into an array of statements
  */
@@ -174,6 +188,9 @@ class Parser {
 
       case TokenType.CROSS:
         return this.parseCrossConnectStatement();
+
+      case TokenType.DEFINE:
+        return this.parseDefineStatement();
 
       case TokenType.SPLICE:
         return this.parseSpliceStatement();
@@ -418,6 +435,93 @@ class Parser {
       type: 'crossConnect',
       label1,
       label2,
+      line: token.line,
+    };
+  }
+
+  private parseDefineStatement(): DefineStatement {
+    const token = this.advance(); // consume 'define' or 'def'
+
+    // Expect archetype name (IDENTIFIER)
+    if (!this.check(TokenType.IDENTIFIER)) {
+      throw new Error(`Expected archetype name after 'define' at line ${token.line}`);
+    }
+    const name = this.advance().value;
+
+    // Expect direction: LEFT, RIGHT, or STRAIGHT
+    let direction: DefineDirection;
+    if (this.check(TokenType.LEFT)) {
+      this.advance();
+      direction = 'left';
+    } else if (this.check(TokenType.RIGHT)) {
+      this.advance();
+      direction = 'right';
+    } else if (this.check(TokenType.STRAIGHT)) {
+      this.advance();
+      direction = 'straight';
+    } else {
+      throw new Error(`Expected direction (left, right, straight, l, r, or s) after archetype name at line ${token.line}`);
+    }
+
+    let radius: number | undefined;
+    let arc: number | undefined;
+    let length: number | undefined;
+
+    if (direction === 'left' || direction === 'right') {
+      // For curves: require radius and arc
+      // Parse in any order
+      while (this.check(TokenType.RADIUS) || this.check(TokenType.ARC)) {
+        if (this.check(TokenType.RADIUS)) {
+          this.advance(); // consume 'radius'
+          if (!this.check(TokenType.NUMBER)) {
+            throw new Error(`Expected number after 'radius' at line ${token.line}`);
+          }
+          radius = parseFloat(this.advance().value);
+        } else if (this.check(TokenType.ARC)) {
+          this.advance(); // consume 'arc'
+          if (!this.check(TokenType.NUMBER)) {
+            throw new Error(`Expected number after 'arc' at line ${token.line}`);
+          }
+          arc = parseFloat(this.advance().value);
+        }
+      }
+
+      // Validate that both radius and arc are provided
+      if (radius === undefined) {
+        throw new Error(`Curve definition requires 'radius' at line ${token.line}`);
+      }
+      if (arc === undefined) {
+        throw new Error(`Curve definition requires 'arc' at line ${token.line}`);
+      }
+
+      // Check that length is not provided for curves
+      if (this.check(TokenType.LENGTH)) {
+        throw new Error(`'length' is not allowed for curve definitions at line ${token.line}`);
+      }
+    } else {
+      // For straights: require length
+      if (!this.check(TokenType.LENGTH)) {
+        throw new Error(`Straight definition requires 'length' at line ${token.line}`);
+      }
+      this.advance(); // consume 'length'
+      if (!this.check(TokenType.NUMBER)) {
+        throw new Error(`Expected number after 'length' at line ${token.line}`);
+      }
+      length = parseFloat(this.advance().value);
+
+      // Check that radius and arc are not provided for straights
+      if (this.check(TokenType.RADIUS) || this.check(TokenType.ARC)) {
+        throw new Error(`'radius' and 'arc' are not allowed for straight definitions at line ${token.line}`);
+      }
+    }
+
+    return {
+      type: 'define',
+      name,
+      direction,
+      radius,
+      arc,
+      length,
       line: token.line,
     };
   }

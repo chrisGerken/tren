@@ -35,6 +35,13 @@ export enum TokenType {
   FLEX = 'FLEX',               // flex keyword (for flex connect)
   CONNECT = 'CONNECT',         // connect keyword (for flex connect)
   CROSS = 'CROSS',             // cross keyword (for cross connect)
+  DEFINE = 'DEFINE',           // define/def keyword (for custom archetype definition)
+  LEFT = 'LEFT',               // left/l keyword (for define - left curve)
+  RIGHT = 'RIGHT',             // right/r keyword (for define - right curve)
+  STRAIGHT = 'STRAIGHT',       // straight/s keyword (for define - straight piece)
+  RADIUS = 'RADIUS',           // radius keyword (for define - curve radius)
+  ARC = 'ARC',                 // arc keyword (for define - curve arc angle)
+  LENGTH = 'LENGTH',           // length keyword (for define - straight length)
   EOF = 'EOF',
 }
 
@@ -449,6 +456,76 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
       if (value === 'cross') {
         tokens.push({
           type: TokenType.CROSS,
+          value: value,
+          line: lineNum,
+          column: startPos + 1,
+        });
+        continue;
+      }
+
+      if (value === 'define' || value === 'def') {
+        tokens.push({
+          type: TokenType.DEFINE,
+          value: value,
+          line: lineNum,
+          column: startPos + 1,
+        });
+        continue;
+      }
+
+      if (value === 'left' || value === 'l') {
+        tokens.push({
+          type: TokenType.LEFT,
+          value: value,
+          line: lineNum,
+          column: startPos + 1,
+        });
+        continue;
+      }
+
+      if (value === 'right' || value === 'r') {
+        tokens.push({
+          type: TokenType.RIGHT,
+          value: value,
+          line: lineNum,
+          column: startPos + 1,
+        });
+        continue;
+      }
+
+      if (value === 'straight' || value === 's') {
+        tokens.push({
+          type: TokenType.STRAIGHT,
+          value: value,
+          line: lineNum,
+          column: startPos + 1,
+        });
+        continue;
+      }
+
+      if (value === 'radius') {
+        tokens.push({
+          type: TokenType.RADIUS,
+          value: value,
+          line: lineNum,
+          column: startPos + 1,
+        });
+        continue;
+      }
+
+      if (value === 'arc') {
+        tokens.push({
+          type: TokenType.ARC,
+          value: value,
+          line: lineNum,
+          column: startPos + 1,
+        });
+        continue;
+      }
+
+      if (value === 'length') {
+        tokens.push({
+          type: TokenType.LENGTH,
           value: value,
           line: lineNum,
           column: startPos + 1,

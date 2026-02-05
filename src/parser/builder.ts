@@ -2,7 +2,7 @@
  * Layout Builder - transforms AST into placed track pieces
  */
 
-import { parse, Statement, PieceStatement, NewStatement, ReferenceStatement, LoopCloseStatement, TitleStatement, DescriptionStatement, LockAheadStatement, SpliceStatement, RandomStatement, MaxTrainsStatement, FlexConnectStatement, CrossConnectStatement } from './parser';
+import { parse, Statement, PieceStatement, NewStatement, ReferenceStatement, LoopCloseStatement, TitleStatement, DescriptionStatement, LockAheadStatement, SpliceStatement, RandomStatement, MaxTrainsStatement, FlexConnectStatement, CrossConnectStatement, DefineStatement } from './parser';
 import { Layout, TrackPiece, Vec3, vec2, ConnectionPointDef, RangeValue as TypeRangeValue } from '../core/types';
 import { getArchetype, registerRuntimeArchetype } from '../core/archetypes';
 import type { TrackArchetype } from '../core/archetypes';
@@ -188,6 +188,9 @@ class LayoutBuilder {
       case 'crossConnect':
         this.processCrossConnect(stmt);
         break;
+      case 'define':
+        this.processDefine(stmt);
+        break;
     }
   }
 
@@ -217,6 +220,88 @@ class LayoutBuilder {
 
   private processMaxTrains(stmt: MaxTrainsStatement): void {
     this.state.maxTrains = stmt.value;
+  }
+
+  /**
+   * Process a define statement to create a custom archetype.
+   * Creates and registers a runtime archetype that can be used like built-in archetypes.
+   */
+  private processDefine(stmt: DefineStatement): void {
+    let archetype: TrackArchetype;
+
+    if (stmt.direction === 'straight') {
+      // Create a straight piece archetype
+      const length = stmt.length!;
+      archetype = {
+        code: stmt.name,
+        aliases: [],
+        sections: [
+          { splinePoints: [vec2(0, 0), vec2(length, 0)] },
+        ],
+        connectionPoints: [
+          { name: 'in', position: vec2(0, 0), direction: vec2(-1, 0), sectionIndices: [0] },
+          { name: 'out', position: vec2(length, 0), direction: vec2(1, 0), sectionIndices: [0] },
+        ],
+      };
+    } else {
+      // Create a curve piece archetype (left or right)
+      const radius = stmt.radius!;
+      const arcDegrees = stmt.arc!;
+      const arcRadians = (arcDegrees * Math.PI) / 180;
+
+      // Generate spline points for the curve
+      // Number of points based on arc angle (at least 3 points, more for larger arcs)
+      const numPoints = Math.max(3, Math.ceil(arcDegrees / 15) + 1);
+      const points: Vec3[] = [];
+
+      for (let i = 0; i < numPoints; i++) {
+        const t = i / (numPoints - 1);
+        const angle = t * arcRadians;
+
+        if (stmt.direction === 'left') {
+          // Left curve: center is at (0, radius), curve goes counter-clockwise
+          points.push(vec2(
+            radius * Math.sin(angle),
+            radius * (1 - Math.cos(angle))
+          ));
+        } else {
+          // Right curve: center is at (0, -radius), curve goes clockwise
+          points.push(vec2(
+            radius * Math.sin(angle),
+            -radius * (1 - Math.cos(angle))
+          ));
+        }
+      }
+
+      // Calculate end position and direction
+      const endPos = points[points.length - 1];
+      let endDir: Vec3;
+      if (stmt.direction === 'left') {
+        endDir = vec2(Math.cos(arcRadians), Math.sin(arcRadians));
+      } else {
+        endDir = vec2(Math.cos(arcRadians), -Math.sin(arcRadians));
+      }
+
+      archetype = {
+        code: stmt.name,
+        aliases: [],
+        sections: [{ splinePoints: points }],
+        connectionPoints: [
+          { name: 'in', position: vec2(0, 0), direction: vec2(-1, 0), sectionIndices: [0] },
+          { name: 'out', position: endPos, direction: endDir, sectionIndices: [0] },
+        ],
+      };
+    }
+
+    // Register the custom archetype
+    registerRuntimeArchetype(archetype);
+
+    if (DEBUG_LOGGING) {
+      console.log(`Defined custom archetype '${stmt.name}': ${stmt.direction}, ` +
+        (stmt.direction === 'straight'
+          ? `length=${stmt.length}`
+          : `radius=${stmt.radius}, arc=${stmt.arc}°`));
+    }
   }
 
   private processSplice(stmt: SpliceStatement): void {

@@ -132,6 +132,22 @@ max trains 5                   # Limit to at most 5 trains on the layout</code><
     <p>The <code>lockahead</code> statement configures collision prevention: <code>distance N</code> sets how far ahead to scan (default 10 inches), <code>count N</code> sets minimum connection points to lock (default 2).</p>
     <p>The <code>random</code> statement enables automatic switch changes after each train passes, creating varied autonomous behavior ideal for demonstrations or computer art.</p>
     <p>The <code>max trains</code> statement limits the number of trains that can exist simultaneously (default: 5). Generators will not spawn new trains when the limit is reached. Trains destroyed by bins free up slots for new trains.</p>
+
+    <h3>Custom Track Pieces</h3>
+    <p>Create custom curve or straight pieces with the <code>define</code> (or <code>def</code>) statement:</p>
+    <pre><code># Custom curves
+define tight_left left radius 12 arc 45
+def wide_right r radius 30 arc 22.5
+
+# Custom straights
+define short_str straight length 4.5
+def long s length 18
+
+# Use custom pieces
+tight_left x 4        # Four tight curves
+short_str x 2         # Two short straights</code></pre>
+    <p><strong>For curves:</strong> Specify <code>left</code>/<code>l</code> or <code>right</code>/<code>r</code>, plus <code>radius</code> and <code>arc</code> (in degrees).</p>
+    <p><strong>For straights:</strong> Specify <code>straight</code>/<code>s</code> and <code>length</code> (in inches).</p>
   </div>
 
   <div class="section">

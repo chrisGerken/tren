@@ -924,6 +924,53 @@ semaphore                # Unlabeled (using alias)
 - Switches are automatic (train picks route); semaphores require manual control
 - Switch indicators are along the track; semaphore indicator is at the piece location
 
+## Custom Track Pieces (Define Statement)
+
+The `define` (or `def`) statement allows users to create custom curve and straight track pieces for use throughout a layout.
+
+**DSL syntax:**
+```
+define <name> <direction> radius <r> arc <a>    # Curve
+define <name> straight length <l>                # Straight
+def <name> left radius 18 arc 45                 # Short form
+```
+
+**Design decisions:**
+- Custom pieces are registered as runtime archetypes (same system as splice/flex)
+- The name must be unique and cannot be an existing keyword
+- Direction determines the archetype type: `left` → `crvl`, `right` → `crvr`, `straight` → `str`
+- Curves require `radius` and `arc`; straights require `length`
+- Validation rejects invalid parameter combinations (e.g., `length` on a curve)
+
+**Implementation:**
+
+1. **Lexer (`src/parser/lexer.ts`):**
+   - New token types: `DEFINE`, `LEFT`, `RIGHT`, `STRAIGHT`, `RADIUS`, `ARC`, `LENGTH`
+   - Keywords recognized: `define`/`def`, `left`/`l`, `right`/`r`, `straight`/`s`, `radius`, `arc`, `length`
+
+2. **Parser (`src/parser/parser.ts`):**
+   - `DefineDirection` type: `'left' | 'right' | 'straight'`
+   - `DefineStatement` interface with: `name`, `direction`, `radius?`, `arc?`, `length?`
+   - `parseDefineStatement()` validates parameter requirements
+
+3. **Builder (`src/parser/builder.ts`):**
+   - `processDefine()` creates runtime archetypes
+   - For straights: two-point spline from (0,0) to (length, 0)
+   - For curves: generates spline points using trigonometric calculations
+   - Uses existing `registerRuntimeArchetype()` function
+
+**Curve spline generation:**
+- Converts arc angle from degrees to radians
+- Generates 7 points along the arc (or more for larger arcs)
+- For left curves: center at (0, radius), points curve left (+Z)
+- For right curves: center at (0, -radius), points curve right (-Z)
+- Connection point directions calculated from tangent at endpoints
+
+**Why runtime archetypes:**
+- Reuses existing infrastructure from splice and flex connect
+- No need for a separate custom piece registry
+- Custom pieces work seamlessly with all DSL features (repetition, labels, etc.)
+
 ## Open Questions
 
 These will be addressed in user scenario discussions:
