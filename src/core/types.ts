@@ -108,12 +108,16 @@ export interface RangeValue {
   max: number;
 }
 
+/** Color mode for train cars */
+export type ColorMode = 'colorful' | 'gray';
+
 /** Generator configuration (from DSL) */
 export interface GeneratorConfig {
   cabCount: number | RangeValue;   // Number of cabs (default 1)
   carCount: number | RangeValue;   // Number of cars (default 5)
   speed?: number | RangeValue;     // Train speed in inches/second (default 12)
   frequency?: number | RangeValue; // Seconds between trains (undefined = one-shot)
+  colorMode: ColorMode;            // Color mode for cars ('colorful' or 'gray', default 'gray')
   lastSpawnTime: number;           // Simulation time of last spawn
   enabled: boolean;                // Whether generator is active
 }

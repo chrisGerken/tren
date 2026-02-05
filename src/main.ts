@@ -2,8 +2,27 @@
  * Tren Train Simulator - Main Entry Point
  */
 
-import { open } from '@tauri-apps/api/dialog';
-import { readTextFile } from '@tauri-apps/api/fs';
+import { open, save } from '@tauri-apps/api/dialog';
+import { readTextFile, writeTextFile } from '@tauri-apps/api/fs';
+
+// Import bundled layouts as raw text using Vite's ?raw suffix
+import manifestJson from './layouts/manifest.json';
+import layoutTwoLoops from './layouts/two-loops.txt?raw';
+import layoutComplex from './layouts/complex-layout.txt?raw';
+import layoutFlexConnect from './layouts/flex-connect.txt?raw';
+import layoutSplice from './layouts/splice.txt?raw';
+import layoutCrossConnect from './layouts/cross-connect.txt?raw';
+import layoutSemaphore from './layouts/semaphore.txt?raw';
+
+// Map of layout filenames to their imported content
+const bundledLayouts: Record<string, string> = {
+  'two-loops.txt': layoutTwoLoops,
+  'complex-layout.txt': layoutComplex,
+  'flex-connect.txt': layoutFlexConnect,
+  'splice.txt': layoutSplice,
+  'cross-connect.txt': layoutCrossConnect,
+  'semaphore.txt': layoutSemaphore,
+};
 import { TrackScene } from './renderer/scene';
 import { renderLayout, setSelectedRouteByKey, getSelectedRoutes, updateConnectionPointColors, updateSemaphoreColor } from './renderer/track-renderer';
 import { renderTrains } from './renderer/train-renderer';
@@ -262,5 +281,227 @@ document.addEventListener('paste', async (e) => {
       const message = error instanceof Error ? error.message : String(error);
       setStatus(`Parse error: ${message}`);
     }
+  }
+});
+
+// ============================================
+// Layouts Dialog
+// ============================================
+
+interface LayoutManifestEntry {
+  file: string;
+  title: string;
+  description: string;
+}
+
+interface LayoutManifest {
+  layouts: LayoutManifestEntry[];
+}
+
+// Dialog elements
+const layoutsBtn = document.getElementById('layouts-btn');
+const layoutsDialog = document.getElementById('layouts-dialog');
+const layoutsList = document.getElementById('layouts-list');
+const dialogRunBtn = document.getElementById('dialog-run-btn') as HTMLButtonElement;
+const dialogSaveBtn = document.getElementById('dialog-save-btn') as HTMLButtonElement;
+const dialogCancelBtn = document.getElementById('dialog-cancel-btn');
+
+// Currently selected layout in dialog
+let selectedLayoutFile: string | null = null;
+let loadedManifest: LayoutManifest | null = null;
+
+/**
+ * Get the layouts manifest (bundled at build time)
+ */
+function getLayoutsManifest(): LayoutManifest {
+  return manifestJson as LayoutManifest;
+}
+
+/**
+ * Get a layout file content (bundled at build time)
+ */
+function getLayoutContent(filename: string): string {
+  const content = bundledLayouts[filename];
+  if (!content) {
+    throw new Error(`Layout not found: ${filename}`);
+  }
+  return content;
+}
+
+/**
+ * Render the layouts list in the dialog
+ */
+function renderLayoutsList(manifest: LayoutManifest): void {
+  if (!layoutsList) return;
+
+  layoutsList.innerHTML = '';
+  selectedLayoutFile = null;
+  updateDialogButtons();
+
+  for (const entry of manifest.layouts) {
+    const item = document.createElement('div');
+    item.className = 'layout-item';
+    item.dataset.file = entry.file;
+
+    const title = document.createElement('div');
+    title.className = 'layout-item-title';
+    title.textContent = entry.title;
+
+    const description = document.createElement('div');
+    description.className = 'layout-item-description';
+    description.textContent = entry.description;
+
+    item.appendChild(title);
+    item.appendChild(description);
+
+    item.addEventListener('click', () => {
+      // Deselect all
+      layoutsList.querySelectorAll('.layout-item').forEach(el => el.classList.remove('selected'));
+      // Select this one
+      item.classList.add('selected');
+      selectedLayoutFile = entry.file;
+      updateDialogButtons();
+    });
+
+    layoutsList.appendChild(item);
+  }
+}
+
+/**
+ * Update dialog button states
+ */
+function updateDialogButtons(): void {
+  const hasSelection = selectedLayoutFile !== null;
+  if (dialogRunBtn) dialogRunBtn.disabled = !hasSelection;
+  if (dialogSaveBtn) dialogSaveBtn.disabled = !hasSelection;
+}
+
+/**
+ * Open the layouts dialog
+ */
+function openLayoutsDialog(): void {
+  if (!layoutsDialog) return;
+
+  try {
+    loadedManifest = getLayoutsManifest();
+    renderLayoutsList(loadedManifest);
+    layoutsDialog.style.display = 'flex';
+    setStatus('');
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    setStatus(`Error: ${message}`);
+  }
+}
+
+/**
+ * Close the layouts dialog
+ */
+function closeLayoutsDialog(): void {
+  if (layoutsDialog) {
+    layoutsDialog.style.display = 'none';
+  }
+  selectedLayoutFile = null;
+}
+
+/**
+ * Run the selected layout
+ */
+function runSelectedLayout(): void {
+  if (!selectedLayoutFile) return;
+
+  // Save the filename before closing dialog (which clears selectedLayoutFile)
+  const filename = selectedLayoutFile;
+
+  try {
+    setStatus(`Loading ${filename}...`);
+    closeLayoutsDialog();
+
+    const content = getLayoutContent(filename);
+
+    setStatus('Parsing layout...');
+    const layout = buildLayout(content);
+    currentLayout = layout;
+
+    updateRandomButtonState();
+
+    setStatus(`Rendering ${layout.pieces.length} pieces...`);
+    renderLayout(scene, layout);
+
+    startSimulation(layout);
+
+    setStatus(`Layout loaded: ${layout.pieces.length} pieces - simulation running`);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    setStatus(`Error: ${message}`);
+    console.error('Run layout error:', error);
+  }
+}
+
+/**
+ * Save the selected layout to a user-chosen location
+ */
+async function saveSelectedLayout(): Promise<void> {
+  if (!selectedLayoutFile) return;
+
+  try {
+    // Get the content first
+    const content = getLayoutContent(selectedLayoutFile);
+
+    // Open save dialog
+    const savePath = await save({
+      filters: [{
+        name: 'Layout Files',
+        extensions: ['txt', 'layout'],
+      }],
+      defaultPath: selectedLayoutFile,
+    });
+
+    if (!savePath) {
+      setStatus('Save cancelled');
+      return;
+    }
+
+    // Write the file
+    await writeTextFile(savePath, content);
+
+    closeLayoutsDialog();
+    setStatus(`Layout saved to: ${savePath}`);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    setStatus(`Error: ${message}`);
+    console.error('Save layout error:', error);
+  }
+}
+
+// Wire up dialog buttons
+if (layoutsBtn) {
+  layoutsBtn.addEventListener('click', openLayoutsDialog);
+}
+
+if (dialogRunBtn) {
+  dialogRunBtn.addEventListener('click', runSelectedLayout);
+}
+
+if (dialogSaveBtn) {
+  dialogSaveBtn.addEventListener('click', saveSelectedLayout);
+}
+
+if (dialogCancelBtn) {
+  dialogCancelBtn.addEventListener('click', closeLayoutsDialog);
+}
+
+// Close dialog when clicking overlay background
+if (layoutsDialog) {
+  layoutsDialog.addEventListener('click', (e) => {
+    if (e.target === layoutsDialog) {
+      closeLayoutsDialog();
+    }
+  });
+}
+
+// Close dialog with Escape key
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && layoutsDialog?.style.display === 'flex') {
+    closeLayoutsDialog();
   }
 });

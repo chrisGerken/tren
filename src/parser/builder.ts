@@ -361,6 +361,7 @@ class LayoutBuilder {
           carCount: stmt.genCars ?? 5,
           speed: stmt.genSpeed as TypeRangeValue | number | undefined,  // undefined means use default (12)
           frequency: stmt.genEvery as TypeRangeValue | number | undefined,
+          colorMode: stmt.genColorMode ?? 'gray',  // Default to grayscale cars
           lastSpawnTime: -Infinity,  // Never spawned yet
           enabled: true,
         };

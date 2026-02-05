@@ -12,10 +12,12 @@
   "tauri": {
     "allowlist": {
       "dialog": {
-        "open": true
+        "open": true,
+        "save": true
       },
       "fs": {
         "readFile": true,
+        "writeFile": true,
         "scope": ["$HOME/**", "$DOCUMENT/**", "$DESKTOP/**"]
       },
       "shell": {

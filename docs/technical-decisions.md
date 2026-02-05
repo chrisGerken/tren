@@ -390,9 +390,22 @@ gen cabs 1-2 cars 3-8 speed 6-24 every 15-30  # Randomized values
 
 **Car rendering:**
 - Uses `THREE.ExtrudeGeometry` with rounded rectangle shape
-- Colors: randomly selected from dark red, blue, green, purple, orange
+- Colors: randomly selected from color palette based on generator's `colorMode` setting
 - Previous car's color has 2× probability of being selected again
 - Creates subtle color groupings within trains
+
+**Car color modes:**
+- `gray` (default): Shades of gray (0x303030 to 0xb0b0b0) for realistic industrial appearance
+- `colorful`: Vibrant colors (red, blue, green, purple, yellow) for playful appearance
+- Color is assigned once at car creation, stored in `car.color` property
+- Cabs (engines) are always yellow regardless of color mode
+
+**DSL syntax for color modes:**
+```
+gen gray                      # Gray cars (default)
+gen colorful                  # Colorful cars
+gen cabs 2 cars 5 colorful    # Combined with other parameters
+```
 
 **Movement:**
 - Default speed: 12 inches/second

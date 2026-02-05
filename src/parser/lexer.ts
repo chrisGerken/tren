@@ -27,6 +27,8 @@ export enum TokenType {
   CARS = 'CARS',               // cars keyword (for gen statement)
   SPEED = 'SPEED',             // speed keyword (for gen statement)
   EVERY = 'EVERY',             // every keyword (for gen statement)
+  COLORFUL = 'COLORFUL',       // colorful keyword (for gen statement - colored cars)
+  GRAY = 'GRAY',               // gray keyword (for gen statement - grayscale cars)
   RANDOM = 'RANDOM',           // random keyword (for random switch changes)
   MAX = 'MAX',                 // max keyword (for max trains)
   TRAINS = 'TRAINS',           // trains keyword (for max trains)
@@ -367,6 +369,26 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
       if (value === 'every') {
         tokens.push({
           type: TokenType.EVERY,
+          value: value,
+          line: lineNum,
+          column: startPos + 1,
+        });
+        continue;
+      }
+
+      if (value === 'colorful') {
+        tokens.push({
+          type: TokenType.COLORFUL,
+          value: value,
+          line: lineNum,
+          column: startPos + 1,
+        });
+        continue;
+      }
+
+      if (value === 'gray') {
+        tokens.push({
+          type: TokenType.GRAY,
           value: value,
           line: lineNum,
           column: startPos + 1,

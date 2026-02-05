@@ -165,15 +165,21 @@ crvl x 4     # Four left curves (90° total)
 crvr * 8     # Eight right curves (180°)</code></pre>
 
     <h3>Generator Syntax</h3>
-    <p>Generators spawn trains with configurable car counts and speed:</p>
-    <pre><code>gen                           # One train: 1 cab, 5 cars, 12"/sec
+    <p>Generators spawn trains with configurable car counts, speed, and colors:</p>
+    <pre><code>gen                           # One train: 1 cab, 5 cars, 12"/sec, gray
 gen cabs 2                    # One train: 2 cabs, 5 cars
 gen cars 3                    # One train: 1 cab, 3 cars
 gen speed 24                  # One train at 24 inches/second
-gen cabs 2 cars 3             # One train: 2 cabs, 3 cars
-gen cabs 2 cars 3 speed 6 every 15    # Full specification</code></pre>
-    <p>Parameters: <code>cabs N</code> (default 1), <code>cars M</code> (default 5), <code>speed S</code> (default 12 inches/sec), <code>every S</code> (spawn interval in seconds).</p>
+gen colorful                  # One train with vibrant colored cars
+gen gray                      # One train with grayscale cars (default)
+gen cabs 2 cars 3 speed 6 every 15 colorful    # Full specification</code></pre>
+    <p>Parameters: <code>cabs N</code> (default 1), <code>cars M</code> (default 5), <code>speed S</code> (default 12 inches/sec), <code>every S</code> (spawn interval in seconds), <code>colorful</code> or <code>gray</code> (car color mode).</p>
     <p>Without <code>every</code>, the generator spawns one train and disables. With <code>every N</code>, it spawns a new train every N seconds.</p>
+    <p><strong>Color modes:</strong></p>
+    <ul>
+      <li><code>gray</code> (default) - Rolling stock uses shades of gray for a realistic look</li>
+      <li><code>colorful</code> - Rolling stock uses vibrant colors (red, blue, green, purple, yellow)</li>
+    </ul>
 
     <h3>Range Values</h3>
     <p>Any parameter can use a range <code>LOW-HIGH</code> for randomization:</p>

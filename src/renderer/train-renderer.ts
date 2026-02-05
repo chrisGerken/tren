@@ -3,7 +3,7 @@
  */
 
 import * as THREE from 'three';
-import { Train, Car } from '../core/types';
+import { Train, Car, ColorMode } from '../core/types';
 import { CAB_LENGTH, CAR_LENGTH } from '../core/train-movement';
 
 // Car dimensions in inches
@@ -13,13 +13,22 @@ const CAR_HEIGHT = 1.5;
 // Colors
 const CAB_COLOR = 0xffff00;   // Yellow for cabs (engines)
 
-// Car colors - pastel variants for rolling stock
+// Car colors - vibrant colors for rolling stock (colorful mode)
 const CAR_COLORS = [
-  0xff0000,   // Pastel red     0xf1948a
-  0x0000ff,   // Pastel blue    0x85c1e9
-  0x00ff00,   // Pastel green   0x82e0aa
-  0xff00ff,   // Pastel purple  0xc39bd3
-  0xffff00,   // Pastel orange  0xf8c471
+  0xff0000,   // Red
+  0x0000ff,   // Blue
+  0x00ff00,   // Green
+  0xff00ff,   // Purple
+  0xffff00,   // Yellow
+];
+
+// Gray colors - shades of gray for rolling stock (gray mode - default)
+const GRAY_COLORS = [
+  0x303030,   // Dark gray
+  0x505050,   // Medium-dark gray
+  0x707070,   // Medium gray
+  0x909090,   // Medium-light gray
+  0xb0b0b0,   // Light gray
 ];
 
 // Track the last car color index for weighted random selection during spawning
@@ -29,9 +38,12 @@ let lastCarColorIndex: number | null = null;
  * Get a random car color with weighted probability
  * Previous color has 2x probability of being chosen
  * Called once when a car is created, not every frame
+ * @param colorMode - 'colorful' for vibrant colors, 'gray' for grayscale (default)
  */
-export function getRandomCarColor(): number {
-  const weights: number[] = CAR_COLORS.map((_, index) => {
+export function getRandomCarColor(colorMode: ColorMode = 'gray'): number {
+  const colors = colorMode === 'colorful' ? CAR_COLORS : GRAY_COLORS;
+
+  const weights: number[] = colors.map((_, index) => {
     // Previous color gets weight 2, others get weight 1
     return (lastCarColorIndex !== null && index === lastCarColorIndex) ? 2 : 1;
   });
@@ -43,13 +55,13 @@ export function getRandomCarColor(): number {
     random -= weights[i];
     if (random <= 0) {
       lastCarColorIndex = i;
-      return CAR_COLORS[i];
+      return colors[i];
     }
   }
 
   // Fallback (shouldn't happen)
   lastCarColorIndex = 0;
-  return CAR_COLORS[0];
+  return colors[0];
 }
 
 /**

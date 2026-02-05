@@ -1,53 +1,54 @@
-# Resume Tasks - Cross Connect Implementation
+# Resume Tasks - Layouts Feature Implementation
 
-## STATUS: COMPLETE
+## Status: COMPLETE
 
-The `cross connect $label1 $label2` DSL statement is fully implemented and working.
+### What Was Implemented
 
-## What Was Implemented
+1. **Bundled Layouts System**
+   - Layouts stored in `src/layouts/` directory
+   - Imported directly into JavaScript bundle using Vite's `?raw` suffix
+   - No runtime fetch() calls - works reliably in Tauri
 
-### 1. Types (src/core/types.ts)
-- `InternalConnectionPoint` interface: `{ id, t, distance, worldPosition }`
-- `TrackPiece.internalConnectionPoints` array for connection points along the track (not at endpoints)
+2. **Example Layouts Included**
+   - `two-loops.txt` - Several loops with generator and bin
+   - `complex-layout.txt` - Multiple loops, switches, tunnels, splice
+   - `flex-connect.txt` - Demonstrates flex connect
+   - `splice.txt` - Demonstrates splice statement
+   - `cross-connect.txt` - Demonstrates cross connect
+   - `semaphore.txt` - Manual signal control example
 
-### 2. Parser (src/parser/lexer.ts, parser.ts)
-- `CROSS` token type
-- `CrossConnectStatement` interface and parsing
+3. **Layouts Dialog UI**
+   - "Layouts" button in toolbar
+   - Modal dialog with list of bundled layouts
+   - Shows title and description (not filename)
+   - Three buttons: Run, Save As..., Cancel
+   - Keyboard support (Escape to close)
+   - Click outside to close
 
-### 3. Builder (src/parser/builder.ts)
-- `performCrossConnect()` - finds intersection, creates shared internal connection point on both pieces
-- `findSplineIntersection()` - line segment intersection algorithm
-- `calculateSectionLength()` - computes track length for t→distance conversion
-- Both pieces share the same connection point ID (`cross_piece1_piece2`)
+4. **Functionality**
+   - Run: Loads and runs the selected layout
+   - Save As: Saves layout to user-chosen location
+   - Cancel: Closes the dialog
 
-### 4. Lock Manager (src/core/lock-manager.ts)
-- `acquireLeadingLocks()` - now includes internal connection points in look-ahead
-- `calculateStraddledPoints()` - includes internal connection points cars are straddling
-- `releaseTrailingLocks()` - keeps locks on internal connection points of occupied pieces
+### Files Created
+- `src/layouts/manifest.json` - Layout metadata
+- `src/layouts/*.txt` - Example layout files
+- `src/vite-env.d.ts` - TypeScript declarations for raw imports
 
-### 5. Track Renderer (src/renderer/track-renderer.ts)
-- Internal connection points rendered as spheres (same as endpoint connection points)
-- Start hidden, controlled by Labels toggle via `updateConnectionPointColors()`
+### Files Modified
+- `index.html` - Added Layouts button and dialog HTML
+- `src/style.css` - Added dialog styles
+- `src/main.ts` - Added dialog logic with bundled imports
+- `src-tauri/tauri.conf.json` - Added save dialog and writeFile permissions
 
-### 6. Simulation (src/core/simulation.ts)
-- Uses standard connection point locking (no separate intersection lock code needed)
+### Key Implementation Details
+- Layouts are imported at build time, not fetched at runtime
+- This avoids issues with Tauri's asset serving
+- The manifest and layout content are embedded in the JS bundle
 
-## How It Works
-1. `cross connect $one $two` finds where the two labeled tracks intersect geometrically
-2. Creates a shared `InternalConnectionPoint` on both pieces at the intersection
-3. The point is added to look-ahead scanning, so trains lock it before crossing
-4. Only one train can hold the lock at a time - others stop and wait
-5. The point displays white (unlocked) or red (locked) when Labels is on
-
-## Files Modified
-- src/core/types.ts
-- src/core/lock-manager.ts
-- src/core/simulation.ts
-- src/parser/lexer.ts
-- src/parser/parser.ts
-- src/parser/builder.ts
-- src/renderer/track-renderer.ts
-- docs/technical-decisions.md
-- docs/layout-dsl.md
-- dsl-help.html
-- CLAUDE.md
+### How to Add New Bundled Layouts
+1. Add the layout file to `src/layouts/`
+2. Add an entry to `src/layouts/manifest.json`
+3. Add an import statement in `src/main.ts`
+4. Add the file to the `bundledLayouts` map in `src/main.ts`
+5. Rebuild the app

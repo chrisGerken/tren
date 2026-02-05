@@ -47,6 +47,7 @@ export interface PieceStatement {
   genCars?: number | RangeValue;      // Number of cars (default 5)
   genSpeed?: number | RangeValue;     // Train speed in inches/second (default 12)
   genEvery?: number | RangeValue;     // Spawn frequency in seconds (undefined = one-shot)
+  genColorMode?: 'colorful' | 'gray'; // Car color mode ('colorful' or 'gray', default 'gray')
 }
 
 export interface ReferenceStatement {
@@ -550,11 +551,12 @@ class Parser {
       archetypeCode = firstToken.value;
     }
 
-    // Parse gen-specific parameters: gen [cabs N|N-M] [cars N|N-M] [speed S|S-S] [every T|T-T]
+    // Parse gen-specific parameters: gen [cabs N|N-M] [cars N|N-M] [speed S|S-S] [every T|T-T] [colorful|gray]
     let genCabs: number | RangeValue | undefined;
     let genCars: number | RangeValue | undefined;
     let genSpeed: number | RangeValue | undefined;
     let genEvery: number | RangeValue | undefined;
+    let genColorMode: 'colorful' | 'gray' | undefined;
 
     if (archetypeCode === 'gen' || archetypeCode === 'generator') {
       while (this.isGenModifier()) {
@@ -570,6 +572,12 @@ class Parser {
         } else if (this.check(TokenType.EVERY)) {
           this.advance(); // consume 'every'
           genEvery = this.parseNumberOrRange(true);
+        } else if (this.check(TokenType.COLORFUL)) {
+          this.advance(); // consume 'colorful'
+          genColorMode = 'colorful';
+        } else if (this.check(TokenType.GRAY)) {
+          this.advance(); // consume 'gray'
+          genColorMode = 'gray';
         } else {
           break;
         }
@@ -595,12 +603,13 @@ class Parser {
       genCars,
       genSpeed,
       genEvery,
+      genColorMode,
     };
   }
 
   private isGenModifier(): boolean {
     const type = this.peek().type;
-    return type === TokenType.CABS || type === TokenType.CARS || type === TokenType.SPEED || type === TokenType.EVERY;
+    return type === TokenType.CABS || type === TokenType.CARS || type === TokenType.SPEED || type === TokenType.EVERY || type === TokenType.COLORFUL || type === TokenType.GRAY;
   }
 
   /**

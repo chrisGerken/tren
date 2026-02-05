@@ -224,16 +224,18 @@ Use archetype codes to specify track pieces. See [Track Dimensions](track-dimens
 
 ### Generator Syntax
 
-Generators spawn trains. The basic syntax is just `gen`, but you can configure the train composition, speed, and spawn frequency:
+Generators spawn trains. The basic syntax is just `gen`, but you can configure the train composition, speed, spawn frequency, and car colors:
 
 ```
-gen                           # One train: 1 cab, 5 cars, 12"/sec (default)
+gen                           # One train: 1 cab, 5 cars, 12"/sec, gray (default)
 gen cabs 2                    # One train: 2 cabs, 5 cars
 gen cars 3                    # One train: 1 cab, 3 cars
 gen speed 24                  # One train at 24 inches/second
 gen cabs 2 cars 3             # One train: 2 cabs, 3 cars
 gen every 10                  # New train every 10 seconds: 1 cab, 5 cars
-gen cabs 2 cars 3 speed 6 every 10    # Full specification
+gen colorful                  # One train with vibrant colored cars
+gen gray                      # One train with grayscale cars (default)
+gen cabs 2 cars 3 speed 6 every 10 colorful    # Full specification with colors
 ```
 
 **Parameters:**
@@ -241,8 +243,16 @@ gen cabs 2 cars 3 speed 6 every 10    # Full specification
 - `cars M` - Number of regular cars (rolling stock). Default: 5
 - `speed S` - Train speed in inches per second. Default: 12
 - `every S` - Spawn frequency in seconds. If omitted, only one train is spawned.
+- `colorful` - Use vibrant colors (red, blue, green, purple, yellow) for rolling stock
+- `gray` - Use grayscale shades for rolling stock (default)
 
 Parameters can appear in any order after `gen`.
+
+**Color Modes:**
+- `gray` (default): Rolling stock uses various shades of gray, creating a more realistic, industrial appearance
+- `colorful`: Rolling stock uses vibrant colors (red, blue, green, purple, yellow) for a more playful appearance
+
+Both modes use weighted random selection where the previous car's color has a higher chance of being repeated, creating natural-looking car groupings.
 
 ### Range Values
 

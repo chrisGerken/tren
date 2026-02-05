@@ -1,0 +1,34 @@
+{
+  "layouts": [
+    {
+      "file": "two-loops.txt",
+      "title": "Two Loops",
+      "description": "Several loops with a generator and a bin. Random switch selection enabled."
+    },
+    {
+      "file": "complex-layout.txt",
+      "title": "More Loops and Switches",
+      "description": "Slightly more complex example with more loops and switches."
+    },
+    {
+      "file": "flex-connect.txt",
+      "title": "Flex Connect Example",
+      "description": "How to fill a non-standard gap between two tracks using flex connect."
+    },
+    {
+      "file": "splice.txt",
+      "title": "Splice Example",
+      "description": "How to use the splice statement to create parallel tracks with switches."
+    },
+    {
+      "file": "cross-connect.txt",
+      "title": "Cross Connect Example",
+      "description": "Demonstrates cross connect for track intersections with collision prevention."
+    },
+    {
+      "file": "semaphore.txt",
+      "title": "Semaphore Test",
+      "description": "Manual signal control - click the green/red dot to stop or allow trains."
+    }
+  ]
+}

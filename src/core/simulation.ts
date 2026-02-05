@@ -310,6 +310,7 @@ export class Simulation {
     }
 
     // Create cars (behind cabs) with randomly assigned colors
+    const colorMode = config.colorMode ?? 'gray';
     for (let i = 0; i < carCount; i++) {
       currentDistance -= CAR_LENGTH / 2; // Move from front edge to center
       const car: Car = {
@@ -321,7 +322,7 @@ export class Simulation {
         visible: false,
         worldPosition: vec3(0, 0, 0),
         rotation: 0,
-        color: getRandomCarColor(),  // Assign color once at creation
+        color: getRandomCarColor(colorMode),  // Assign color once at creation based on colorMode
       };
       train.cars.push(car);
       currentDistance -= CAR_LENGTH / 2 + CAR_GAP; // Move from center to back edge + gap
