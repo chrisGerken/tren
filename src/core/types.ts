@@ -109,7 +109,7 @@ export interface RangeValue {
 }
 
 /** Color mode for train cars */
-export type ColorMode = 'colorful' | 'gray';
+export type ColorMode = 'colorful' | 'gray' | 'black';
 
 /** Generator configuration (from DSL) */
 export interface GeneratorConfig {

@@ -68,7 +68,7 @@ The `cross connect $label1 $label2` statement creates a shared lockable point wh
 
 Trains are ordered car lists (consists). The primary cab (first cab in train) controls speed and direction. Each car maintains its own position along the track section, querying the spline for position and tangent each frame. Cars transition between sections independently when crossing boundaries.
 
-**Generator syntax:** `gen cabs N cars M speed S every T` - N cabs (default 1), M cars (default 5), speed S inches/sec (default 12), spawn every T seconds (omit for one-shot). Parameters can appear in any order. Any parameter can use range syntax `LOW-HIGH` for randomization (e.g., `cabs 1-2 cars 3-8 speed 6-24`).
+**Generator syntax:** `gen cabs N cars M speed S every T` - N cabs (default 1), M cars (default 5), speed S inches/sec (default 12), spawn every T seconds (omit for one-shot). Parameters can appear in any order. Any parameter can use range syntax `LOW-HIGH` for randomization (e.g., `cabs 1-2 cars 3-8 speed 6-24`). Color modes: `colorful` (vibrant), `gray` (default), `black` (all cars black, cabs remain yellow).
 
 **Route memory:** Each train remembers which route it took at each switch. All cars in the train follow the same route, even if the switch is changed while the train is crossing.
 
@@ -78,7 +78,7 @@ Trains are ordered car lists (consists). The primary cab (first cab in train) co
 
 ## Layout DSL
 
-Layouts are defined in text files. Statements can be one per line or multiple per line separated by semicolons:
+Layouts are defined in text files. All keywords, archetype names, and connection point names are case-insensitive (labels remain case-sensitive). Statements can be one per line or multiple per line separated by semicolons:
 - `new` or `new DEGREES` — start new unconnected segment at given rotation (default 0°; implicit at start)
 - `new from $label.point` or `new $label.point` — start new segment from a labeled piece's connection point
 - `piece` — place a track piece, attaching `piece.in` to previous, continue from `piece.out`

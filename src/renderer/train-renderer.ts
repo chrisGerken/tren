@@ -41,6 +41,7 @@ let lastCarColorIndex: number | null = null;
  * @param colorMode - 'colorful' for vibrant colors, 'gray' for grayscale (default)
  */
 export function getRandomCarColor(colorMode: ColorMode = 'gray'): number {
+  if (colorMode === 'black') return 0x000000;
   const colors = colorMode === 'colorful' ? CAR_COLORS : GRAY_COLORS;
 
   const weights: number[] = colors.map((_, index) => {

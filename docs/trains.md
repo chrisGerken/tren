@@ -222,9 +222,12 @@ For the initial 2D top-down version:
 
 ### Car Shape
 - Cars (rolling stock) are rounded rectangles with smooth corners
-- Color: randomly selected from dark red, dark blue, dark green, dark purple, or dark orange
+- Color depends on generator color mode:
+  - `gray` (default): randomly selected from shades of gray
+  - `colorful`: randomly selected from red, blue, green, purple, yellow
+  - `black`: all cars are solid black (0x000000)
 - Dimensions: 3" long × 2" wide × 1.5" height
-- The previous car's color has 2× probability of being selected for the next car, creating subtle color groupings
+- In `gray` and `colorful` modes, the previous car's color has 2× probability of being selected for the next car, creating subtle color groupings
 
 ### Common Properties
 - Gap between cars: 0.5"

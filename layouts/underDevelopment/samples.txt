@@ -13,6 +13,10 @@
 #   title TEXT             Layout title for UI display (max one, default: "Simulador de Tren")
 #   description TEXT       Layout description (multiple allowed, concatenated)
 #
+# CASE INSENSITIVITY:
+#   All keywords, archetype names, and connection point names are case-insensitive.
+#   GEN, Gen, gen, gEn are all equivalent. Labels remain case-sensitive.
+#
 # BASIC SYNTAX:
 #   piece                  Place a track piece (connects in->previous, out->next)
 #   piece x N              Place N consecutive pieces (also: piece * N)
@@ -39,6 +43,9 @@
 #   gen cars M                      One train with M cars
 #   gen cabs N cars M               One train with N cabs and M cars
 #   gen every S                     Spawn new train every S seconds
+#   gen colorful                    Vibrant colored cars
+#   gen gray                        Grayscale cars (default)
+#   gen black                       All-black cars (cabs remain yellow)
 #   gen cabs N cars M every S       Full specification
 #
 # SEGMENT CONTROL (new statement with flexible modifiers):

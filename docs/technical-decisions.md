@@ -397,6 +397,7 @@ gen cabs 1-2 cars 3-8 speed 6-24 every 15-30  # Randomized values
 **Car color modes:**
 - `gray` (default): Shades of gray (0x303030 to 0xb0b0b0) for realistic industrial appearance
 - `colorful`: Vibrant colors (red, blue, green, purple, yellow) for playful appearance
+- `black`: All rolling stock is solid black (0x000000) for a uniform dark appearance
 - Color is assigned once at car creation, stored in `car.color` property
 - Cabs (engines) are always yellow regardless of color mode
 
@@ -404,6 +405,7 @@ gen cabs 1-2 cars 3-8 speed 6-24 every 15-30  # Randomized values
 ```
 gen gray                      # Gray cars (default)
 gen colorful                  # Colorful cars
+gen black                     # All-black cars (cabs remain yellow)
 gen cabs 2 cars 5 colorful    # Combined with other parameters
 ```
 
@@ -970,6 +972,20 @@ def <name> left radius 18 arc 45                 # Short form
 - Reuses existing infrastructure from splice and flex connect
 - No need for a separate custom piece registry
 - Custom pieces work seamlessly with all DSL features (repetition, labels, etc.)
+
+## Case-Insensitive DSL Parsing
+
+All DSL keywords, archetype names, connection point names, and custom archetype names (from `def`/`define`) are case-insensitive. `GEN`, `Gen`, `gen`, and `gEn` are all treated as the generator archetype.
+
+**Design decisions:**
+- Case insensitivity improves usability — users don't need to worry about casing conventions
+- Labels remain case-sensitive since they are user-defined identifiers that may use casing for readability (e.g., `myLoop`, `leftBranch`)
+- Implementation normalizes to lowercase at parse time (lexer for keywords, parser for archetype codes and connection point names)
+
+**Implementation:**
+1. **Lexer (`src/parser/lexer.ts`):** All keyword comparisons use `lowerValue = value.toLowerCase()` while preserving original casing in the token value for labels and identifiers
+2. **Parser (`src/parser/parser.ts`):** Archetype codes and connection point names are lowercased when extracted from tokens
+3. **Archetypes (`src/core/archetypes.ts`):** `getArchetype()`, `registerRuntimeArchetype()`, and `isValidArchetype()` normalize input keys to lowercase
 
 ## Open Questions
 

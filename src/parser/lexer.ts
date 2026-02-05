@@ -29,6 +29,7 @@ export enum TokenType {
   EVERY = 'EVERY',             // every keyword (for gen statement)
   COLORFUL = 'COLORFUL',       // colorful keyword (for gen statement - colored cars)
   GRAY = 'GRAY',               // gray keyword (for gen statement - grayscale cars)
+  BLACK = 'BLACK',             // black keyword (for gen statement - all black cars)
   RANDOM = 'RANDOM',           // random keyword (for random switch changes)
   MAX = 'MAX',                 // max keyword (for max trains)
   TRAINS = 'TRAINS',           // trains keyword (for max trains)
@@ -194,6 +195,7 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
         pos++;
       }
       const value = statement.substring(start, pos);
+      const lowerValue = value.toLowerCase();
 
       // Check for label definition (followed by :)
       // Skip whitespace first
@@ -212,8 +214,8 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
         continue;
       }
 
-      // Check for keywords
-      if (value === 'new') {
+      // Check for keywords (case-insensitive)
+      if (lowerValue === 'new') {
         tokens.push({
           type: TokenType.NEW,
           value: value,
@@ -223,7 +225,7 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
         continue;
       }
 
-      if (value === 'title') {
+      if (lowerValue === 'title') {
         tokens.push({
           type: TokenType.TITLE,
           value: value,
@@ -243,7 +245,7 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
         return tokens; // Done with this statement
       }
 
-      if (value === 'description') {
+      if (lowerValue === 'description') {
         tokens.push({
           type: TokenType.DESCRIPTION,
           value: value,
@@ -263,7 +265,7 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
         return tokens; // Done with this statement
       }
 
-      if (value === 'lockahead') {
+      if (lowerValue === 'lockahead') {
         tokens.push({
           type: TokenType.LOCKAHEAD,
           value: value,
@@ -273,7 +275,7 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
         continue;
       }
 
-      if (value === 'distance') {
+      if (lowerValue === 'distance') {
         tokens.push({
           type: TokenType.DISTANCE,
           value: value,
@@ -283,7 +285,7 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
         continue;
       }
 
-      if (value === 'count') {
+      if (lowerValue === 'count') {
         tokens.push({
           type: TokenType.COUNT,
           value: value,
@@ -293,7 +295,7 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
         continue;
       }
 
-      if (value === 'degrees') {
+      if (lowerValue === 'degrees') {
         tokens.push({
           type: TokenType.DEGREES,
           value: value,
@@ -303,7 +305,7 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
         continue;
       }
 
-      if (value === 'offset') {
+      if (lowerValue === 'offset') {
         tokens.push({
           type: TokenType.OFFSET,
           value: value,
@@ -313,7 +315,7 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
         continue;
       }
 
-      if (value === 'base') {
+      if (lowerValue === 'base') {
         tokens.push({
           type: TokenType.BASE,
           value: value,
@@ -323,7 +325,7 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
         continue;
       }
 
-      if (value === 'splice') {
+      if (lowerValue === 'splice') {
         tokens.push({
           type: TokenType.SPLICE,
           value: value,
@@ -333,7 +335,7 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
         continue;
       }
 
-      if (value === 'using') {
+      if (lowerValue === 'using') {
         tokens.push({
           type: TokenType.USING,
           value: value,
@@ -343,7 +345,7 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
         continue;
       }
 
-      if (value === 'cabs') {
+      if (lowerValue === 'cabs') {
         tokens.push({
           type: TokenType.CABS,
           value: value,
@@ -353,7 +355,7 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
         continue;
       }
 
-      if (value === 'cars') {
+      if (lowerValue === 'cars') {
         tokens.push({
           type: TokenType.CARS,
           value: value,
@@ -363,7 +365,7 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
         continue;
       }
 
-      if (value === 'speed') {
+      if (lowerValue === 'speed') {
         tokens.push({
           type: TokenType.SPEED,
           value: value,
@@ -373,7 +375,7 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
         continue;
       }
 
-      if (value === 'every') {
+      if (lowerValue === 'every') {
         tokens.push({
           type: TokenType.EVERY,
           value: value,
@@ -383,7 +385,7 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
         continue;
       }
 
-      if (value === 'colorful') {
+      if (lowerValue === 'colorful') {
         tokens.push({
           type: TokenType.COLORFUL,
           value: value,
@@ -393,7 +395,7 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
         continue;
       }
 
-      if (value === 'gray') {
+      if (lowerValue === 'gray') {
         tokens.push({
           type: TokenType.GRAY,
           value: value,
@@ -403,7 +405,17 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
         continue;
       }
 
-      if (value === 'random') {
+      if (lowerValue === 'black') {
+        tokens.push({
+          type: TokenType.BLACK,
+          value: value,
+          line: lineNum,
+          column: startPos + 1,
+        });
+        continue;
+      }
+
+      if (lowerValue === 'random') {
         tokens.push({
           type: TokenType.RANDOM,
           value: value,
@@ -413,7 +425,7 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
         continue;
       }
 
-      if (value === 'max') {
+      if (lowerValue === 'max') {
         tokens.push({
           type: TokenType.MAX,
           value: value,
@@ -423,7 +435,7 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
         continue;
       }
 
-      if (value === 'trains') {
+      if (lowerValue === 'trains') {
         tokens.push({
           type: TokenType.TRAINS,
           value: value,
@@ -433,7 +445,7 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
         continue;
       }
 
-      if (value === 'flex') {
+      if (lowerValue === 'flex') {
         tokens.push({
           type: TokenType.FLEX,
           value: value,
@@ -443,7 +455,7 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
         continue;
       }
 
-      if (value === 'connect') {
+      if (lowerValue === 'connect') {
         tokens.push({
           type: TokenType.CONNECT,
           value: value,
@@ -453,7 +465,7 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
         continue;
       }
 
-      if (value === 'cross') {
+      if (lowerValue === 'cross') {
         tokens.push({
           type: TokenType.CROSS,
           value: value,
@@ -463,7 +475,7 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
         continue;
       }
 
-      if (value === 'define' || value === 'def') {
+      if (lowerValue === 'define' || lowerValue === 'def') {
         tokens.push({
           type: TokenType.DEFINE,
           value: value,
@@ -473,7 +485,7 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
         continue;
       }
 
-      if (value === 'left' || value === 'l') {
+      if (lowerValue === 'left' || lowerValue === 'l') {
         tokens.push({
           type: TokenType.LEFT,
           value: value,
@@ -483,7 +495,7 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
         continue;
       }
 
-      if (value === 'right' || value === 'r') {
+      if (lowerValue === 'right' || lowerValue === 'r') {
         tokens.push({
           type: TokenType.RIGHT,
           value: value,
@@ -493,7 +505,7 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
         continue;
       }
 
-      if (value === 'straight' || value === 's') {
+      if (lowerValue === 'straight' || lowerValue === 's') {
         tokens.push({
           type: TokenType.STRAIGHT,
           value: value,
@@ -503,7 +515,7 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
         continue;
       }
 
-      if (value === 'radius') {
+      if (lowerValue === 'radius') {
         tokens.push({
           type: TokenType.RADIUS,
           value: value,
@@ -513,7 +525,7 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
         continue;
       }
 
-      if (value === 'arc') {
+      if (lowerValue === 'arc') {
         tokens.push({
           type: TokenType.ARC,
           value: value,
@@ -523,7 +535,7 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
         continue;
       }
 
-      if (value === 'length') {
+      if (lowerValue === 'length') {
         tokens.push({
           type: TokenType.LENGTH,
           value: value,
@@ -534,7 +546,7 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
       }
 
       // Check for 'x' as repetition operator (standalone, not part of identifier like 'x90')
-      if (value === 'x') {
+      if (lowerValue === 'x') {
         tokens.push({
           type: TokenType.REPETITION,
           value: 'x',

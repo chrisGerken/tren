@@ -108,6 +108,7 @@
   <div class="section">
     <h2>File Format</h2>
     <p>Layout files are plain text. Blank lines are ignored. Comments begin with <code>#</code>.</p>
+    <p><strong>Case insensitivity:</strong> All keywords, archetype names, and connection point names are case-insensitive. <code>GEN</code>, <code>Gen</code>, and <code>gen</code> are equivalent. Labels remain case-sensitive.</p>
 
     <h3>Statement Separators</h3>
     <p>Multiple statements can be placed on one line, separated by semicolons:</p>
@@ -188,13 +189,15 @@ gen cars 3                    # One train: 1 cab, 3 cars
 gen speed 24                  # One train at 24 inches/second
 gen colorful                  # One train with vibrant colored cars
 gen gray                      # One train with grayscale cars (default)
+gen black                     # One train with all-black cars (cabs remain yellow)
 gen cabs 2 cars 3 speed 6 every 15 colorful    # Full specification</code></pre>
-    <p>Parameters: <code>cabs N</code> (default 1), <code>cars M</code> (default 5), <code>speed S</code> (default 12 inches/sec), <code>every S</code> (spawn interval in seconds), <code>colorful</code> or <code>gray</code> (car color mode).</p>
+    <p>Parameters: <code>cabs N</code> (default 1), <code>cars M</code> (default 5), <code>speed S</code> (default 12 inches/sec), <code>every S</code> (spawn interval in seconds), <code>colorful</code>, <code>gray</code>, or <code>black</code> (car color mode).</p>
     <p>Without <code>every</code>, the generator spawns one train and disables. With <code>every N</code>, it spawns a new train every N seconds.</p>
     <p><strong>Color modes:</strong></p>
     <ul>
       <li><code>gray</code> (default) - Rolling stock uses shades of gray for a realistic look</li>
       <li><code>colorful</code> - Rolling stock uses vibrant colors (red, blue, green, purple, yellow)</li>
+      <li><code>black</code> - All rolling stock is solid black (cabs remain yellow)</li>
     </ul>
 
     <h3>Range Values</h3>

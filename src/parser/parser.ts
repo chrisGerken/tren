@@ -48,7 +48,7 @@ export interface PieceStatement {
   genCars?: number | RangeValue;      // Number of cars (default 5)
   genSpeed?: number | RangeValue;     // Train speed in inches/second (default 12)
   genEvery?: number | RangeValue;     // Spawn frequency in seconds (undefined = one-shot)
-  genColorMode?: 'colorful' | 'gray'; // Car color mode ('colorful' or 'gray', default 'gray')
+  genColorMode?: 'colorful' | 'gray' | 'black'; // Car color mode ('colorful', 'gray', or 'black', default 'gray')
 }
 
 export interface ReferenceStatement {
@@ -254,7 +254,7 @@ class Parser {
       } else if (this.check(TokenType.NUMBER)) {
         // Legacy: bare number is degrees
         degrees = parseFloat(this.advance().value);
-      } else if (this.check(TokenType.IDENTIFIER) && this.peek().value === 'from') {
+      } else if (this.check(TokenType.IDENTIFIER) && this.peek().value.toLowerCase() === 'from') {
         // Legacy: 'from $label.point'
         this.advance(); // consume 'from'
         const ref = this.parseConnectionPointRef();
@@ -286,7 +286,7 @@ class Parser {
       type === TokenType.BASE ||
       type === TokenType.NUMBER ||
       type === TokenType.LABEL_REF ||
-      (type === TokenType.IDENTIFIER && value === 'from') ||
+      (type === TokenType.IDENTIFIER && value.toLowerCase() === 'from') ||
       (type === TokenType.IDENTIFIER && this.peekNext()?.type === TokenType.DOT)
     );
   }
@@ -299,13 +299,13 @@ class Parser {
       if (this.check(TokenType.DOT)) {
         this.advance(); // consume dot
         if (this.check(TokenType.IDENTIFIER)) {
-          point = this.advance().value;
+          point = this.advance().value.toLowerCase();
         }
       }
       return { label, point };
     } else if (this.check(TokenType.IDENTIFIER) && this.peekNext()?.type === TokenType.DOT) {
       // point.$label syntax
-      const point = this.advance().value;
+      const point = this.advance().value.toLowerCase();
       this.advance(); // consume dot
       if (this.check(TokenType.LABEL_REF)) {
         const label = this.advance().value;
@@ -446,7 +446,7 @@ class Parser {
     if (!this.check(TokenType.IDENTIFIER)) {
       throw new Error(`Expected archetype name after 'define' at line ${token.line}`);
     }
-    const name = this.advance().value;
+    const name = this.advance().value.toLowerCase();
 
     // Expect direction: LEFT, RIGHT, or STRAIGHT
     let direction: DefineDirection;
@@ -567,7 +567,7 @@ class Parser {
     if (this.check(TokenType.DOT)) {
       this.advance(); // consume dot
       if (this.check(TokenType.IDENTIFIER)) {
-        point = this.advance().value;
+        point = this.advance().value.toLowerCase();
       }
     }
 
@@ -580,7 +580,7 @@ class Parser {
    */
   private parsePointLabelReference(): ReferenceStatement {
     const pointToken = this.advance(); // consume point name (e.g., 'out')
-    const point = pointToken.value;
+    const point = pointToken.value.toLowerCase();
 
     this.advance(); // consume dot
 
@@ -604,7 +604,7 @@ class Parser {
 
     if (this.check(TokenType.IDENTIFIER)) {
       // Format 1: > point.$label
-      point = this.advance().value;
+      point = this.advance().value.toLowerCase();
 
       if (!this.check(TokenType.DOT)) {
         throw new Error(`Expected "." after connection point in loop close at line ${startToken.line}`);
@@ -627,7 +627,7 @@ class Parser {
       if (!this.check(TokenType.IDENTIFIER)) {
         throw new Error(`Expected connection point after "$${label}." in loop close at line ${startToken.line}`);
       }
-      point = this.advance().value;
+      point = this.advance().value.toLowerCase();
     } else {
       throw new Error(`Expected connection point reference after ">" at line ${startToken.line}`);
     }
@@ -644,15 +644,15 @@ class Parser {
     // Check for explicit connection syntax: in.piece or out.piece
     if (this.check(TokenType.DOT)) {
       // This is explicit connection syntax
-      attachPoint = firstToken.value; // 'in' or 'out'
+      attachPoint = firstToken.value.toLowerCase(); // 'in' or 'out'
       this.advance(); // consume dot
 
       if (!this.check(TokenType.IDENTIFIER)) {
         throw new Error(`Expected piece code after '${attachPoint}.' at line ${firstToken.line}`);
       }
-      archetypeCode = this.advance().value;
+      archetypeCode = this.advance().value.toLowerCase();
     } else {
-      archetypeCode = firstToken.value;
+      archetypeCode = firstToken.value.toLowerCase();
     }
 
     // Parse gen-specific parameters: gen [cabs N|N-M] [cars N|N-M] [speed S|S-S] [every T|T-T] [colorful|gray]
@@ -660,7 +660,7 @@ class Parser {
     let genCars: number | RangeValue | undefined;
     let genSpeed: number | RangeValue | undefined;
     let genEvery: number | RangeValue | undefined;
-    let genColorMode: 'colorful' | 'gray' | undefined;
+    let genColorMode: 'colorful' | 'gray' | 'black' | undefined;
 
     if (archetypeCode === 'gen' || archetypeCode === 'generator') {
       while (this.isGenModifier()) {
@@ -682,6 +682,9 @@ class Parser {
         } else if (this.check(TokenType.GRAY)) {
           this.advance(); // consume 'gray'
           genColorMode = 'gray';
+        } else if (this.check(TokenType.BLACK)) {
+          this.advance(); // consume 'black'
+          genColorMode = 'black';
         } else {
           break;
         }
@@ -713,7 +716,7 @@ class Parser {
 
   private isGenModifier(): boolean {
     const type = this.peek().type;
-    return type === TokenType.CABS || type === TokenType.CARS || type === TokenType.SPEED || type === TokenType.EVERY || type === TokenType.COLORFUL || type === TokenType.GRAY;
+    return type === TokenType.CABS || type === TokenType.CARS || type === TokenType.SPEED || type === TokenType.EVERY || type === TokenType.COLORFUL || type === TokenType.GRAY || type === TokenType.BLACK;
   }
 
   /**

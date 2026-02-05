@@ -311,7 +311,7 @@ const runtimeArchetypes = new Map<string, TrackArchetype>();
  * Register a dynamically created archetype at runtime
  */
 export function registerRuntimeArchetype(archetype: TrackArchetype): void {
-  runtimeArchetypes.set(archetype.code, archetype);
+  runtimeArchetypes.set(archetype.code.toLowerCase(), archetype);
 }
 
 /**
@@ -327,11 +327,12 @@ export function clearRuntimeArchetypes(): void {
  * @throws Error if archetype not found
  */
 export function getArchetype(codeOrAlias: string): TrackArchetype {
+  const key = codeOrAlias.toLowerCase();
   // Check runtime archetypes first (for dynamically created ones like splice results)
-  const runtime = runtimeArchetypes.get(codeOrAlias);
+  const runtime = runtimeArchetypes.get(key);
   if (runtime) return runtime;
 
-  const archetype = archetypeByCode.get(codeOrAlias) || archetypeByAlias.get(codeOrAlias);
+  const archetype = archetypeByCode.get(key) || archetypeByAlias.get(key);
   if (!archetype) {
     throw new Error(`Unknown track archetype: ${codeOrAlias}`);
   }
@@ -342,7 +343,8 @@ export function getArchetype(codeOrAlias: string): TrackArchetype {
  * Check if a code or alias is a valid archetype
  */
 export function isValidArchetype(codeOrAlias: string): boolean {
-  return archetypeByCode.has(codeOrAlias) || archetypeByAlias.has(codeOrAlias);
+  const key = codeOrAlias.toLowerCase();
+  return archetypeByCode.has(key) || archetypeByAlias.has(key);
 }
 
 /**
