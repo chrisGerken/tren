@@ -29,10 +29,8 @@ import { renderTrains } from './renderer/train-renderer';
 import { buildLayout } from './parser/builder';
 import { Simulation } from './core/simulation';
 import { Layout } from './core/types';
+import { setLogLevel, LogLevel, logger } from './core/logger';
 import './style.css';
-
-// Set to true to enable console logging for debugging
-const DEBUG_LOGGING = false;
 
 // Initialize scene
 const container = document.getElementById('canvas-container');
@@ -51,7 +49,7 @@ let simulation: Simulation | null = null;
 
 // Set up switch click callback
 scene.setSwitchClickCallback((routeKey, connectionIndex) => {
-  if (DEBUG_LOGGING) console.log(`Switch click callback: ${routeKey} -> ${connectionIndex}`);
+  logger.debug(`Switch click callback: ${routeKey} -> ${connectionIndex}`);
 
   // Check if the junction is locked by a train
   if (simulation?.isJunctionLocked(routeKey)) {
@@ -61,24 +59,24 @@ scene.setSwitchClickCallback((routeKey, connectionIndex) => {
 
   setSelectedRouteByKey(routeKey, connectionIndex);
   if (currentLayout) {
-    if (DEBUG_LOGGING) console.log(`Calling renderLayout with ${currentLayout.pieces.length} pieces`);
+    logger.debug(`Calling renderLayout with ${currentLayout.pieces.length} pieces`);
     renderLayout(scene, currentLayout);
     setStatus(`Switch toggled: ${routeKey} → route ${connectionIndex + 1}`);
   } else {
-    if (DEBUG_LOGGING) console.log('currentLayout is null!');
+    logger.debug('currentLayout is null!');
   }
 });
 
 // Set up semaphore click callback
 scene.setSemaphoreClickCallback((pieceId) => {
-  if (DEBUG_LOGGING) console.log(`Semaphore click callback: ${pieceId}`);
+  logger.debug(`Semaphore click callback: ${pieceId}`);
 
   if (!currentLayout) return;
 
   // Find the semaphore piece
   const piece = currentLayout.pieces.find(p => p.id === pieceId);
   if (!piece || !piece.semaphoreConfig) {
-    if (DEBUG_LOGGING) console.log(`Semaphore piece ${pieceId} not found or has no config`);
+    logger.debug(`Semaphore piece ${pieceId} not found or has no config`);
     return;
   }
 
@@ -98,6 +96,19 @@ function setStatus(message: string): void {
   if (statusEl) {
     statusEl.textContent = message;
   }
+}
+
+/**
+ * Apply the log level from a layout (or default to WARNING)
+ */
+function applyLogLevel(layout: Layout): void {
+  const levelMap: Record<string, LogLevel> = {
+    'debug': LogLevel.DEBUG,
+    'info': LogLevel.INFO,
+    'warn': LogLevel.WARNING,
+    'error': LogLevel.ERROR,
+  };
+  setLogLevel(layout.logLevel ? levelMap[layout.logLevel] : LogLevel.WARNING);
 }
 
 /**
@@ -124,7 +135,7 @@ function startSimulation(layout: Layout): void {
   // Start the simulation
   simulation.start();
 
-  if (DEBUG_LOGGING) console.log('Simulation started');
+  logger.debug('Simulation started');
 }
 
 /**
@@ -154,6 +165,7 @@ async function importLayout(): Promise<void> {
     setStatus('Parsing layout...');
     const layout = buildLayout(content);
     currentLayout = layout;
+    applyLogLevel(layout);
 
     // Update random button to reflect layout's setting
     updateRandomButtonState();
@@ -164,11 +176,12 @@ async function importLayout(): Promise<void> {
     // Start simulation
     startSimulation(layout);
 
+    logger.info(`Layout loaded: ${layout.pieces.length} pieces`);
     setStatus(`Layout loaded: ${layout.pieces.length} pieces - simulation running`);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     setStatus(`Error: ${message}`);
-    console.error('Import error:', error);
+    logger.error('Import error:', error);
   }
 }
 
@@ -267,6 +280,7 @@ document.addEventListener('paste', async (e) => {
       setStatus('Parsing pasted layout...');
       const layout = buildLayout(text);
       currentLayout = layout;
+      applyLogLevel(layout);
 
       // Update random button to reflect layout's setting
       updateRandomButtonState();
@@ -276,6 +290,7 @@ document.addEventListener('paste', async (e) => {
       // Start simulation
       startSimulation(layout);
 
+      logger.info(`Layout loaded from clipboard: ${layout.pieces.length} pieces`);
       setStatus(`Layout loaded from clipboard: ${layout.pieces.length} pieces - simulation running`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -421,6 +436,7 @@ function runSelectedLayout(): void {
     setStatus('Parsing layout...');
     const layout = buildLayout(content);
     currentLayout = layout;
+    applyLogLevel(layout);
 
     updateRandomButtonState();
 
@@ -429,11 +445,12 @@ function runSelectedLayout(): void {
 
     startSimulation(layout);
 
+    logger.info(`Layout loaded: ${layout.pieces.length} pieces`);
     setStatus(`Layout loaded: ${layout.pieces.length} pieces - simulation running`);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     setStatus(`Error: ${message}`);
-    console.error('Run layout error:', error);
+    logger.error('Run layout error:', error);
   }
 }
 
@@ -469,7 +486,7 @@ async function saveSelectedLayout(): Promise<void> {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     setStatus(`Error: ${message}`);
-    console.error('Save layout error:', error);
+    logger.error('Save layout error:', error);
   }
 }
 

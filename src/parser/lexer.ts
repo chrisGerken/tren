@@ -43,6 +43,7 @@ export enum TokenType {
   RADIUS = 'RADIUS',           // radius keyword (for define - curve radius)
   ARC = 'ARC',                 // arc keyword (for define - curve arc angle)
   LENGTH = 'LENGTH',           // length keyword (for define - straight length)
+  LOG = 'LOG',                 // log/logging keyword (for log level configuration)
   EOF = 'EOF',
 }
 
@@ -468,6 +469,16 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
       if (lowerValue === 'cross') {
         tokens.push({
           type: TokenType.CROSS,
+          value: value,
+          line: lineNum,
+          column: startPos + 1,
+        });
+        continue;
+      }
+
+      if (lowerValue === 'log' || lowerValue === 'logging') {
+        tokens.push({
+          type: TokenType.LOG,
           value: value,
           line: lineNum,
           column: startPos + 1,

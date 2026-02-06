@@ -153,11 +153,37 @@ new
 $out2.out
 crvr * 4
 
-crvl * 12
+crvl * 7
+b2a: crvl
+crvl * 8
 
 new
 crvr * 4
 > $in2.in
+
+new 
+$b2a.out
+b2b: str
+crvl * 4
+crvr * 4
+
+new 
+$b2b.out
+b2c: str
+crvl * 4
+crvr * 4
+
+new 
+$b2c.out
+b2d: str
+crvl * 4
+crvr * 4
+
+new 
+$b2d.out
+b2e: str
+crvl * 4
+crvr * 4
 
 #
 # Small layout 3

@@ -18,7 +18,8 @@ export type Statement =
   | MaxTrainsStatement
   | FlexConnectStatement
   | CrossConnectStatement
-  | DefineStatement;
+  | DefineStatement
+  | LogStatement;
 
 export interface NewStatement {
   type: 'new';
@@ -131,6 +132,12 @@ export interface DefineStatement {
   line: number;
 }
 
+export interface LogStatement {
+  type: 'log';
+  level: 'debug' | 'info' | 'warn' | 'error';
+  line: number;
+}
+
 /**
  * Parse DSL text into an array of statements
  */
@@ -191,6 +198,9 @@ class Parser {
 
       case TokenType.DEFINE:
         return this.parseDefineStatement();
+
+      case TokenType.LOG:
+        return this.parseLogStatement();
 
       case TokenType.SPLICE:
         return this.parseSpliceStatement();
@@ -435,6 +445,30 @@ class Parser {
       type: 'crossConnect',
       label1,
       label2,
+      line: token.line,
+    };
+  }
+
+  private parseLogStatement(): LogStatement {
+    const token = this.advance(); // consume 'log' or 'logging'
+
+    if (!this.check(TokenType.IDENTIFIER)) {
+      throw new Error(`Expected log level (debug, info, warn, error) after 'log' at line ${token.line}`);
+    }
+
+    const levelToken = this.advance();
+    let levelStr = levelToken.value.toLowerCase();
+
+    // Accept 'warning' as alias for 'warn'
+    if (levelStr === 'warning') levelStr = 'warn';
+
+    if (levelStr !== 'debug' && levelStr !== 'info' && levelStr !== 'warn' && levelStr !== 'error') {
+      throw new Error(`Invalid log level '${levelToken.value}' at line ${token.line}. Expected: debug, info, warn, or error`);
+    }
+
+    return {
+      type: 'log',
+      level: levelStr as 'debug' | 'info' | 'warn' | 'error',
       line: token.line,
     };
   }

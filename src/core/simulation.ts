@@ -14,6 +14,7 @@ import {
 } from './train-movement';
 import { getRandomCarColor, resetCarColorTracking } from '../renderer/train-renderer';
 import { LockManager } from './lock-manager';
+import { logger } from './logger';
 
 // Default train speed in inches per second
 const DEFAULT_SPEED = 12;
@@ -52,9 +53,6 @@ function resolveRealValue(value: number | RangeValue | undefined, defaultValue: 
   }
   return value;
 }
-
-// Debug logging
-const DEBUG_LOGGING = false;
 
 /**
  * Simulation class - manages the animation loop and train state
@@ -98,7 +96,7 @@ export class Simulation {
     this.running = true;
     this.lastTime = performance.now();
     this.animationLoop(this.lastTime);
-    if (DEBUG_LOGGING) console.log('Simulation started');
+    logger.info('Simulation started');
   }
 
   /**
@@ -110,7 +108,7 @@ export class Simulation {
       cancelAnimationFrame(this.animationId);
       this.animationId = null;
     }
-    if (DEBUG_LOGGING) console.log('Simulation stopped');
+    logger.info('Simulation stopped');
   }
 
   /**
@@ -129,9 +127,7 @@ export class Simulation {
       }
     }
 
-    if (locked.size > 0 && DEBUG_LOGGING) {
-      console.log('Locked points:', Array.from(locked));
-    }
+    logger.debug('Locked points:', Array.from(locked));
     return locked;
   }
 
@@ -151,7 +147,7 @@ export class Simulation {
       }
     }
     this.onUpdate();
-    if (DEBUG_LOGGING) console.log('Simulation reset');
+    logger.info('Simulation reset');
   }
 
   /**
@@ -168,7 +164,7 @@ export class Simulation {
     const piece = this.layout.pieces.find(p => p.id === pieceId);
     if (piece?.genConfig) {
       piece.genConfig.enabled = !piece.genConfig.enabled;
-      if (DEBUG_LOGGING) console.log(`Generator ${pieceId} toggled: ${piece.genConfig.enabled}`);
+      logger.info(`Generator ${pieceId} toggled: ${piece.genConfig.enabled}`);
     }
   }
 
@@ -255,9 +251,7 @@ export class Simulation {
 
     // Check maxTrains limit before spawning
     if (!this.canSpawnTrain()) {
-      if (DEBUG_LOGGING) {
-        console.log(`Cannot spawn train - at max trains limit (${this.layout.maxTrains})`);
-      }
+      logger.debug(`Cannot spawn train - at max trains limit (${this.layout.maxTrains})`);
       return false;
     }
 
@@ -280,7 +274,7 @@ export class Simulation {
     // Generator has an internal section - cars spawn inside it
     const genSectionLength = getSectionLength(generatorPiece, 0);
     if (genSectionLength === 0) {
-      if (DEBUG_LOGGING) console.log(`Generator ${generatorPiece.id} has no internal section`);
+      logger.debug(`Generator ${generatorPiece.id} has no internal section`);
       return false;
     }
 
@@ -343,14 +337,12 @@ export class Simulation {
 
     if (!lockResult.success) {
       // Track ahead is blocked - don't spawn yet
-      if (DEBUG_LOGGING) {
-        console.log(`Cannot spawn train - blocked at ${lockResult.blocked} by ${lockResult.blockingTrainId}`);
-      }
+      logger.debug(`Cannot spawn train - blocked at ${lockResult.blocked} by ${lockResult.blockingTrainId}`);
       return false;
     }
 
     this.trains.push(train);
-    if (DEBUG_LOGGING) console.log(`Spawned train ${train.id} with ${train.cars.length} cars`);
+    logger.info(`Spawned train ${train.id} with ${train.cars.length} cars`);
     return true;
   }
 
@@ -405,7 +397,7 @@ export class Simulation {
       // This ensures all cars use the same route, then it's forgotten for the next lap
       for (const routeKey of routesToClear) {
         train.routesTaken.delete(routeKey);
-        if (DEBUG_LOGGING) console.log(`Cleared route memory: ${routeKey} for train ${train.id}`);
+        logger.debug(`Cleared route memory: ${routeKey} for train ${train.id}`);
       }
 
       // Step 4: Release locks for connection points the train has cleared
@@ -464,7 +456,7 @@ export class Simulation {
       if (allInBin) {
         // Release all locks held by this train
         this.lockManager.releaseAllLocks(train.id);
-        if (DEBUG_LOGGING) console.log(`Removing train ${train.id} - all cars in bin`);
+        logger.info(`Removing train ${train.id} - all cars in bin`);
         return false; // Remove this train
       }
       return true; // Keep this train

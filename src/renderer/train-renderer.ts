@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { Train, Car, ColorMode } from '../core/types';
 import { CAB_LENGTH, CAR_LENGTH } from '../core/train-movement';
+import { logger } from '../core/logger';
 
 // Car dimensions in inches
 const CAR_WIDTH = 2;
@@ -316,7 +317,7 @@ function renderCar(car: Car): THREE.Group {
 
   // Guard against NaN values which can cause rendering issues
   if (Number.isNaN(posX) || Number.isNaN(posZ) || Number.isNaN(rot)) {
-    console.error(`NaN detected in car ${car.id}: pos=(${posX}, ${posZ}), rot=${rot}`);
+    logger.error(`NaN detected in car ${car.id}: pos=(${posX}, ${posZ}), rot=${rot}`);
     group.visible = false;
   } else {
     group.position.set(posX, 0, posZ);
@@ -353,7 +354,7 @@ export function updateTrainMeshes(group: THREE.Group, trains: Train[]): void {
 
         // Guard against NaN values
         if (Number.isNaN(posX) || Number.isNaN(posZ) || Number.isNaN(rot)) {
-          console.error(`NaN detected in car ${car.id}: pos=(${posX}, ${posZ}), rot=${rot}`);
+          logger.error(`NaN detected in car ${car.id}: pos=(${posX}, ${posZ}), rot=${rot}`);
           carGroup.visible = false;
         } else {
           carGroup.position.set(posX, 0, posZ);

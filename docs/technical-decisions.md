@@ -291,15 +291,21 @@ Virtual switches (connection points with multiple connections) are visually indi
 **Future work:**
 - Integration with train routing logic
 
-## Debug Logging
+## Centralized Logger
 
-Configurable debug logging is available for troubleshooting:
+All console output is routed through a centralized logger utility (`src/core/logger.ts`).
 
-- `DEBUG_LOGGING` constant in `src/renderer/track-renderer.ts` - logs switch route selection
-- `DEBUG_LOGGING` constant in `src/main.ts` - logs switch click callbacks and re-renders
-- `DEBUG_MODE` constant in `src/renderer/track-renderer.ts` - shows simplified debug view with connection points
+**Design:** Module-level singleton with a `LogLevel` enum (DEBUG=0, INFO=1, WARNING=2, ERROR=3). The `logger` object exposes `debug()`, `info()`, `warn()`, and `error()` methods that check the current level before calling the corresponding `console.*` function. Messages are prefixed with `[DEBUG]`, `[INFO]`, `[WARN]`, or `[ERROR]`.
 
-Set any of these to `true` to enable the respective logging.
+**DSL Integration:** The `log` DSL statement (e.g., `log debug`) sets the log level. The level is applied immediately during layout building (so debug output from the parser/builder is also controlled) and reapplied at runtime from `layout.logLevel`. Default level is WARNING, matching the previous behavior where per-file `DEBUG_LOGGING` constants were set to `false`.
+
+**Severity assignments:**
+- **DEBUG**: Geometry calculations, lock acquisition/release details, piece placement coordinates, spline math, connection point details, switch indicator positioning
+- **INFO**: Train spawned, train removed/binned, layout loaded, generator toggled, simulation start/stop
+- **WARNING**: No intersection for cross connect, no flex solution, no track at splice
+- **ERROR**: NaN in rendering, file I/O errors
+
+**Previous approach (replaced):** Per-file `DEBUG_LOGGING` boolean constants that guarded `console.log` calls. This was fragile — one file (`lock-manager.ts`) had `DEBUG_LOGGING = true` accidentally left on, causing console spam in production.
 
 ## Rendering Details
 

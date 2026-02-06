@@ -129,10 +129,12 @@ str          # This is a comment</code></pre>
 description A test layout      # Description text
 lockahead distance 15 count 3  # Lock ahead: 15 inches, 3 connection points
 random                         # Switches change randomly when trains pass
-max trains 5                   # Limit to at most 5 trains on the layout</code></pre>
+max trains 5                   # Limit to at most 5 trains on the layout
+log debug                      # Set log level: debug, info, warn, error</code></pre>
     <p>The <code>lockahead</code> statement configures collision prevention: <code>distance N</code> sets how far ahead to scan (default 10 inches), <code>count N</code> sets minimum connection points to lock (default 2).</p>
     <p>The <code>random</code> statement enables automatic switch changes after each train passes, creating varied autonomous behavior ideal for demonstrations or computer art.</p>
     <p>The <code>max trains</code> statement limits the number of trains that can exist simultaneously (default: 5). Generators will not spawn new trains when the limit is reached. Trains destroyed by bins free up slots for new trains.</p>
+    <p>The <code>log</code> (or <code>logging</code>) statement controls browser console output verbosity. Levels: <code>debug</code> (all messages), <code>info</code>, <code>warn</code> (default), <code>error</code> (least verbose). <code>warning</code> is accepted as an alias for <code>warn</code>.</p>
 
     <h3>Custom Track Pieces</h3>
     <p>Create custom curve or straight pieces with the <code>define</code> (or <code>def</code>) statement:</p>

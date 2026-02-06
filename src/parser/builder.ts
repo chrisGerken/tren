@@ -2,13 +2,11 @@
  * Layout Builder - transforms AST into placed track pieces
  */
 
-import { parse, Statement, PieceStatement, NewStatement, ReferenceStatement, LoopCloseStatement, TitleStatement, DescriptionStatement, LockAheadStatement, SpliceStatement, RandomStatement, MaxTrainsStatement, FlexConnectStatement, CrossConnectStatement, DefineStatement } from './parser';
+import { parse, Statement, PieceStatement, NewStatement, ReferenceStatement, LoopCloseStatement, TitleStatement, DescriptionStatement, LockAheadStatement, SpliceStatement, RandomStatement, MaxTrainsStatement, FlexConnectStatement, CrossConnectStatement, DefineStatement, LogStatement } from './parser';
 import { Layout, TrackPiece, Vec3, vec2, ConnectionPointDef, RangeValue as TypeRangeValue } from '../core/types';
 import { getArchetype, registerRuntimeArchetype } from '../core/archetypes';
 import type { TrackArchetype } from '../core/archetypes';
-
-// Debug logging for layout building
-const DEBUG_LOGGING = false;
+import { setLogLevel, LogLevel, logger } from '../core/logger';
 
 interface SpliceInfo {
   label?: string;
@@ -66,6 +64,7 @@ interface BuilderState {
   lockAheadCount?: number;
   randomSwitches?: boolean;
   maxTrains?: number;
+  logLevel?: string;
   pendingSplices: SpliceInfo[];
   pendingFlexConnects: FlexConnectInfo[];
   pendingCrossConnects: CrossConnectInfo[];
@@ -146,6 +145,7 @@ class LayoutBuilder {
       lockAheadCount: this.state.lockAheadCount,
       randomSwitches: this.state.randomSwitches,
       maxTrains: this.state.maxTrains,
+      logLevel: this.state.logLevel,
       pieces: this.state.pieces,
     };
   }
@@ -191,7 +191,21 @@ class LayoutBuilder {
       case 'define':
         this.processDefine(stmt);
         break;
+      case 'log':
+        this.processLog(stmt);
+        break;
     }
+  }
+
+  private processLog(stmt: LogStatement): void {
+    this.state.logLevel = stmt.level;
+    const levelMap: Record<string, LogLevel> = {
+      'debug': LogLevel.DEBUG,
+      'info': LogLevel.INFO,
+      'warn': LogLevel.WARNING,
+      'error': LogLevel.ERROR,
+    };
+    setLogLevel(levelMap[stmt.level]);
   }
 
   private processTitle(stmt: TitleStatement): void {
@@ -296,12 +310,10 @@ class LayoutBuilder {
     // Register the custom archetype
     registerRuntimeArchetype(archetype);
 
-    if (DEBUG_LOGGING) {
-      console.log(`Defined custom archetype '${stmt.name}': ${stmt.direction}, ` +
-        (stmt.direction === 'straight'
-          ? `length=${stmt.length}`
-          : `radius=${stmt.radius}, arc=${stmt.arc}°`));
-    }
+    logger.debug(`Defined custom archetype '${stmt.name}': ${stmt.direction}, ` +
+      (stmt.direction === 'straight'
+        ? `length=${stmt.length}`
+        : `radius=${stmt.radius}, arc=${stmt.arc}°`));
   }
 
   private processSplice(stmt: SpliceStatement): void {
@@ -392,13 +404,11 @@ class LayoutBuilder {
       this.state.currentPiece = labeledPiece;
       this.state.currentPointName = pointName;
 
-      if (DEBUG_LOGGING) {
-        console.log(`Line ${stmt.line}: New segment from $${stmt.baseLabel}.${pointName}:`);
-        console.log(`Line ${stmt.line}:   baseAngle: ${(baseAngle * 180 / Math.PI).toFixed(1)}°`);
-        console.log(`Line ${stmt.line}:   degrees offset: ${stmt.degrees}°`);
-        console.log(`Line ${stmt.line}:   currentRotation: ${(worldRotation * 180 / Math.PI).toFixed(1)}°`);
-        console.log(`Line ${stmt.line}:   position: (${offsetPos.x.toFixed(2)}, ${offsetPos.z.toFixed(2)})`);
-      }
+      logger.debug(`Line ${stmt.line}: New segment from $${stmt.baseLabel}.${pointName}:`);
+      logger.debug(`Line ${stmt.line}:   baseAngle: ${(baseAngle * 180 / Math.PI).toFixed(1)}°`);
+      logger.debug(`Line ${stmt.line}:   degrees offset: ${stmt.degrees}°`);
+      logger.debug(`Line ${stmt.line}:   currentRotation: ${(worldRotation * 180 / Math.PI).toFixed(1)}°`);
+      logger.debug(`Line ${stmt.line}:   position: (${offsetPos.x.toFixed(2)}, ${offsetPos.z.toFixed(2)})`);
     } else {
       // Start at origin with specified rotation and offset
       const worldRotation = degreesRadians;
@@ -418,12 +428,10 @@ class LayoutBuilder {
       this.state.currentPiece = null;
       this.state.currentPointName = 'out';
 
-      if (DEBUG_LOGGING) {
-        console.log(`Line ${stmt.line}: New segment at origin:`);
-        console.log(`Line ${stmt.line}:   degrees: ${stmt.degrees}°`);
-        console.log(`Line ${stmt.line}:   currentRotation: ${(worldRotation * 180 / Math.PI).toFixed(1)}°`);
-        console.log(`Line ${stmt.line}:   position: (${startPos.x.toFixed(2)}, ${startPos.z.toFixed(2)})`);
-      }
+      logger.debug(`Line ${stmt.line}: New segment at origin:`);
+      logger.debug(`Line ${stmt.line}:   degrees: ${stmt.degrees}°`);
+      logger.debug(`Line ${stmt.line}:   currentRotation: ${(worldRotation * 180 / Math.PI).toFixed(1)}°`);
+      logger.debug(`Line ${stmt.line}:   position: (${startPos.x.toFixed(2)}, ${startPos.z.toFixed(2)})`);
     }
   }
 
@@ -514,13 +522,13 @@ class LayoutBuilder {
       connections: new Map(),
     };
 
-    if (DEBUG_LOGGING) {
+    {
       const labelStr = label ? ` "${label}"` : '';
       const lineStr = line !== undefined ? `Line ${line}` : 'Line ?';
-      console.log(`${lineStr}: Placed ${archetype.code}${labelStr} (${piece.id}):`);
-      console.log(`${lineStr}:   incomingRotation: ${(this.state.currentRotation * 180 / Math.PI).toFixed(1)}°`);
-      console.log(`${lineStr}:   pieceRotation: ${(pieceRotation * 180 / Math.PI).toFixed(1)}°`);
-      console.log(`${lineStr}:   position: (${piecePosition.x.toFixed(2)}, ${piecePosition.z.toFixed(2)})`);
+      logger.debug(`${lineStr}: Placed ${archetype.code}${labelStr} (${piece.id}):`);
+      logger.debug(`${lineStr}:   incomingRotation: ${(this.state.currentRotation * 180 / Math.PI).toFixed(1)}°`);
+      logger.debug(`${lineStr}:   pieceRotation: ${(pieceRotation * 180 / Math.PI).toFixed(1)}°`);
+      logger.debug(`${lineStr}:   position: (${piecePosition.x.toFixed(2)}, ${piecePosition.z.toFixed(2)})`);
     }
 
     // Update current position and rotation for next piece
@@ -536,9 +544,9 @@ class LayoutBuilder {
       this.state.currentRotation = Math.atan2(continueDir.z, continueDir.x);
       this.state.currentPointName = continuePointName!; // Non-null: continuePoint implies continuePointName is defined
 
-      if (DEBUG_LOGGING) {
+      {
         const lineStr = line !== undefined ? `Line ${line}` : 'Line ?';
-        console.log(`${lineStr}:   outgoingRotation: ${(this.state.currentRotation * 180 / Math.PI).toFixed(1)}°`);
+        logger.debug(`${lineStr}:   outgoingRotation: ${(this.state.currentRotation * 180 / Math.PI).toFixed(1)}°`);
       }
     }
 
@@ -572,13 +580,11 @@ class LayoutBuilder {
     this.state.currentPiece = labeledPiece;
     this.state.currentPointName = pointName;
 
-    if (DEBUG_LOGGING) {
-      console.log(`Line ${stmt.line}: Reference $${stmt.label}.${pointName}:`);
-      console.log(`Line ${stmt.line}:   labeledPiece (${labeledPiece.archetypeCode}) rotation: ${(labeledPiece.rotation * 180 / Math.PI).toFixed(1)}°`);
-      console.log(`Line ${stmt.line}:   point.direction (local): (${point.direction.x.toFixed(3)}, ${point.direction.z.toFixed(3)})`);
-      console.log(`Line ${stmt.line}:   rotatedDir (world): (${rotatedDir.x.toFixed(3)}, ${rotatedDir.z.toFixed(3)})`);
-      console.log(`Line ${stmt.line}:   new currentRotation: ${(this.state.currentRotation * 180 / Math.PI).toFixed(1)}°`);
-    }
+    logger.debug(`Line ${stmt.line}: Reference $${stmt.label}.${pointName}:`);
+    logger.debug(`Line ${stmt.line}:   labeledPiece (${labeledPiece.archetypeCode}) rotation: ${(labeledPiece.rotation * 180 / Math.PI).toFixed(1)}°`);
+    logger.debug(`Line ${stmt.line}:   point.direction (local): (${point.direction.x.toFixed(3)}, ${point.direction.z.toFixed(3)})`);
+    logger.debug(`Line ${stmt.line}:   rotatedDir (world): (${rotatedDir.x.toFixed(3)}, ${rotatedDir.z.toFixed(3)})`);
+    logger.debug(`Line ${stmt.line}:   new currentRotation: ${(this.state.currentRotation * 180 / Math.PI).toFixed(1)}°`);
   }
 
   private processLoopClose(stmt: LoopCloseStatement): void {
@@ -661,12 +667,10 @@ class LayoutBuilder {
     };
     this.state.currentRotation = desiredAngle;
 
-    if (DEBUG_LOGGING) {
-      console.log(`Line ${stmt.line}: Loop close to $${stmt.label}.${stmt.point}:`);
-      console.log(`Line ${stmt.line}:   rotationDelta: ${(rotationDelta * 180 / Math.PI).toFixed(1)}°`);
-      console.log(`Line ${stmt.line}:   new currentPosition: (${targetPos.x.toFixed(2)}, ${targetPos.z.toFixed(2)})`);
-      console.log(`Line ${stmt.line}:   new currentRotation: ${(desiredAngle * 180 / Math.PI).toFixed(1)}°`);
-    }
+    logger.debug(`Line ${stmt.line}: Loop close to $${stmt.label}.${stmt.point}:`);
+    logger.debug(`Line ${stmt.line}:   rotationDelta: ${(rotationDelta * 180 / Math.PI).toFixed(1)}°`);
+    logger.debug(`Line ${stmt.line}:   new currentPosition: (${targetPos.x.toFixed(2)}, ${targetPos.z.toFixed(2)})`);
+    logger.debug(`Line ${stmt.line}:   new currentRotation: ${(desiredAngle * 180 / Math.PI).toFixed(1)}°`);
 
     // Create connection records
     if (this.state.currentPiece) {
@@ -730,7 +734,7 @@ class LayoutBuilder {
    * Creates custom curve+straight or straight+curve pieces to bridge gaps.
    */
   private processPendingFlexConnects(): void {
-    console.log(`Processing ${this.state.pendingFlexConnects.length} flex connects`);
+    logger.debug(`Processing ${this.state.pendingFlexConnects.length} flex connects`);
     for (const flexConnect of this.state.pendingFlexConnects) {
       this.performFlexConnect(flexConnect);
     }
@@ -742,7 +746,7 @@ class LayoutBuilder {
    */
   private processPendingCrossConnects(): void {
     if (this.state.pendingCrossConnects.length > 0) {
-      console.log(`Processing ${this.state.pendingCrossConnects.length} cross connects`);
+      logger.debug(`Processing ${this.state.pendingCrossConnects.length} cross connects`);
     }
     for (const crossConnect of this.state.pendingCrossConnects) {
       this.performCrossConnect(crossConnect);
@@ -774,7 +778,7 @@ class LayoutBuilder {
     // Find intersection point
     const intersection = this.findSplineIntersection(piece1, piece2);
     if (!intersection) {
-      console.warn(`No intersection found between $${info.label1} and $${info.label2} at line ${info.line}`);
+      logger.warn(`No intersection found between $${info.label1} and $${info.label2} at line ${info.line}`);
       return;
     }
 
@@ -785,10 +789,10 @@ class LayoutBuilder {
     const distance1 = intersection.t1 * length1;
     const distance2 = intersection.t2 * length2;
 
-    console.log(`Cross connect at line ${info.line}:`);
-    console.log(`  Intersection at (${intersection.worldPos.x.toFixed(2)}, ${intersection.worldPos.z.toFixed(2)})`);
-    console.log(`  piece1: t=${intersection.t1.toFixed(3)}, length=${length1.toFixed(1)}, distance=${distance1.toFixed(1)}`);
-    console.log(`  piece2: t=${intersection.t2.toFixed(3)}, length=${length2.toFixed(1)}, distance=${distance2.toFixed(1)}`);
+    logger.debug(`Cross connect at line ${info.line}:`);
+    logger.debug(`  Intersection at (${intersection.worldPos.x.toFixed(2)}, ${intersection.worldPos.z.toFixed(2)})`);
+    logger.debug(`  piece1: t=${intersection.t1.toFixed(3)}, length=${length1.toFixed(1)}, distance=${distance1.toFixed(1)}`);
+    logger.debug(`  piece2: t=${intersection.t2.toFixed(3)}, length=${length2.toFixed(1)}, distance=${distance2.toFixed(1)}`);
 
     // Create shared connection point ID for this intersection
     const sharedPointId = `cross_${piece1.id}_${piece2.id}`;
@@ -815,7 +819,7 @@ class LayoutBuilder {
       worldPosition: { ...intersection.worldPos },
     });
 
-    console.log(`  Created shared internal connection point: ${sharedPointId}`);
+    logger.debug(`  Created shared internal connection point: ${sharedPointId}`);
   }
 
   /**
@@ -1108,20 +1112,20 @@ class LayoutBuilder {
     // D2 is the incoming direction (opposite of connection point direction)
     const D2: Vec3 = { x: -dir2World.x, y: 0, z: -dir2World.z };
 
-    console.log(`Flex connect at line ${info.line}:`);
-    console.log(`  P1: (${P1.x.toFixed(2)}, ${P1.z.toFixed(2)}), D1: (${D1.x.toFixed(3)}, ${D1.z.toFixed(3)}) angle=${(Math.atan2(D1.z, D1.x) * 180 / Math.PI).toFixed(1)}°`);
-    console.log(`  P2: (${P2.x.toFixed(2)}, ${P2.z.toFixed(2)}), D2: (${D2.x.toFixed(3)}, ${D2.z.toFixed(3)}) angle=${(Math.atan2(D2.z, D2.x) * 180 / Math.PI).toFixed(1)}°`);
-    console.log(`  Distance: ${Math.sqrt((P2.x-P1.x)**2 + (P2.z-P1.z)**2).toFixed(2)}`);
+    logger.debug(`Flex connect at line ${info.line}:`);
+    logger.debug(`  P1: (${P1.x.toFixed(2)}, ${P1.z.toFixed(2)}), D1: (${D1.x.toFixed(3)}, ${D1.z.toFixed(3)}) angle=${(Math.atan2(D1.z, D1.x) * 180 / Math.PI).toFixed(1)}°`);
+    logger.debug(`  P2: (${P2.x.toFixed(2)}, ${P2.z.toFixed(2)}), D2: (${D2.x.toFixed(3)}, ${D2.z.toFixed(3)}) angle=${(Math.atan2(D2.z, D2.x) * 180 / Math.PI).toFixed(1)}°`);
+    logger.debug(`  Distance: ${Math.sqrt((P2.x-P1.x)**2 + (P2.z-P1.z)**2).toFixed(2)}`);
 
     // Try to find a valid straight+curve or curve+straight solution
     const solution = this.solveFlexConnect(P1, D1, P2, D2, info.line);
 
     if (!solution) {
-      console.warn(`Could not find flex connect solution at line ${info.line}`);
+      logger.warn(`Could not find flex connect solution at line ${info.line}`);
       return;
     }
 
-    console.log(`  Solution: ${solution.type}, straight=${solution.straightLength.toFixed(2)}", radius=${solution.radius.toFixed(2)}", direction=${solution.curveDirection}`);
+    logger.debug(`  Solution: ${solution.type}, straight=${solution.straightLength.toFixed(2)}", radius=${solution.radius.toFixed(2)}", direction=${solution.curveDirection}`);
 
     // Create the flex track pieces (labels are derived from endpoint labels)
     this.createFlexPieces(solution, piece1, info.point1Name, piece2, info.point2Name, info.point1Label, info.point2Label, info.line);
@@ -1154,9 +1158,7 @@ class LayoutBuilder {
     const DIRECTION_TOLERANCE = 0.02; // Tolerance for direction alignment (cos should be > 0.98)
     const COLLINEAR_SIN_TOLERANCE = 0.02; // Tolerance for collinearity (sin of angle < 0.02 ≈ 1.1°)
 
-    if (DEBUG_LOGGING) {
-      console.log(`  Solving with delta=(${delta.x.toFixed(2)}, ${delta.z.toFixed(2)}), length=${deltaLength.toFixed(2)}`);
-    }
+    logger.debug(`  Solving with delta=(${delta.x.toFixed(2)}, ${delta.z.toFixed(2)}), length=${deltaLength.toFixed(2)}`);
 
     // Check for straight-only case: D1 ≈ D2 and delta is parallel to D1 (same direction)
     const directionDot = D1.x * D2.x + D1.z * D2.z;  // cos(angle between D1 and D2)
@@ -1174,15 +1176,11 @@ class LayoutBuilder {
       deltaAlongD1 = cosAngle > 0.98;  // delta points in same direction as D1
     }
 
-    if (DEBUG_LOGGING) {
-      console.log(`  Direction dot=${directionDot.toFixed(4)}, aligned=${isDirectionAligned}, collinear=${isCollinear}, deltaAlongD1=${deltaAlongD1}`);
-    }
+    logger.debug(`  Direction dot=${directionDot.toFixed(4)}, aligned=${isDirectionAligned}, collinear=${isCollinear}, deltaAlongD1=${deltaAlongD1}`);
 
     if (isDirectionAligned && isCollinear && deltaAlongD1 && deltaLength > 0.1) {
       // Straight-only solution
-      if (DEBUG_LOGGING) {
-        console.log(`  [straight-only] length=${deltaLength.toFixed(2)}"`);
-      }
+      logger.debug(`  [straight-only] length=${deltaLength.toFixed(2)}"`);
       return {
         type: 'straight-only',
         straightLength: deltaLength,
@@ -1203,9 +1201,7 @@ class LayoutBuilder {
     const MAX_ARC_DEGREES = 270; // Reject curves greater than 270 degrees
     const maxArcRadians = MAX_ARC_DEGREES * Math.PI / 180;
 
-    if (DEBUG_LOGGING) {
-      console.log(`  Arc angle between D1 and D2: ${(arcAngle * 180 / Math.PI).toFixed(1)}°`);
-    }
+    logger.debug(`  Arc angle between D1 and D2: ${(arcAngle * 180 / Math.PI).toFixed(1)}°`);
 
     // Try curve+straight and straight+curve combinations
     const solutions: FlexSolution[] = [];
@@ -1218,9 +1214,7 @@ class LayoutBuilder {
       if (result && result.L >= 0 && Math.abs(result.R) >= MIN_RADIUS) {
         // Reject if arc angle is too large (> 270 degrees)
         if (Math.abs(arcAngle) <= maxArcRadians) {
-          if (DEBUG_LOGGING) {
-            console.log(`  [str+curve] L=${result.L.toFixed(2)}, R=${result.R.toFixed(2)}`);
-          }
+          logger.debug(`  [str+curve] L=${result.L.toFixed(2)}, R=${result.R.toFixed(2)}`);
           if (result.L < MIN_STRAIGHT) {
             // Curve-only solution
             solutions.push({
@@ -1239,8 +1233,8 @@ class LayoutBuilder {
               P1, D1, P2, D2,
             });
           }
-        } else if (DEBUG_LOGGING) {
-          console.log(`  [str+curve] rejected: arc angle ${(arcAngle * 180 / Math.PI).toFixed(1)}° exceeds ${MAX_ARC_DEGREES}°`);
+        } else {
+          logger.debug(`  [str+curve] rejected: arc angle ${(arcAngle * 180 / Math.PI).toFixed(1)}° exceeds ${MAX_ARC_DEGREES}°`);
         }
       }
     }
@@ -1253,9 +1247,7 @@ class LayoutBuilder {
       if (result && result.L >= 0 && Math.abs(result.R) >= MIN_RADIUS) {
         // Reject if arc angle is too large (> 270 degrees)
         if (Math.abs(arcAngle) <= maxArcRadians) {
-          if (DEBUG_LOGGING) {
-            console.log(`  [curve+str] L=${result.L.toFixed(2)}, R=${result.R.toFixed(2)}`);
-          }
+          logger.debug(`  [curve+str] L=${result.L.toFixed(2)}, R=${result.R.toFixed(2)}`);
           if (result.L < MIN_STRAIGHT) {
             // Curve-only solution (avoid duplicates)
             const hasCurveOnly = solutions.some(s => s.type === 'curve-only');
@@ -1277,18 +1269,16 @@ class LayoutBuilder {
               P1, D1, P2, D2,
             });
           }
-        } else if (DEBUG_LOGGING) {
-          console.log(`  [curve+str] rejected: arc angle ${(arcAngle * 180 / Math.PI).toFixed(1)}° exceeds ${MAX_ARC_DEGREES}°`);
+        } else {
+          logger.debug(`  [curve+str] rejected: arc angle ${(arcAngle * 180 / Math.PI).toFixed(1)}° exceeds ${MAX_ARC_DEGREES}°`);
         }
       }
     }
 
     if (solutions.length === 0) {
-      if (DEBUG_LOGGING) {
-        console.log(`No valid flex connect solution found at line ${line}`);
-        console.log(`  P1: (${P1.x.toFixed(2)}, ${P1.z.toFixed(2)}), D1: (${D1.x.toFixed(3)}, ${D1.z.toFixed(3)})`);
-        console.log(`  P2: (${P2.x.toFixed(2)}, ${P2.z.toFixed(2)}), D2: (${D2.x.toFixed(3)}, ${D2.z.toFixed(3)})`);
-      }
+      logger.debug(`No valid flex connect solution found at line ${line}`);
+      logger.debug(`  P1: (${P1.x.toFixed(2)}, ${P1.z.toFixed(2)}), D1: (${D1.x.toFixed(3)}, ${D1.z.toFixed(3)})`);
+      logger.debug(`  P2: (${P2.x.toFixed(2)}, ${P2.z.toFixed(2)}), D2: (${D2.x.toFixed(3)}, ${D2.z.toFixed(3)})`);
       return null;
     }
 
@@ -1404,9 +1394,7 @@ class LayoutBuilder {
 
       this.state.pieces.push(straightPiece);
 
-      if (DEBUG_LOGGING) {
-        console.log(`Flex connect at line ${line}: straight-only(${solution.straightLength.toFixed(2)}") labeled "${straightLabel}"`);
-      }
+      logger.debug(`Flex connect at line ${line}: straight-only(${solution.straightLength.toFixed(2)}") labeled "${straightLabel}"`);
     } else if (solution.type === 'curve-only') {
       // Create only a curve piece
       // curveDirection is always 'left' or 'right' for curve-only solutions
@@ -1438,9 +1426,7 @@ class LayoutBuilder {
 
       this.state.pieces.push(curvePiece);
 
-      if (DEBUG_LOGGING) {
-        console.log(`Flex connect at line ${line}: curve-only(R=${solution.radius.toFixed(2)}", ${solution.curveDirection}) labeled "${curveLabel}"`);
-      }
+      logger.debug(`Flex connect at line ${line}: curve-only(R=${solution.radius.toFixed(2)}", ${solution.curveDirection}) labeled "${curveLabel}"`);
     } else if (solution.type === 'straight-curve') {
       // Create straight piece first, then curve
       const straightArch = this.createFlexStraightArchetype(
@@ -1498,9 +1484,7 @@ class LayoutBuilder {
 
       this.state.pieces.push(straightPiece, curvePiece);
 
-      if (DEBUG_LOGGING) {
-        console.log(`Flex connect at line ${line}: straight(${solution.straightLength.toFixed(2)}") labeled "${straightLabel}" + ${solution.curveDirection} curve(R=${solution.radius.toFixed(2)}") labeled "${curveLabel}"`);
-      }
+      logger.debug(`Flex connect at line ${line}: straight(${solution.straightLength.toFixed(2)}") labeled "${straightLabel}" + ${solution.curveDirection} curve(R=${solution.radius.toFixed(2)}") labeled "${curveLabel}"`);
     } else {
       // Create curve piece first, then straight (curve-straight case)
       // curveDirection is always 'left' or 'right' for curve-straight solutions
@@ -1557,9 +1541,7 @@ class LayoutBuilder {
 
       this.state.pieces.push(curvePiece, straightPiece);
 
-      if (DEBUG_LOGGING) {
-        console.log(`Flex connect at line ${line}: ${solution.curveDirection} curve(R=${solution.radius.toFixed(2)}") labeled "${curveLabel}" + straight(${solution.straightLength.toFixed(2)}") labeled "${straightLabel}"`);
-      }
+      logger.debug(`Flex connect at line ${line}: ${solution.curveDirection} curve(R=${solution.radius.toFixed(2)}") labeled "${curveLabel}" + straight(${solution.straightLength.toFixed(2)}") labeled "${straightLabel}"`);
     }
   }
 
@@ -1767,7 +1749,7 @@ class LayoutBuilder {
 
     if (!targetPiece) {
       const pointRef = splice.label ? `$${splice.label}.${pointName}` : `current piece .${pointName}`;
-      console.warn(`No track found at splice point ${pointRef} (world pos: ${spliceWorldPos.x.toFixed(2)}, ${spliceWorldPos.z.toFixed(2)}) at line ${splice.line}`);
+      logger.warn(`No track found at splice point ${pointRef} (world pos: ${spliceWorldPos.x.toFixed(2)}, ${spliceWorldPos.z.toFixed(2)}) at line ${splice.line}`);
 
       // Mark the piece with "can't splice" label for visual debugging
       splicePiece.label = (splicePiece.label ? splicePiece.label + ' ' : '') + "can't splice";

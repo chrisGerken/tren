@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { TrackPiece, Layout, Connection } from '../core/types';
 import { getArchetype, TrackArchetype } from '../core/archetypes';
 import { TrackScene } from './scene';
+import { logger } from '../core/logger';
 
 // Track colors (hex values with RGB equivalents)
 const RAIL_COLOR = 0x5c4033;  // Silver (R:192, G:192, B:192)    0xc0c0c0
@@ -38,9 +39,6 @@ const ROADBED_HEIGHT = 0.1;  // Height of roadbed above ground
 // Set to true to show simplified debug view
 const DEBUG_MODE = false;
 
-// Set to true to enable console logging for debugging
-const DEBUG_LOGGING = false;
-
 // Track selected routes for virtual switches
 // Key: "pieceId.pointName", Value: index of selected connection (0-based)
 const selectedRoutes = new Map<string, number>();
@@ -61,7 +59,7 @@ function getSelectedRouteByKey(key: string): number {
     selectedRoutes.set(key, 0); // Default to first connection
   }
   const value = selectedRoutes.get(key)!;
-  if (DEBUG_LOGGING) console.log(`getSelectedRouteByKey: key="${key}" → ${value}`);
+  logger.debug(`getSelectedRouteByKey: key="${key}" → ${value}`);
   return value;
 }
 
@@ -70,7 +68,7 @@ function getSelectedRouteByKey(key: string): number {
  */
 export function setSelectedRouteByKey(key: string, connectionIndex: number): void {
   const oldValue = selectedRoutes.get(key);
-  if (DEBUG_LOGGING) console.log(`setSelectedRouteByKey: key="${key}" ${oldValue} → ${connectionIndex}`);
+  logger.debug(`setSelectedRouteByKey: key="${key}" ${oldValue} → ${connectionIndex}`);
   selectedRoutes.set(key, connectionIndex);
 }
 
@@ -206,11 +204,11 @@ function renderTrackPieceDebug(piece: TrackPiece, archetype: TrackArchetype): TH
     sphere.position.set(world.x, 0.5, world.z);
     group.add(sphere);
 
-    console.log(`  ${piece.id}.${cp.name}: world=(${world.x.toFixed(3)}, ${world.z.toFixed(3)})`);
+    logger.debug(`  ${piece.id}.${cp.name}: world=(${world.x.toFixed(3)}, ${world.z.toFixed(3)})`);
   }
 
   // Log piece position for debugging
-  console.log(`Piece ${piece.id} (${archetype.code}): pos=(${piece.position.x.toFixed(2)}, ${piece.position.z.toFixed(2)}), rot=${(piece.rotation * 180 / Math.PI).toFixed(1)}°`);
+  logger.debug(`Piece ${piece.id} (${archetype.code}): pos=(${piece.position.x.toFixed(2)}, ${piece.position.z.toFixed(2)}), rot=${(piece.rotation * 180 / Math.PI).toFixed(1)}°`);
 
   return group;
 }
@@ -268,7 +266,7 @@ function renderTrackPiece(
 
       // Render switch indicators if this is a virtual switch (multiple connections)
       // Skip if random mode is on (hideIndicators)
-      if (DEBUG_LOGGING) console.log(`  ${piece.id}.${cp.name}: ${connections.length} connections`);
+      logger.debug(`  ${piece.id}.${cp.name}: ${connections.length} connections`);
       if (connections.length > 1 && !hideIndicators) {
       const switchIndicators = renderSwitchIndicators(
         piece,
@@ -294,7 +292,7 @@ function renderTrackPiece(
         );
         const icpMesh = renderConnectionPointWorld(screenPos, icp.id);
         group.add(icpMesh);
-        if (DEBUG_LOGGING) console.log(`  Internal connection point ${icp.id} at (${icp.worldPosition.x.toFixed(1)}, ${icp.worldPosition.z.toFixed(1)})`);
+        logger.debug(`  Internal connection point ${icp.id} at (${icp.worldPosition.x.toFixed(1)}, ${icp.worldPosition.z.toFixed(1)})`);
       }
     }
   }
@@ -884,10 +882,8 @@ function renderDirectionalSwitchIndicators(
   const routeKey = `junction.${canonicalJunctionId}.${direction}`;
   const selectedIndex = getSelectedRouteByKey(routeKey);
 
-  if (DEBUG_LOGGING) {
-    console.log(`renderSwitchIndicators: ${routeKey}, ${connections.length} connections, selectedIndex=${selectedIndex}`);
-    connections.forEach((c, i) => console.log(`  route[${i}]: ${c.pieceId}.${c.pointName} ${c.isAutoConnect ? '(auto)' : ''}`));
-  }
+  logger.debug(`renderSwitchIndicators: ${routeKey}, ${connections.length} connections, selectedIndex=${selectedIndex}`);
+  connections.forEach((c, i) => logger.debug(`  route[${i}]: ${c.pieceId}.${c.pointName} ${c.isAutoConnect ? '(auto)' : ''}`));
 
   // Build curve info for each connection
   const curveInfos: (CurveInfo | null)[] = [];
@@ -913,7 +909,7 @@ function renderDirectionalSwitchIndicators(
   // Create indicator meshes
   for (let i = 0; i < connections.length; i++) {
     const pos = positions[i];
-    if (DEBUG_LOGGING) console.log(`  Indicator ${i}: pos=${pos ? `(${pos.x.toFixed(2)}, ${pos.z.toFixed(2)})` : 'null'}, curveInfo=${curveInfos[i] ? 'valid' : 'null'}`);
+    logger.debug(`  Indicator ${i}: pos=${pos ? `(${pos.x.toFixed(2)}, ${pos.z.toFixed(2)})` : 'null'}, curveInfo=${curveInfos[i] ? 'valid' : 'null'}`);
     if (!pos) continue;
 
     const isSelected = i === selectedIndex;
@@ -931,7 +927,7 @@ function renderDirectionalSwitchIndicators(
       connectionIndex: i,
     };
 
-    if (DEBUG_LOGGING) console.log(`  Created indicator ${i} at (${pos.x.toFixed(2)}, 0.7, ${pos.z.toFixed(2)}), selected=${isSelected}, color=${isSelected ? 'green' : 'red'}`);
+    logger.debug(`  Created indicator ${i} at (${pos.x.toFixed(2)}, 0.7, ${pos.z.toFixed(2)}), selected=${isSelected}, color=${isSelected ? 'green' : 'red'}`);
     indicators.push(mesh);
   }
 

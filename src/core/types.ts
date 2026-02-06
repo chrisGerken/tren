@@ -67,6 +67,7 @@ export interface Layout {
   lockAheadCount?: number;     // Minimum connection points to lock (default: 2)
   randomSwitches?: boolean;  // If true, switches randomly change when trains pass
   maxTrains?: number;    // Maximum number of trains allowed on the layout at once
+  logLevel?: string;     // Log level from DSL: 'debug', 'info', 'warn', 'error'
   pieces: TrackPiece[];
 }
 

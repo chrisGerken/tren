@@ -82,6 +82,25 @@ When `max trains` is set:
 
 **Default**: 5 trains. Specify a higher number for busier layouts.
 
+### Log Level
+
+The `log` (or `logging`) statement controls the verbosity of browser console output:
+
+```
+log debug                     # Show all messages
+log info                      # Show info, warn, and error
+log warn                      # Show warn and error (default)
+log error                     # Show only errors
+```
+
+**Levels (from most to least verbose):**
+- `debug` — Detailed internal information: geometry calculations, lock acquisition/release, piece placement, spline math, connection details
+- `info` — User-visible events: train spawned, train removed/binned, layout loaded, generator toggled, simulation start/stop
+- `warn` — Potential issues: no intersection for cross connect, no flex solution, no track at splice
+- `error` — Failures: NaN in rendering, file I/O errors
+
+`warning` is accepted as an alias for `warn`. Multiple `log` statements are allowed. Each changes the level from that point forward during layout building; the last one sets the runtime level. If no `log` statement is present, the default level is `warn`.
+
 ### Custom Track Pieces (Define)
 
 The `define` statement creates custom curve or straight track pieces for use throughout the layout:

@@ -4,11 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Tren - Train Simulator</title>
-    <script type="module" crossorigin src="/assets/index-Cn1UAkDS.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-CCf2G_FT.css">
+    <script type="module" crossorigin src="/assets/index-BIWE1wVr.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-IU6NJaQ8.css">
   </head>
   <body>
     <div id="toolbar">
+      <button id="layouts-btn">Layouts</button>
       <button id="import-btn">Import Layout</button>
       <button id="random-btn">Random</button>
       <button id="labels-btn">Labels</button>
@@ -16,5 +17,18 @@
       <span id="status"></span>
     </div>
     <div id="canvas-container"></div>
+
+    <!-- Layouts Dialog -->
+    <div id="layouts-dialog" class="dialog-overlay" style="display: none;">
+      <div class="dialog-content">
+        <h2>Example Layouts</h2>
+        <div id="layouts-list" class="layouts-list"></div>
+        <div class="dialog-buttons">
+          <button id="dialog-run-btn" disabled>Run</button>
+          <button id="dialog-save-btn" disabled>Save As...</button>
+          <button id="dialog-cancel-btn">Cancel</button>
+        </div>
+      </div>
+    </div>
   </body>
 </html>
