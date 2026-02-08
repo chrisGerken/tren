@@ -1,0 +1,24 @@
+1) Replace resumeTasks.txt with an empty file and as work progresses on the remaining tasks continue to update resumeTasks.txt with any information needed to resume these tasks in the situation where my usage hits a limit and is cut off.
+
+--------------------
+
+2) Add an HTTP server in the Rust layer (src-tauri/src/main.rs) using axum or warp. Define REST endpoints for
+   layout objects: GET /trains, GET /trains/:id, PUT /switches/:id, PUT /semaphores/:id, POST /trains/:id/stop,
+   GET /layout, etc. The server should listen on a configurable port (default 3001) and return JSON responses.
+   Start the HTTP server as a background task when the Tauri app launches.
+
+3) Create Tauri IPC command handlers to bridge between the Rust HTTP server and the JS frontend. Each REST
+   endpoint should have a corresponding Tauri command that the Rust server invokes to get or set state in the
+   JS simulation. Use Tauri's invoke mechanism for request/response patterns and events for notifications.
+
+4) Add JS-side handlers in src/main.ts (or a new module) that register as Tauri command handlers. These
+   handlers query or mutate the simulation state and return results as JSON-serializable objects. For reads:
+   gather train positions/speeds, switch states, semaphore states, layout metadata. For writes: stop/start
+   trains, toggle switches to specific routes, lock/unlock semaphores, toggle generators. Add any new methods
+   needed on the Simulation class (e.g., stop a specific train by ID, set train speed, get train by ID).
+
+5) Design and document the REST API contract. Define the resource model (trains, switches, semaphores,
+   generators, layout), HTTP methods, request/response schemas, status codes, and error formats. Document
+   in docs/rest-api.md. Consider: listing all switches with their current route and available routes, listing
+   all semaphores with lock state, listing all trains with position/speed/car count, and action endpoints
+   for controlling each object type.

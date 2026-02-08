@@ -5,24 +5,17 @@
 import { open, save } from '@tauri-apps/api/dialog';
 import { readTextFile, writeTextFile } from '@tauri-apps/api/fs';
 
-// Import bundled layouts as raw text using Vite's ?raw suffix
+// Import bundled layouts dynamically using Vite's import.meta.glob
 import manifestJson from './layouts/manifest.json';
-import layoutTwoLoops from './layouts/two-loops.txt?raw';
-import layoutComplex from './layouts/complex-layout.txt?raw';
-import layoutFlexConnect from './layouts/flex-connect.txt?raw';
-import layoutSplice from './layouts/splice.txt?raw';
-import layoutCrossConnect from './layouts/cross-connect.txt?raw';
-import layoutSemaphore from './layouts/semaphore.txt?raw';
+
+const layoutModules = import.meta.glob('./layouts/*.txt', { eager: true, query: '?raw', import: 'default' });
 
 // Map of layout filenames to their imported content
-const bundledLayouts: Record<string, string> = {
-  'two-loops.txt': layoutTwoLoops,
-  'complex-layout.txt': layoutComplex,
-  'flex-connect.txt': layoutFlexConnect,
-  'splice.txt': layoutSplice,
-  'cross-connect.txt': layoutCrossConnect,
-  'semaphore.txt': layoutSemaphore,
-};
+const bundledLayouts: Record<string, string> = {};
+for (const [path, content] of Object.entries(layoutModules)) {
+  const filename = path.split('/').pop()!;
+  bundledLayouts[filename] = content as string;
+}
 import { TrackScene } from './renderer/scene';
 import { renderLayout, setSelectedRouteByKey, getSelectedRoutes, updateConnectionPointColors, updateSemaphoreColor } from './renderer/track-renderer';
 import { renderTrains } from './renderer/train-renderer';

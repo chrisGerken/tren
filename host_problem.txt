@@ -1,0 +1,25 @@
+Problem:
+When running "npm run tauri dev", the Vite dev server starts on port 5173.
+Accessing http://192.168.68.52:5173 from another machine on the same WiFi
+network results in an "unable to connect" error.
+
+Cause:
+By default, Vite binds its dev server to "localhost" (127.0.0.1), which is the
+loopback interface. This means the server only accepts connections originating
+from the local machine. Requests from other machines on the network are refused
+because they arrive on the machine's network interface (e.g., 192.168.68.52),
+not on the loopback interface.
+
+Solution:
+In vite.config.ts, add host: '0.0.0.0' to the server configuration. This
+tells Vite to listen on all network interfaces, including the WiFi adapter,
+allowing other machines on the local network to connect.
+
+  server: {
+    host: '0.0.0.0',
+    port: 5173,
+    strictPort: true,
+  },
+
+If the issue persists after this change, verify that the macOS firewall is not
+blocking incoming connections on port 5173 (System Settings > Network > Firewall).

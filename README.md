@@ -147,6 +147,20 @@ brew uninstall --cask tren
 sudo apt remove tren
 ```
 
+## Development
+
+After cloning and running `npm install`, there are two ways to run the app in development mode:
+
+```bash
+# Opens a Tauri desktop window with the app
+npm run tauri dev
+
+# Starts only the Vite dev server (no desktop window)
+npm run dev
+```
+
+Use `npm run dev` when you want to access the app from a browser — for example, on another machine on the same network. The dev server listens on port 5173 and is configured to accept connections from any host, so you can navigate to `http://<your-ip>:5173` from another device.
+
 ## Future Considerations
 
 - User scenarios (to be documented)

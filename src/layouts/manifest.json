@@ -1,6 +1,11 @@
 {
   "layouts": [
     {
+      "file": "layout03.txt",
+      "title": "Large main loop",
+      "description": "Large main loop with side layouts"
+    },
+    {
       "file": "two-loops.txt",
       "title": "Two Loops",
       "description": "Several loops with a generator and a bin. Random switch selection enabled."
