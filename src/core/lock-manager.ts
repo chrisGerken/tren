@@ -20,10 +20,10 @@ import {
   getSectionLength,
   getNextSection,
   isInPoint,
-  isOutPoint,
   getOppositePoint,
 } from './train-movement';
 import { getArchetype } from './archetypes';
+import { getLeadCar } from './train-helpers';
 import { logger } from './logger';
 
 /**
@@ -222,7 +222,7 @@ export class LockManager {
     selectedRoutes: Map<string, number>,
     simulationTime: number
   ): LockAcquisitionResult {
-    const leadCar = train.cars[0];
+    const leadCar = getLeadCar(train);
     const piece = layout.pieces.find(p => p.id === leadCar.currentPieceId);
     if (!piece) {
       logger.debug(`acquireLeadingLocks: No piece found for ${leadCar.currentPieceId}`);
@@ -232,9 +232,8 @@ export class LockManager {
     const pointsToLock: ConnectionPointId[] = [];
     let distanceCovered = 0;
 
-    // Determine travel direction based on entry point
-    const travelDirection: 'forward' | 'backward' =
-      leadCar.entryPoint && isOutPoint(leadCar.entryPoint) ? 'backward' : 'forward';
+    // Use train's travel direction to determine exit point
+    const travelDirection = train.travelDirection;
 
     // Start from current piece
     let currentPieceId = leadCar.currentPieceId;

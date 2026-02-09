@@ -17,12 +17,14 @@ for (const [path, content] of Object.entries(layoutModules)) {
   bundledLayouts[filename] = content as string;
 }
 import { TrackScene } from './renderer/scene';
-import { renderLayout, setSelectedRouteByKey, getSelectedRoutes, updateConnectionPointColors, updateSemaphoreColor } from './renderer/track-renderer';
+import { renderLayout, setSelectedRouteByKey, getSelectedRoutes, updateConnectionPointColors, updateSemaphoreColor, updateDecouplerColor } from './renderer/track-renderer';
 import { renderTrains } from './renderer/train-renderer';
 import { buildLayout } from './parser/builder';
 import { Simulation } from './core/simulation';
 import { Layout } from './core/types';
 import { setLogLevel, LogLevel, logger } from './core/logger';
+import { InspectorManager } from './inspector/inspector-manager';
+import { TrainInspectorWidget } from './inspector/train-inspector';
 import './style.css';
 
 // Initialize scene
@@ -32,6 +34,7 @@ if (!container) {
 }
 
 const scene = new TrackScene(container);
+const inspectorManager = new InspectorManager();
 const statusEl = document.getElementById('status');
 
 // Track current layout for re-rendering after switch clicks
@@ -85,6 +88,49 @@ scene.setSemaphoreClickCallback((pieceId) => {
   scene.render();
 });
 
+// Set up decoupler click callback
+scene.setDecouplerClickCallback((pieceId) => {
+  logger.debug(`Decoupler click callback: ${pieceId}`);
+
+  if (!currentLayout || !simulation) return;
+
+  // Find the decoupler piece
+  const piece = currentLayout.pieces.find(p => p.id === pieceId);
+  if (!piece || !piece.decouplerConfig) {
+    logger.debug(`Decoupler piece ${pieceId} not found or has no config`);
+    return;
+  }
+
+  // Activate the decoupler
+  const newTrainId = simulation.activateDecoupler(pieceId);
+
+  if (newTrainId) {
+    // Flash the decoupler red for 1 second
+    piece.decouplerConfig.activated = true;
+    updateDecouplerColor(pieceId, true);
+    setStatus(`Decoupler ${pieceId}: ACTIVATED - train split`);
+
+    setTimeout(() => {
+      piece.decouplerConfig!.activated = false;
+      updateDecouplerColor(pieceId, false);
+      scene.render();
+    }, 1000);
+  } else {
+    setStatus(`Decoupler ${pieceId}: no train to split`);
+  }
+
+  scene.render();
+});
+
+// Set up train double-click callback for inspector
+scene.setTrainDblClickCallback((trainId) => {
+  if (!simulation) return;
+  if (inspectorManager.hasWidgetForTarget(trainId)) return;
+
+  const widget = new TrainInspectorWidget(trainId, simulation);
+  inspectorManager.addWidget(widget);
+});
+
 function setStatus(message: string): void {
   if (statusEl) {
     statusEl.textContent = message;
@@ -113,6 +159,9 @@ function startSimulation(layout: Layout): void {
     simulation.stop();
   }
 
+  // Clear inspector widgets from previous layout
+  inspectorManager.clear();
+
   // Create new simulation
   simulation = new Simulation(layout, getSelectedRoutes(), () => {
     // Update callback - render trains and update connection point colors
@@ -121,6 +170,8 @@ function startSimulation(layout: Layout): void {
       scene.updateTrains(trainGroup);
       // Update connection point colors based on lock state (only visible when Labels are on)
       updateConnectionPointColors(simulation.getLockedPoints(), scene.getLabelsVisible());
+      // Update inspector widgets with live values
+      inspectorManager.update();
       scene.render();
     }
   });

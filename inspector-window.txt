@@ -1,0 +1,27 @@
+1) Replace resumeTasks.txt with an empty file and as work progresses on the remaining tasks continue to update resumeTasks.txt with any information needed to resume these tasks in the situation where my usage hits a limit and is cut off.
+
+2) Support several kinds of inspector widgets, but for now just implement an inspector widget for trains. 
+An inspector widget is tall enough to hold one line of form data for the attributes and some behavior of
+an inspectable simulation object and is at least as wide as the simulation window. If it needs to be longer than the 
+simulation window is wide then us a scroll bar to move the widget left and right. If there are multiple 
+inspector widget present then the scroll bar scrolls all of them.  The first inspector widget will be for trains, but
+there will be other inspector widgets for switches, generators and possibly other objects.
+
+3) The inspector widget for an object (e.g. a train) is displayed when the object is double clicked. The first
+inspector widget will be placed at the bottom of the simulation window and is unlocked. An unlocked icon is drawn
+at the far right of the inspector widget, next to the right edge of the simulation window. If another object is 
+double clicked and the first inspector widget is unlocked, then the new inspector widget is drawn over the old 
+inspector widget and the old inspector widget is discarded. In either case, the new inspector widget is unlocked
+at first.  If the first inspector widget is locked (by clicking on the unlocked icon) the the first inspector
+widget is kept and the new inspector widget is drawn directly above the first.  When a new inspector widget is
+added all unlocked inspector widgets are removed before the new inspector widget is added.  The locked status
+is toggled by clicking of the locked or unlocked icon. In addition to the lock indication icon, there will be a
+red 'X' which removes the inspector widget from the UI.
+
+4) Finally, all information shown on an inspector widget is current and correct, even if other interactions
+with the UI (or even future API's) are changing the target object's property values.  
+
+4) The train inspector widget displays, from left to right, the constant label "Train", the train id, the numbers of cabs and of cars (all read only so far)
+the current speed (read only), the desired speed (as a thumb slider), a toggle indicating direction of 
+the train (forward or backward). A button labeled "Stop" or "Resume" depending of whether the train in moving
+or not.

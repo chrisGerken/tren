@@ -24,6 +24,8 @@ const SWITCH_UNSELECTED_COLOR = 0xff0000;  // Red for unselected routes
 const SEMAPHORE_UNLOCKED_COLOR = 0x00ff00;  // Green for unlocked (open)
 const SEMAPHORE_LOCKED_COLOR = 0xff0000;    // Red for locked (blocked)
 const SEMAPHORE_RING_COLOR = 0x333333;      // Dark gray for the circle outline
+const DECOUPLER_INACTIVE_COLOR = 0xff8800;  // Orange for inactive decoupler
+const DECOUPLER_ACTIVE_COLOR = 0xff0000;    // Red for activated decoupler
 
 // Track dimensions (in inches - model scale)
 const RAIL_GAUGE = 1.045;  // Distance between rails
@@ -50,6 +52,10 @@ const connectionPointMeshes = new Map<string, THREE.Mesh>();
 // Store semaphore meshes for click handling and color updates
 // Key: pieceId, Value: { dot: THREE.Mesh, ring: THREE.Mesh }
 const semaphoreMeshes = new Map<string, { dot: THREE.Mesh; ring: THREE.Mesh }>();
+
+// Store decoupler meshes for click handling and color updates
+// Key: pieceId, Value: array of triangle meshes
+const decouplerMeshes = new Map<string, THREE.Mesh[]>();
 
 /**
  * Get or initialize the selected route by full key
@@ -116,6 +122,21 @@ export function updateSemaphoreColor(pieceId: string, locked: boolean): void {
 }
 
 /**
+ * Update a decoupler's visual state
+ * @param pieceId - The piece ID of the decoupler
+ * @param activated - Whether the decoupler is activated (red) or inactive (orange)
+ */
+export function updateDecouplerColor(pieceId: string, activated: boolean): void {
+  const meshes = decouplerMeshes.get(pieceId);
+  if (meshes) {
+    for (const mesh of meshes) {
+      const material = mesh.material as THREE.MeshBasicMaterial;
+      material.color.setHex(activated ? DECOUPLER_ACTIVE_COLOR : DECOUPLER_INACTIVE_COLOR);
+    }
+  }
+}
+
+/**
  * Render a complete layout
  */
 export function renderLayout(scene: TrackScene, layout: Layout): void {
@@ -125,6 +146,8 @@ export function renderLayout(scene: TrackScene, layout: Layout): void {
   connectionPointMeshes.clear();
   // Clear semaphore mesh references
   semaphoreMeshes.clear();
+  // Clear decoupler mesh references
+  decouplerMeshes.clear();
 
   // Build a map for quick piece lookup
   const pieceMap = new Map<string, TrackPiece>();
@@ -319,6 +342,11 @@ function renderTrackPiece(
     const locked = piece.semaphoreConfig?.locked ?? false;
     const semaphoreGroup = renderSemaphoreWorld(worldPos, piece.id, locked);
     group.add(semaphoreGroup);
+  } else if (archetype.code === 'dec' || archetype.code === 'decoupler') {
+    const worldPos = toWorld({ x: 0, y: 0, z: 0 });
+    const activated = piece.decouplerConfig?.activated ?? false;
+    const decouplerGroup = renderDecouplerWorld(worldPos, piece.id, piece.rotation, activated);
+    group.add(decouplerGroup);
   }
 
   return group;
@@ -616,6 +644,77 @@ function renderSemaphoreWorld(worldPos: THREE.Vector3, pieceId: string, locked: 
 
   // Store meshes for later updates
   semaphoreMeshes.set(pieceId, { dot: dotMesh, ring: ringMesh });
+
+  return group;
+}
+
+/**
+ * Render decoupler as two triangles, one on each side of the track
+ * Triangles point toward the track center, indicating the decoupling point
+ * @param worldPos - Position in world coordinates
+ * @param pieceId - The piece ID for click handling
+ * @param rotation - Piece rotation in radians
+ * @param activated - Whether the decoupler is currently activated
+ */
+function renderDecouplerWorld(
+  worldPos: THREE.Vector3,
+  pieceId: string,
+  rotation: number,
+  activated: boolean
+): THREE.Group {
+  const group = new THREE.Group();
+  const color = activated ? DECOUPLER_ACTIVE_COLOR : DECOUPLER_INACTIVE_COLOR;
+
+  // Triangle dimensions
+  const triangleSize = 0.8;  // Size of each triangle
+  const offset = 1.5;        // Distance from track center to triangle center
+
+  // Perpendicular direction to track (in screen coords, Z-flipped)
+  const perpX = -Math.sin(-rotation);
+  const perpZ = -Math.cos(-rotation);
+
+  // Create triangle geometry (pointing inward toward track)
+  const triangleShape = new THREE.Shape();
+  triangleShape.moveTo(0, triangleSize);
+  triangleShape.lineTo(-triangleSize * 0.7, -triangleSize * 0.5);
+  triangleShape.lineTo(triangleSize * 0.7, -triangleSize * 0.5);
+  triangleShape.lineTo(0, triangleSize);
+
+  const geometry = new THREE.ShapeGeometry(triangleShape);
+  const material = new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide });
+
+  // Left triangle (points toward track from left side)
+  const leftTriangle = new THREE.Mesh(geometry, material.clone());
+  leftTriangle.rotation.x = -Math.PI / 2;  // Lay flat
+  leftTriangle.rotation.z = -rotation;       // Align with track
+  leftTriangle.position.set(
+    worldPos.x + perpX * offset,
+    0.6,
+    worldPos.z + perpZ * offset
+  );
+  leftTriangle.userData = {
+    isDecoupler: true,
+    pieceId: pieceId,
+  };
+  group.add(leftTriangle);
+
+  // Right triangle (points toward track from right side)
+  const rightTriangle = new THREE.Mesh(geometry, material.clone());
+  rightTriangle.rotation.x = -Math.PI / 2;  // Lay flat
+  rightTriangle.rotation.z = Math.PI - rotation;  // Flip and align with track
+  rightTriangle.position.set(
+    worldPos.x - perpX * offset,
+    0.6,
+    worldPos.z - perpZ * offset
+  );
+  rightTriangle.userData = {
+    isDecoupler: true,
+    pieceId: pieceId,
+  };
+  group.add(rightTriangle);
+
+  // Store meshes for dynamic color updates
+  decouplerMeshes.set(pieceId, [leftTriangle, rightTriangle]);
 
   return group;
 }

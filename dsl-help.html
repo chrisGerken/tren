@@ -175,6 +175,7 @@ crvl         # Place a left curve (22" radius default)</code></pre>
       <tr><td><code>bin</code></td><td>Train sink (removes trains)</td></tr>
       <tr><td><code>tun</code>, <code>tunnel</code></td><td>Visibility toggle</td></tr>
       <tr><td><code>sem</code>, <code>semaphore</code></td><td>Manual signal (see Semaphore Syntax below)</td></tr>
+      <tr><td><code>dec</code>, <code>decoupler</code></td><td>Train splitter (see Decoupler Syntax below)</td></tr>
     </table>
 
     <h3>Repetition</h3>
@@ -222,6 +223,15 @@ signal: sem                   # Labeled semaphore</code></pre>
     </ul>
     <p><strong>Interaction:</strong> Click the dot to toggle between locked and unlocked. Semaphores start unlocked (green).</p>
     <p><strong>Use cases:</strong> Manual traffic control, creating holding points, simulating station stops.</p>
+
+    <h3>Decoupler Syntax</h3>
+    <p>Decouplers split a stopped train into two trains at the decoupler's position:</p>
+    <pre><code>dec                           # Place a decoupler
+decoupler                     # Same as dec (alias)
+split: dec                    # Labeled decoupler</code></pre>
+    <p><strong>Visual appearance:</strong> Two small triangles on each side of the track (orange = inactive, red = activated).</p>
+    <p><strong>Interaction:</strong> Click either triangle to activate. If a stopped train straddles the decoupler, the train is split into two stopped trains. The decoupler flashes red for 1 second.</p>
+    <p><strong>Use cases:</strong> Splitting trains for shunting, dropping off cars at sidings.</p>
   </div>
 
   <div class="section">
@@ -394,6 +404,8 @@ cross connect $one $two</code></pre>
       <tr><td>Red circle</td><td>Bin (train sink)</td></tr>
       <tr><td>Green dot in circle</td><td>Semaphore - unlocked (click to lock)</td></tr>
       <tr><td>Red dot in circle</td><td>Semaphore - locked (click to unlock)</td></tr>
+      <tr><td>Orange triangles</td><td>Decoupler - inactive (click to split stopped train)</td></tr>
+      <tr><td>Red triangles</td><td>Decoupler - activated (briefly flashes)</td></tr>
       <tr><td>Green dot (small)</td><td>Selected route at virtual switch</td></tr>
       <tr><td>Red dot (small)</td><td>Unselected route at virtual switch (click to select)</td></tr>
       <tr><td>White sphere (small)</td><td>Connection point - unlocked (only visible when Labels is on)</td></tr>
@@ -418,6 +430,7 @@ cross connect $one $two</code></pre>
       <tr><td><code>gen</code></td><td><code>in</code>, <code>out</code></td><td><code>in</code></td><td><code>out</code></td></tr>
       <tr><td><code>bin</code></td><td><code>in</code>, <code>out</code></td><td><code>in</code></td><td><code>out</code></td></tr>
       <tr><td><code>sem</code></td><td><code>in</code>, <code>out</code></td><td><code>in</code></td><td><code>out</code></td></tr>
+      <tr><td><code>dec</code></td><td><code>in</code>, <code>out</code></td><td><code>in</code></td><td><code>out</code></td></tr>
     </table>
   </div>
 
@@ -457,6 +470,22 @@ str x 4
       <tr><td><strong>Labels</strong></td><td>Toggle track labels AND connection point indicators (white=unlocked, red=locked)</td></tr>
     </table>
     <p>Active buttons are highlighted. You can also paste layout text directly into the window.</p>
+  </div>
+
+  <div class="section">
+    <h2>Train Inspector</h2>
+    <p>Double-click a train to open an inspector widget at the bottom of the window. The widget shows live train properties and provides controls:</p>
+    <table>
+      <tr><th>Control</th><th>Function</th></tr>
+      <tr><td><strong>Target Speed slider</strong></td><td>Set the train's desired speed (0&ndash;48 inches/sec)</td></tr>
+      <tr><td><strong>Change Direction</strong></td><td>Reverse the train (only when stopped)</td></tr>
+      <tr><td><strong>Stop / Resume</strong></td><td>Stop the train (saves speed); Resume restores saved speed</td></tr>
+      <tr><td><strong>Couple</strong></td><td>Enter coupling mode (only when stopped) &mdash; train moves slowly to merge with another stopped train</td></tr>
+      <tr><td><strong>Lock / Unlock</strong></td><td>Lock the widget so it persists when you double-click another train</td></tr>
+      <tr><td><strong>&times;</strong></td><td>Close the widget</td></tr>
+    </table>
+    <p><strong>Widget behavior:</strong> Widgets start locked (persist across double-clicks). Unlock a widget to have it replaced when you double-click a different train. Multiple locked widgets can stack.</p>
+    <p><strong>Auto-removal:</strong> A widget is automatically removed when its train is destroyed (e.g., enters a bin).</p>
   </div>
 
 </body>

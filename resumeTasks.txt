@@ -1,34 +1,59 @@
 # Resume Tasks
 
-All tasks from nextSteps.txt are COMPLETE.
+## Completed
 
-## Completed Tasks
+### Feature 2: Deceleration to Stop
+- Added NORMAL_BRAKING = 12 constant to simulation.ts
+- Added third speed-adjustment branch: currentSpeed > desiredSpeed -> normal braking (12 in/s²)
+- Files: src/core/simulation.ts
 
-### Task 1: resumeTasks.txt
-- Replaced with empty file and updated throughout (this file)
+### Feature 3: Flexible Train Composition
+- Added travelDirection to Train, facingForward to Car in types.ts
+- Created src/core/train-helpers.ts with getLeadCar/getTailCar/getLeadCarIndex/getTailCarIndex helpers
+- Updated simulation.ts to initialize new fields and use getTailCarIndex
+- Updated lock-manager.ts to use getLeadCar and train.travelDirection
+- Files: src/core/types.ts, src/core/train-helpers.ts, src/core/simulation.ts, src/core/lock-manager.ts
 
-### Task 2: Add `log` DSL statement
-- Created centralized logger utility: `src/core/logger.ts`
-- Added LOG token to lexer: `src/parser/lexer.ts`
-- Added LogStatement to parser: `src/parser/parser.ts`
-- Added log processing to builder: `src/parser/builder.ts`
-- Added logLevel field to Layout type: `src/core/types.ts`
-- Applied log level at runtime in: `src/main.ts`
-- Syntax: `log debug|info|warning|error` (alias: `logging`)
-- Default level: WARNING
+### Feature 4: Reverse Movement
+- Added reverseTrain() method (only when stopped)
+- Signed distance calculation based on travelDirection
+- Updated lock-manager to use train.travelDirection instead of inferring from entry point
+- Files: src/core/simulation.ts, src/core/lock-manager.ts
 
-### Task 3: Replace all console.* calls with logger
-- `src/parser/builder.ts` — 44 calls replaced (41 debug, 3 warn)
-- `src/core/simulation.ts` — 15 calls replaced (info for user events, debug for internals)
-- `src/core/lock-manager.ts` — 20 calls replaced (all debug; fixed DEBUG_LOGGING=true bug)
-- `src/renderer/track-renderer.ts` — 11 calls replaced (all debug)
-- `src/renderer/train-renderer.ts` — 2 calls replaced (both error)
-- `src/main.ts` — 9 calls replaced (debug/info/error as appropriate)
-- All per-file DEBUG_LOGGING constants removed
-- TypeScript compiles cleanly with zero errors
+### Feature 5: Coupling
+- Added coupling mode, couplingSpeed to Train in types.ts
+- Added COUPLING_SPEED = 3 constant
+- Coupling trains move at low speed, ignore lock failures
+- Added startCoupling(), checkCouplingContact(), coupleTrains() methods
+- Files: src/core/types.ts, src/core/simulation.ts
 
-### Documentation updated
-- `docs/layout-dsl.md` — Added Log Level section
-- `docs/technical-decisions.md` — Replaced Debug Logging section with Centralized Logger
-- `dsl-help.html` — Added log statement to Layout Settings
-- `CLAUDE.md` — Added log level mention
+### Feature 6: Decoupler Archetype
+- Added dec archetype (zero-length, like sem) in archetypes.ts
+- Added DecouplerConfig interface and decouplerConfig to TrackPiece in types.ts
+- Initialized decoupler config in builder.ts
+- Rendering: two triangles, orange/red when active in track-renderer.ts
+- Click handling in scene.ts, wired up in main.ts with 1-second flash
+- activateDecoupler(), isCouplerNearDecoupler(), splitTrain() in simulation.ts
+- Files: src/core/types.ts, src/core/archetypes.ts, src/parser/builder.ts, src/renderer/track-renderer.ts, src/renderer/scene.ts, src/core/simulation.ts, src/main.ts
+
+### Documentation Updates
+- docs/trains.md - speed regulation, flexible composition, reverse, coupling, decoupling
+- docs/technical-decisions.md - design rationale for all 5 features
+- docs/layout-dsl.md - dec archetype, decoupler syntax
+- docs/track-system.md - sem and dec in summary table, detailed sections
+- dsl-help.html - dec archetype, decoupler syntax, visual indicators
+- CLAUDE.md - added dec to archetype codes
+
+### Feature 7: Inspector Widget System
+- Created src/inspector/inspector-widget.ts - abstract base class with lock/close/content areas
+- Created src/inspector/train-inspector.ts - train properties display and control (speed slider, direction, stop/resume)
+- Created src/inspector/inspector-manager.ts - container manager with stacking rules (unlocked replaced, locked persist)
+- Modified index.html - added #inspector-container div
+- Modified src/style.css - inspector CSS rules (fixed bottom, dark semi-transparent, scrollable content)
+- Modified src/renderer/scene.ts - added dblclick handler with raycast against train meshes
+- Modified src/main.ts - wired InspectorManager, TrainInspectorWidget, dblclick callback, update loop, clear on layout change
+- Updated docs/technical-decisions.md - design rationale and implementation details
+
+## Pending
+
+(none)

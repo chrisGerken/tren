@@ -196,3 +196,170 @@ html, body {
 #dialog-cancel-btn:hover {
   background: #555;
 }
+
+/* ============================================
+   Inspector Widgets
+   ============================================ */
+
+#inspector-container {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  pointer-events: none;
+  z-index: 50;
+}
+
+.inspector-widget {
+  display: flex;
+  flex-direction: row;
+  height: 36px;
+  background: rgba(30, 30, 30, 0.9);
+  border-top: 1px solid #555;
+  pointer-events: auto;
+  font-size: 13px;
+  color: #fff;
+}
+
+.inspector-content {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 12px;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.inspector-content::-webkit-scrollbar {
+  height: 4px;
+}
+
+.inspector-content::-webkit-scrollbar-thumb {
+  background: #666;
+  border-radius: 2px;
+}
+
+.inspector-buttons {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  border-left: 1px solid #555;
+}
+
+.inspector-type-label {
+  color: #4a90d9;
+  font-weight: 600;
+  margin-right: 4px;
+}
+
+.inspector-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.inspector-field-label {
+  color: #999;
+}
+
+.inspector-field-value {
+  color: #fff;
+}
+
+.inspector-slider {
+  width: 80px;
+  height: 4px;
+  cursor: pointer;
+  accent-color: #4a90d9;
+}
+
+.inspector-speed-value {
+  display: inline-block;
+  min-width: 36px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.inspector-slider-value {
+  display: inline-block;
+  min-width: 20px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.inspector-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px 8px;
+  border-radius: 3px;
+  color: #fff;
+}
+
+.inspector-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.inspector-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.inspector-lock-btn {
+  font-size: 16px;
+}
+
+.inspector-close-btn {
+  color: #e74c3c;
+  font-weight: bold;
+}
+
+.inspector-close-btn:hover {
+  background: rgba(231, 76, 60, 0.2);
+}
+
+.inspector-dir-btn {
+  background: #4a90d9;
+  font-size: 12px;
+  padding: 2px 8px;
+}
+
+.inspector-dir-btn:hover {
+  background: #357abd;
+}
+
+.inspector-stop-btn {
+  background: #e74c3c;
+  font-size: 12px;
+  padding: 2px 8px;
+}
+
+.inspector-stop-btn:hover {
+  background: #c0392b;
+}
+
+.inspector-resume-btn {
+  background: #2ecc71;
+  font-size: 12px;
+  padding: 2px 8px;
+}
+
+.inspector-resume-btn:hover:not(:disabled) {
+  background: #27ae60;
+}
+
+.inspector-couple-btn {
+  background: #e67e22;
+  font-size: 12px;
+  padding: 2px 8px;
+}
+
+.inspector-couple-btn:hover:not(:disabled) {
+  background: #d35400;
+}

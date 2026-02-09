@@ -13,6 +13,12 @@ export type SwitchClickCallback = (routeKey: string, connectionIndex: number) =>
 // Callback type for semaphore clicks
 export type SemaphoreClickCallback = (pieceId: string) => void;
 
+// Callback type for decoupler clicks
+export type DecouplerClickCallback = (pieceId: string) => void;
+
+// Callback type for train double-clicks
+export type TrainDblClickCallback = (trainId: string) => void;
+
 export class TrackScene {
   scene: THREE.Scene;
   camera: THREE.OrthographicCamera;
@@ -27,6 +33,8 @@ export class TrackScene {
   private mouse: THREE.Vector2;
   private onSwitchClick?: SwitchClickCallback;
   private onSemaphoreClick?: SemaphoreClickCallback;
+  private onDecouplerClick?: DecouplerClickCallback;
+  private onTrainDblClick?: TrainDblClickCallback;
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -113,6 +121,9 @@ export class TrackScene {
     // Handle click events for switch indicators
     this.renderer.domElement.addEventListener('click', (event) => this.onClick(event));
 
+    // Handle double-click events for train inspection
+    this.renderer.domElement.addEventListener('dblclick', (event) => this.onDblClick(event));
+
     // Handle window resize
     window.addEventListener('resize', () => this.onResize());
   }
@@ -129,6 +140,20 @@ export class TrackScene {
    */
   setSemaphoreClickCallback(callback: SemaphoreClickCallback): void {
     this.onSemaphoreClick = callback;
+  }
+
+  /**
+   * Set callback for decoupler clicks
+   */
+  setDecouplerClickCallback(callback: DecouplerClickCallback): void {
+    this.onDecouplerClick = callback;
+  }
+
+  /**
+   * Set callback for train double-clicks
+   */
+  setTrainDblClickCallback(callback: TrainDblClickCallback): void {
+    this.onTrainDblClick = callback;
   }
 
   /**
@@ -160,6 +185,40 @@ export class TrackScene {
           this.onSemaphoreClick(userData.pieceId);
         }
         break;
+      }
+      if (userData && userData.isDecoupler) {
+        if (this.onDecouplerClick) {
+          this.onDecouplerClick(userData.pieceId);
+        }
+        break;
+      }
+    }
+  }
+
+  /**
+   * Handle double-click events for train inspection
+   */
+  private onDblClick(event: MouseEvent): void {
+    if (!this.onTrainDblClick) return;
+
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+    this.raycaster.setFromCamera(this.mouse, this.camera);
+
+    // Raycast against train group children (recursive)
+    const intersects = this.raycaster.intersectObjects(this.trainGroup.children, true);
+
+    if (intersects.length > 0) {
+      // Walk up object hierarchy to find the train group (name starts with "train_")
+      let obj: THREE.Object3D | null = intersects[0].object;
+      while (obj) {
+        if (obj.name && obj.name.startsWith('train_')) {
+          this.onTrainDblClick(obj.name);
+          return;
+        }
+        obj = obj.parent;
       }
     }
   }

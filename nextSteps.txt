@@ -2,8 +2,8 @@
 
 --------------------
 
-2) Support the ability to stop a train within a given amount of distance. The train will slow at an even rate 
-of deceleration until the train has moved the given distance and come to a stop. The desired speed will be 0 
+2) Support the ability to stop a train within a given amount of distance. The train will slow at a
+configurable and even rate of deceleration until the train has come to a stop. The desired speed will be 0 
 and the direction of the train will be unchanged.   
 
 3) Support the ability for a train to be composed of any combination of cabs and cars in any order. 

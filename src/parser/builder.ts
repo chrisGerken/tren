@@ -467,6 +467,13 @@ class LayoutBuilder {
         };
       }
 
+      // Apply decoupler config for 'dec' pieces
+      if (archetype.code === 'dec' && i === 0) {
+        piece.decouplerConfig = {
+          activated: false,
+        };
+      }
+
       this.state.pieces.push(piece);
       this.state.currentSegment.pieces.push(piece);
       this.state.currentPiece = piece;

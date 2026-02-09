@@ -289,6 +289,7 @@ Use archetype codes to specify track pieces. See [Track Dimensions](track-dimens
 | `bin` | Train sink (trains removed) |
 | `tun`, `tunnel` | Visibility toggle (hide track/trains) |
 | `sem`, `semaphore` | Manual signal (see Semaphore Syntax below) |
+| `dec`, `decoupler` | Train splitter (see Decoupler Syntax below) |
 
 ### Generator Syntax
 
@@ -370,6 +371,35 @@ signal: sem                   # Labeled semaphore
 - Manual traffic control at junctions
 - Creating "holding points" where you can accumulate trains
 - Simulating station stops or signal blocks
+
+### Decoupler Syntax
+
+Decouplers split a stopped train into two separate trains at the decoupler's position:
+
+```
+dec                           # Place a decoupler
+decoupler                     # Same as dec (alias)
+split: dec                    # Labeled decoupler
+```
+
+**Behavior:**
+- **Orange triangles** (inactive): Decoupler is ready, no action
+- **Red triangles** (activated): Decoupler has been triggered (flashes for 1 second)
+
+**Interaction:**
+- Click either triangle to activate the decoupler
+- If a stopped train straddles the decoupler, the train is split into two stopped trains
+- The coupler between consecutive cars nearest to the decoupler (within ~2 inches) is where the split occurs
+- If no stopped train is found, the status bar shows "no train to split"
+
+**Visual appearance:**
+- Two small triangles, one on each side of the track, pointing toward the decoupler position
+- Orange when inactive, briefly red when activated
+
+**Use cases:**
+- Splitting trains for shunting/switching operations
+- Dropping off cars at sidings
+- Creating separate train consists from a single train
 
 ### Repetition
 
@@ -1012,3 +1042,4 @@ See [Connection Points](connection-points.md) for complete connection point defi
 | `gen` | `in`, `out` | `in` | `out` |
 | `bin` | `in`, `out` | `in` | `out` |
 | `sem` | `in`, `out` | `in` | `out` |
+| `dec` | `in`, `out` | `in` | `out` |

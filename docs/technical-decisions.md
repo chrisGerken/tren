@@ -993,6 +993,192 @@ All DSL keywords, archetype names, connection point names, and custom archetype 
 2. **Parser (`src/parser/parser.ts`):** Archetype codes and connection point names are lowercased when extracted from tokens
 3. **Archetypes (`src/core/archetypes.ts`):** `getArchetype()`, `registerRuntimeArchetype()`, and `isValidArchetype()` normalize input keys to lowercase
 
+## Deceleration to Stop
+
+When a train's `desiredSpeed` is lowered (or set to 0), it decelerates smoothly at 12 inches/sec² (normal braking) rather than using emergency braking.
+
+**Design decisions:**
+- Three-tier speed adjustment in `updateTrains()`:
+  1. Lock failure → emergency braking (24 in/s²) — unchanged
+  2. `currentSpeed > desiredSpeed` → normal braking (12 in/s²) — **new**
+  3. `currentSpeed < desiredSpeed` → acceleration (6 in/s²) — unchanged
+- Normal braking rate (12) is between acceleration (6) and emergency braking (24)
+- Trains decelerate smoothly using `Math.max(desiredSpeed, currentSpeed - NORMAL_BRAKING * dt)`
+
+## Flexible Train Composition
+
+Trains support any combination of cabs and cars in any order, with direction-aware lead/tail car access.
+
+**Design decisions:**
+- `Train.travelDirection: 'forward' | 'backward'` determines which end is the lead
+- `Car.facingForward: boolean` records original orientation (for future rendering)
+- Helper functions in `src/core/train-helpers.ts` abstract direction-aware access:
+  - `getLeadCar(train)` / `getTailCar(train)` — return car references
+  - `getLeadCarIndex(train)` / `getTailCarIndex(train)` — return indices
+- `lock-manager.ts` uses `getLeadCar(train)` instead of `train.cars[0]`
+- `simulation.ts` uses `getTailCarIndex(train)` for route memory clearing
+
+**Why helper functions instead of methods:**
+- Train is a plain interface, not a class
+- Functions are easily testable and importable
+- Consistent with the existing functional style of `train-movement.ts`
+
+## Reverse Movement
+
+Trains can reverse direction when stopped, enabling back-and-forth operations.
+
+**Design decisions:**
+- Reversal only allowed at `currentSpeed === 0` (safety constraint)
+- `reverseTrain(trainId)` flips `travelDirection`, releases all locks, re-acquires for new direction
+- Movement distance is signed: `distance = travelDirection === 'forward' ? raw : -raw`
+- Negative distance triggers underflow handling in `moveCar()`, which already handles backward section transitions
+- Lock manager uses `train.travelDirection` instead of inferring from `leadCar.entryPoint`
+
+**Why not negative speed:**
+- Speed is always non-negative (magnitude)
+- Direction is a separate property on the train
+- Cleaner separation of concerns; `currentSpeed` always means "how fast" not "which way"
+
+## Coupling
+
+Trains can merge with stopped trains to form longer consists.
+
+**Design decisions:**
+- Coupling mode is a boolean flag on the train, not a separate state machine
+- `couplingSpeed` is configurable per train (default 3 in/s)
+- In coupling mode, trains ignore lock failures but still acquire/release locks normally
+- Contact detection checks if lead car is on same piece as any car of a stopped train, within `CAR_GAP` tolerance
+- Car arrays are merged: prepend or append depending on travel direction and contact point
+- Combined train stops immediately and exits coupling mode
+- Locks are released from the absorbed train and re-acquired for the combined train
+
+**Why ignore lock failures during coupling:**
+- The whole point of coupling is to approach another train, which will have locks on the track ahead
+- Without ignoring locks, the coupling train would stop short of the target
+- Lock acquisition still happens for connection points the coupling train passes over
+
+**Stop cancels coupling mode:**
+- Pressing Stop in the inspector while a train is coupling sets `coupling = false` and `currentSpeed = 0`
+- This is necessary because coupling mode bypasses normal speed control (ignores `desiredSpeed`, uses `couplingSpeed` directly)
+- Simply setting `desiredSpeed = 0` would not stop a coupling train
+
+**Merged car movement fix:**
+- After merging, all cars in the combined train must have `previousPieceId` cleared to `undefined`
+- The `getNextSection()` function uses `previousPieceId` to filter out the piece a car just left (preventing backward routing)
+- Without clearing, absorbed cars retain stale `previousPieceId` values from their original forward travel direction
+- When the merged train moves (especially backward), the stale filter blocks correct section transitions, causing cars to appear stuck or move erratically
+- `routesTaken` is also cleared since the absorbed train's route memory is irrelevant to the combined train
+- This follows the same pattern used in `reverseTrain()`, which also clears `previousPieceId` and `routesTaken`
+
+## Decoupler Archetype
+
+A zero-length track piece that splits stopped trains, following the same pattern as semaphore.
+
+**Design decisions:**
+- Zero-length piece like `sem`, `ph`, `tun` — consistent archetype design
+- Two triangle indicators (one per side) for easy click target
+- Orange = inactive, red = activated (brief 1-second flash)
+- Activation finds a stopped train whose coupler gap is within 2" of the decoupler's world position
+- Split creates two stopped trains: front portion keeps original train ID, rear becomes new train
+- Both trains get `desiredSpeed: 0` after split
+- Locks are released and re-acquired for both trains independently
+
+**Why world-position distance check instead of piece-based:**
+- Decoupler is zero-length, so the coupler may be on an adjacent piece
+- World position comparison is more robust for zero-length pieces
+- 2" tolerance accounts for car gaps and position rounding
+
+**Rendering:**
+- Uses `THREE.ShapeGeometry` for triangles (flat, laid on ground plane)
+- Each triangle stores `userData: { isDecoupler: true, pieceId }` for click detection
+- `decouplerMeshes` map enables dynamic color updates
+- `updateDecouplerColor()` exported for activation flash
+
+## Inspector Widget System
+
+An HTML/CSS overlay system at the bottom of the simulation window for inspecting and controlling simulation objects. Double-clicking an object opens a one-line-tall widget with live-updating properties.
+
+**Architecture: HTML/CSS Overlay (not Three.js)**
+- Widgets need native form controls (sliders, buttons, toggles) that are impractical in Three.js
+- Inspector container is `position: fixed` at bottom, z-index 50 (below toolbar at 100, below dialogs at 200)
+- Container uses `pointer-events: none` so empty areas pass clicks to the canvas
+- Individual widgets use `pointer-events: auto` to capture interaction
+
+**Widget stacking rules:**
+1. Double-click object → new unlocked widget appears at bottom
+2. Double-click another object with unlocked widget → unlocked widget replaced
+3. Lock a widget → persists; next double-click adds new widget above it
+4. Multiple locked widgets can coexist (stack upward)
+5. X button removes any widget (locked or unlocked)
+
+**Implementation:**
+
+1. **Abstract base (`src/inspector/inspector-widget.ts`):**
+   - `InspectorWidget` abstract class with `element`, `locked`, `contentEl`
+   - Lock button toggles padlock icon, close button (red X) removes widget
+   - `onRemove` callback for notifying the manager
+   - Abstract methods: `targetId`, `typeLabel`, `buildContent()`, `update()`, `dispose()`
+
+2. **Train inspector (`src/inspector/train-inspector.ts`):**
+   - `TrainInspectorWidget extends InspectorWidget`
+   - Fields: train ID, cab/car counts, current speed, desired speed slider (0-48), direction toggle, stop/resume
+   - Slider `input` event sets `train.desiredSpeed` directly
+   - Direction toggle calls `simulation.reverseTrain()` (only when stopped)
+   - Stop saves `desiredSpeed`, sets to 0; Resume restores saved speed
+   - `update()` refreshes all values each frame; skips slider while user is dragging
+   - Auto-removes when train no longer exists (entered bin)
+
+3. **Manager (`src/inspector/inspector-manager.ts`):**
+   - Holds `#inspector-container` DOM element and `widgets` array
+   - `addWidget()` removes all unlocked widgets, then appends new widget
+   - `update()` calls `widget.update()` on snapshot (safe for auto-removal during iteration)
+   - `clear()` removes all widgets (called on layout change)
+   - `hasWidgetForTarget()` prevents duplicate widgets for same object
+
+4. **Scene integration (`src/renderer/scene.ts`):**
+   - `TrainDblClickCallback` type and `setTrainDblClickCallback()` setter
+   - `onDblClick()` raycasts against `trainGroup.children` (recursive)
+   - Walks up object hierarchy to find Group with name starting `train_`
+
+5. **Main wiring (`src/main.ts`):**
+   - `InspectorManager` created after scene
+   - Train double-click callback creates `TrainInspectorWidget` and adds to manager
+   - `inspectorManager.update()` called in simulation update callback
+   - `inspectorManager.clear()` called at top of `startSimulation()`
+
+**Design decisions:**
+- HTML overlay chosen over Three.js geometry for native form control support
+- Slider range 0-48 covers practical speed range (default 12, max reasonable ~48 in/s)
+- Auto-removal on train destruction prevents stale widgets
+- Slider drag detection uses `mousedown`/`mouseup` events to avoid fighting with live updates
+- Widget height fixed at 36px for consistent single-line appearance
+- Widgets default to locked state (padlock icon shows locked on creation)
+
+**DOM mutation and click event suppression:**
+- The `update()` method runs every animation frame (~60fps) to refresh live values
+- Setting `element.textContent` every frame replaces the DOM text node, even if the value is unchanged
+- When textContent replacement occurs between `mousedown` and `mouseup`, the browser suppresses the `click` event because the original text node (the mousedown target) no longer exists
+- **Fix:** Only mutate `textContent` and `disabled` properties when the value has actually changed:
+  ```typescript
+  const newText = train.coupling ? 'Coupling...' : 'Couple';
+  if (this.coupleBtn.textContent !== newText) {
+    this.coupleBtn.textContent = newText;
+  }
+  ```
+- This pattern must be applied to ALL button properties updated in `update()` that the user might click
+- The slider already avoided this issue because it skips updates during active drag (via `sliderActive` flag)
+
+**Change Direction preserving stop/resume state:**
+- Clicking Change Direction does NOT reset the stop/resume state
+- If the train was stopped (Resume button showing), it stays stopped after direction change
+- The saved speed is preserved so Resume restores the correct speed
+- Previously, Change Direction unconditionally reset `isStopped`, `savedSpeed`, and the stop button label, which caused the Resume button to incorrectly revert to "Stop"
+
+**Extensibility:**
+- New inspector types (switch, generator, etc.) extend `InspectorWidget`
+- Manager is type-agnostic — works with any widget subclass
+- `targetId` property enables duplicate prevention across widget types
+
 ## Open Questions
 
 These will be addressed in user scenario discussions:

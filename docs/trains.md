@@ -60,8 +60,13 @@ Trains automatically regulate their speed to prevent collisions:
 
 **Acceleration/Deceleration rates**:
 - Acceleration: 6 inches/second² (gradual speed-up)
-- Normal braking: 12 inches/second² (comfortable slow-down)
-- Emergency braking: 24 inches/second² (hard stop)
+- Normal braking: 12 inches/second² (comfortable slow-down when reducing desired speed)
+- Emergency braking: 24 inches/second² (hard stop when locks fail)
+
+**Speed regulation priority:**
+1. **Lock failure** → emergency braking (24 in/s²) — hard stop to avoid collision
+2. **currentSpeed > desiredSpeed** → normal braking (12 in/s²) — smooth deceleration
+3. **currentSpeed < desiredSpeed** → acceleration (6 in/s²) — gradual speed-up
 
 **Lock ahead configuration**: Trains use connection point locking for collision prevention. The `lockahead` DSL statement configures how far ahead trains scan and how many connection points they must lock:
 - `distance N` - Minimum distance (in inches) to scan ahead (default: 10)
@@ -243,3 +248,117 @@ Cars transition visibility individually when crossing tunnel pieces:
 - A train partially inside a tunnel will have some cars visible and others invisible
 
 See [Track System](track-system.md#tunnel-tun) for tunnel archetype details.
+
+## Flexible Train Composition
+
+Trains can be composed of any combination of cabs and cars in any order. Each car has a `facingForward` boolean indicating its orientation relative to the original train direction.
+
+### Travel Direction
+
+Each train has a `travelDirection` property: `'forward'` or `'backward'`. This determines:
+- Which end of the train is the "lead" (front in current direction)
+- Which end is the "tail" (rear in current direction)
+
+**Helper functions** (`src/core/train-helpers.ts`):
+- `getLeadCar(train)` — returns the car at the front in the current travel direction
+- `getTailCar(train)` — returns the car at the rear in the current travel direction
+- `getLeadCarIndex(train)` / `getTailCarIndex(train)` — index variants
+
+When `travelDirection` is `'forward'`, lead = `cars[0]`, tail = `cars[last]`.
+When `travelDirection` is `'backward'`, lead = `cars[last]`, tail = `cars[0]`.
+
+### Lead Car Responsibilities
+
+The lead car (determined by travel direction) handles:
+- Lock acquisition ahead of the train
+- Route selection at switches
+
+The tail car handles:
+- Route memory clearing (forgets route after last car passes a switch)
+
+## Reverse Movement
+
+Trains can reverse direction, but only when completely stopped.
+
+### Reversal Process
+
+1. Train must be at `currentSpeed === 0`
+2. Call `reverseTrain(trainId)` to flip `travelDirection`
+3. All existing locks are released and re-acquired for the new direction
+4. Set `desiredSpeed` to resume movement in the new direction
+
+### Movement Direction
+
+Movement distance is signed based on travel direction:
+- Forward: `distance = currentSpeed * deltaTime` (positive)
+- Backward: `distance = -(currentSpeed * deltaTime)` (negative)
+
+Negative distance causes cars to traverse splines in reverse, naturally handling backward movement through the existing section transition system (underflow handling).
+
+## Coupling
+
+Trains can couple (merge) with other stopped trains to form longer consists.
+
+### Coupling Mode
+
+When a train enters coupling mode (`coupling: true`):
+- It moves at the configurable `couplingSpeed` (default: 3 inches/sec)
+- It ignores lock failures (continues moving even when blocked)
+- It still acquires and releases locks for connection points it crosses
+
+### Coupling Process
+
+1. Stop the train (`currentSpeed === 0`)
+2. Enter coupling mode via `startCoupling(trainId)`
+3. Train moves at coupling speed in its current direction
+4. When the lead car contacts a stopped train's car (within `CAR_GAP` tolerance on the same piece), coupling occurs
+
+### Contact Detection
+
+Contact is detected when:
+- The coupling train's lead car is on the same track piece as a car from another stopped train
+- The distance between car centers ≤ `(leadCar.length + otherCar.length) / 2 + CAR_GAP`
+
+### Train Merging
+
+When contact occurs:
+- The stopped train's cars are added to the coupling train
+- Car order depends on which end of each train made contact
+- The combined train stops and exits coupling mode
+- Locks are redistributed for the combined train
+- All cars have `previousPieceId` cleared (prevents stale backward-routing filters from blocking section transitions)
+- The train's `routesTaken` map is cleared (absorbed train's route memory is irrelevant)
+
+### Stopping During Coupling
+
+Pressing Stop in the inspector while a train is coupling:
+- Sets `coupling` to `false` and `currentSpeed` to `0`
+- This fully cancels coupling mode — simply setting `desiredSpeed = 0` is insufficient because coupling mode bypasses `desiredSpeed` and uses `couplingSpeed` directly
+
+## Decoupling
+
+Trains can be split into two separate trains at a decoupler track piece.
+
+### Decoupler Archetype
+
+The decoupler (`dec` or `decoupler`) is a zero-length track piece similar to semaphores and placeholders. It is placed inline in the track and activated by clicking.
+
+**Visual appearance:** Two small triangles, one on each side of the track, pointing toward the decoupler position. Orange when inactive, red when activated.
+
+### Decoupling Process
+
+1. A stopped train must straddle the decoupler (a coupler between consecutive cars within ~2 inches of the decoupler position)
+2. Click one of the triangles to activate
+3. The train is split at the coupler closest to the decoupler
+4. Both resulting trains are stopped
+5. The decoupler flashes red for 1 second, then returns to orange
+6. When the front portion is set in motion, it pulls away; the rear portion stays stopped
+
+### Split Details
+
+- Cars `[0..splitIndex-1]` stay in the original train
+- Cars `[splitIndex..end]` become a new stopped train
+- Both trains inherit the original travel direction
+- Locks are released and re-acquired for both trains
+
+See [Track System](track-system.md#decoupler-dec) for archetype details.

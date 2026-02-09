@@ -55,6 +55,7 @@ export interface TrackPiece {
   connections: Map<string, Connection[]>;  // Connection point name -> connected pieces
   genConfig?: GeneratorConfig;  // Generator configuration (only for 'gen' pieces)
   semaphoreConfig?: SemaphoreConfig;  // Semaphore configuration (only for 'sem' pieces)
+  decouplerConfig?: DecouplerConfig;  // Decoupler configuration (only for 'dec' pieces)
   inTunnel?: boolean;     // True if piece is inside a tunnel (between tunnel pieces)
   internalConnectionPoints?: InternalConnectionPoint[];  // Connection points along the track (not at endpoints)
 }
@@ -91,16 +92,20 @@ export interface Car {
   worldPosition: Vec3;             // Cached world position
   rotation: number;                // Rotation in radians (heading)
   color?: number;                  // Car color (hex, assigned at creation for non-cabs)
+  facingForward: boolean;          // True if car faces same direction as original train travel
 }
 
 /** Train consist (ordered list of cars) */
 export interface Train {
   id: string;
-  cars: Car[];                     // First car is the head
+  cars: Car[];                     // Ordered list: cars[0] is original front, cars[last] is original rear
   desiredSpeed: number;            // Target speed in inches per second
   currentSpeed: number;            // Actual speed (may be lower due to collision prevention)
   generatorId: string;             // Which generator spawned this train
   routesTaken: Map<string, number>; // Switch routes taken (pieceId.pointName -> connectionIndex)
+  travelDirection: 'forward' | 'backward'; // Current direction of travel
+  coupling: boolean;               // True when in coupling mode (moving to connect with another train)
+  couplingSpeed: number;           // Speed during coupling (inches/sec, default 3)
 }
 
 /** Range value for randomized parameters */
@@ -126,6 +131,11 @@ export interface GeneratorConfig {
 /** Semaphore configuration - manual lock control point */
 export interface SemaphoreConfig {
   locked: boolean;                 // True = red (blocked), false = green (open)
+}
+
+/** Decoupler configuration - splits a stopped train */
+export interface DecouplerConfig {
+  activated: boolean;              // True when decoupler has been triggered (briefly)
 }
 
 /** Helper to create a Vec3 */

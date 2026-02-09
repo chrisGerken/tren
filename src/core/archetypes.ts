@@ -260,6 +260,18 @@ const archetypes: TrackArchetype[] = [
     ],
   },
 
+  // Decoupler (splits a stopped train at this point)
+  // Zero-length track, click to activate
+  {
+    code: 'dec',
+    aliases: ['decoupler'],
+    sections: [],
+    connectionPoints: [
+      { name: 'in', position: vec2(0, 0), direction: vec2(-1, 0), sectionIndices: [] },
+      { name: 'out', position: vec2(0, 0), direction: vec2(1, 0), sectionIndices: [] },
+    ],
+  },
+
   // 90° Crossing
   {
     code: 'x90',
