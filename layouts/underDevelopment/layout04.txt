@@ -32,8 +32,6 @@ str * 3
 crvl * 4
 
 
-> $onramp.in
-
 
 #
 # Offramp
