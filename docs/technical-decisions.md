@@ -1174,6 +1174,17 @@ An HTML/CSS overlay system at the bottom of the simulation window for inspecting
 - The saved speed is preserved so Resume restores the correct speed
 - Previously, Change Direction unconditionally reset `isStopped`, `savedSpeed`, and the stop button label, which caused the Resume button to incorrectly revert to "Stop"
 
+**Next Switch Selector (in train inspector):**
+- Shows the next virtual switch the train will encounter as a radio-button-like group
+- Buttons are labeled spatially: Left/Right for 2-way, Left/Center/Right for 3-way
+- Spatial ordering uses 2D cross product of forward direction vs entry direction at the switch
+- Clicking a button pre-sets the route in `train.routesTaken` via `setTrainSwitchOverride()`
+- Since `getNextSection()` checks `routesTaken` first, the override is automatically used when the lead car reaches the switch; all subsequent cars follow the same route
+- Clicking the already-selected button clears the override, restoring normal switch logic (random or selectedRoutes)
+- The tail car naturally clears the entry from `routesTaken` after passing, so the override is consumed once
+- Walk-ahead algorithm mirrors `acquireLeadingLocks()`: starts from lead car, follows track graph, handles crossings (x90/x45) by staying on same track number, limited to 50 pieces
+- DOM is only rebuilt when the switch changes (different routeKey), not every frame, to avoid the textContent click-suppression issue
+
 **Extensibility:**
 - New inspector types (switch, generator, etc.) extend `InspectorWidget`
 - Manager is type-agnostic — works with any widget subclass

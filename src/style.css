@@ -363,3 +363,32 @@ html, body {
 .inspector-couple-btn:hover:not(:disabled) {
   background: #d35400;
 }
+
+.inspector-switch-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.inspector-switch-label {
+  color: #999;
+  font-size: 12px;
+}
+
+.inspector-switch-btn {
+  background: #555;
+  color: #fff;
+  font-size: 11px;
+  padding: 2px 6px;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.inspector-switch-btn.selected {
+  background: #4a90d9;
+}
+
+.inspector-switch-btn:hover:not(.selected) {
+  background: #666;
+}

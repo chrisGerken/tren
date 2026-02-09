@@ -215,6 +215,37 @@ When a train crosses a virtual switch (a connection point with multiple routes):
 - This ensures the entire train follows the same path, even if the switch is changed while the train is crossing
 - Without this, changing a switch mid-crossing would cause cars to split onto different tracks (derailment)
 
+## Next Switch Override (Inspector)
+
+The train inspector widget includes a "Next Switch" selector that allows users to pre-select the route at the upcoming switch without finding and clicking switch indicators on the track.
+
+### How It Works
+
+1. The simulation walks ahead from the train's lead car along the track graph
+2. When it finds a connection point with multiple route options (a virtual switch), it returns the switch info
+3. The inspector displays buttons for each route, labeled spatially (Left/Right/Center)
+4. Clicking a button sets the route in `train.routesTaken` — the same map that `getNextSection()` checks first
+5. When the lead car reaches the switch, it finds the pre-set route and follows it
+6. All subsequent cars follow the same route (standard route memory behavior)
+7. The tail car clears the entry after passing (standard route memory cleanup)
+
+### Spatial Labels
+
+Route options are labeled based on their spatial position relative to the forward direction at the switch:
+- **2 options**: "Left", "Right"
+- **3 options**: "Left", "Center", "Right"
+- **4+ options**: "Left", numbered middle options, "Right"
+
+The spatial ordering uses the 2D cross product of the exit direction at the switch point versus the entry direction of each connected track.
+
+### Deselecting
+
+Clicking the currently-selected button deselects it, removing the override from `routesTaken`. This restores normal switch logic (random mode or `selectedRoutes` map).
+
+### No Override Set
+
+When no button is selected, the train uses the standard route selection logic when it reaches the switch.
+
 ## Visual Representation (2D)
 
 For the initial 2D top-down version:

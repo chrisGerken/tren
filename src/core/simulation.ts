@@ -11,11 +11,23 @@ import {
   CAR_LENGTH,
   CAR_GAP,
   getSectionLength,
+  isInPoint,
+  isOutPoint,
+  getOppositePoint,
 } from './train-movement';
 import { getRandomCarColor, resetCarColorTracking } from '../renderer/train-renderer';
 import { LockManager } from './lock-manager';
 import { getLeadCar, getTailCarIndex } from './train-helpers';
 import { logger } from './logger';
+
+/**
+ * Information about the next switch a train will encounter
+ */
+export interface NextSwitchInfo {
+  routeKey: string;
+  options: { index: number; label: string }[];  // Sorted left-to-right
+  currentOverride?: number;  // Index if user has set override, undefined if not
+}
 
 // Default train speed in inches per second
 const DEFAULT_SPEED = 12;
@@ -768,5 +780,219 @@ export class Simulation {
    */
   isJunctionLocked(routeKey: string): boolean {
     return this.lockManager.isJunctionLocked(routeKey);
+  }
+
+  /**
+   * Find the next virtual switch ahead of a train's lead car.
+   * Walks forward along the track and returns info about the first switch
+   * (connection point with multiple route options in the travel direction).
+   */
+  findNextSwitch(trainId: string): NextSwitchInfo | null {
+    const train = this.trains.find(t => t.id === trainId);
+    if (!train) return null;
+
+    const leadCar = getLeadCar(train);
+    const piece = this.layout.pieces.find(p => p.id === leadCar.currentPieceId);
+    if (!piece) return null;
+
+    const travelDirection = train.travelDirection;
+
+    // Start from current piece
+    let currentPieceId = leadCar.currentPieceId;
+    let currentPiece = piece;
+    let exitPoint = travelDirection === 'forward' ? 'out' : 'in';
+
+    // Handle crossings — determine which track we're on
+    const archetype = getArchetype(piece.archetypeCode);
+    if (archetype && (archetype.code === 'x90' || archetype.code === 'x45')) {
+      if (leadCar.entryPoint === 'in1' || leadCar.entryPoint === 'out1') {
+        exitPoint = travelDirection === 'forward' ? 'out1' : 'in1';
+      } else if (leadCar.entryPoint === 'in2' || leadCar.entryPoint === 'out2') {
+        exitPoint = travelDirection === 'forward' ? 'out2' : 'in2';
+      }
+    }
+
+    let previousPieceId: string | undefined = undefined;
+
+    for (let step = 0; step < 50; step++) {
+      // Get all connections at exit point
+      const allConnections = currentPiece.connections.get(exitPoint);
+      if (!allConnections || allConnections.length === 0) {
+        return null; // Dead end
+      }
+
+      // Filter out the previous piece
+      const validConnections = allConnections.filter(c => c.pieceId !== previousPieceId);
+      if (validConnections.length === 0) return null;
+
+      // Separate by direction type
+      const forwardConnections = validConnections.filter(c => isInPoint(c.pointName));
+      const backwardConnections = validConnections.filter(c => isOutPoint(c.pointName));
+
+      let connections: typeof validConnections;
+      let switchDirection: 'fwd' | 'bwd';
+
+      if (travelDirection === 'backward') {
+        if (backwardConnections.length > 0) {
+          connections = backwardConnections;
+          switchDirection = 'bwd';
+        } else {
+          connections = forwardConnections;
+          switchDirection = 'fwd';
+        }
+      } else {
+        if (forwardConnections.length > 0) {
+          connections = forwardConnections;
+          switchDirection = 'fwd';
+        } else {
+          connections = backwardConnections;
+          switchDirection = 'bwd';
+        }
+      }
+
+      if (connections.length === 0) {
+        connections = validConnections;
+        switchDirection = 'fwd';
+      }
+
+      if (connections.length > 1) {
+        // This is a switch! Compute route key and spatial ordering.
+        const junctionPoints = allConnections.map(c => `${c.pieceId}.${c.pointName}`);
+        junctionPoints.push(`${currentPieceId}.${exitPoint}`);
+        junctionPoints.sort();
+        const canonicalJunctionId = junctionPoints[0];
+        const routeKey = `junction.${canonicalJunctionId}.${switchDirection}`;
+
+        // Compute spatial ordering using cross product
+        const options = this.computeSpatialLabels(currentPiece, exitPoint, connections);
+
+        // Check if train has an override set
+        let currentOverride: number | undefined;
+        if (train.routesTaken.has(routeKey)) {
+          currentOverride = train.routesTaken.get(routeKey)!;
+        }
+
+        return { routeKey, options, currentOverride };
+      }
+
+      // Single connection — follow it to next piece
+      const nextConn = connections[0];
+      const nextPiece = this.layout.pieces.find(p => p.id === nextConn.pieceId);
+      if (!nextPiece) return null;
+
+      previousPieceId = currentPieceId;
+      currentPieceId = nextConn.pieceId;
+      currentPiece = nextPiece;
+
+      // Determine exit point for next piece
+      const nextArchetype = getArchetype(nextPiece.archetypeCode);
+      if (nextArchetype && (nextArchetype.code === 'x90' || nextArchetype.code === 'x45')) {
+        if (nextConn.pointName === 'in1') exitPoint = 'out1';
+        else if (nextConn.pointName === 'out1') exitPoint = 'in1';
+        else if (nextConn.pointName === 'in2') exitPoint = 'out2';
+        else exitPoint = 'in2';
+      } else {
+        exitPoint = getOppositePoint(nextConn.pointName);
+      }
+    }
+
+    return null; // Exceeded search limit
+  }
+
+  /**
+   * Compute spatial labels (Left/Right/Center) for switch connections.
+   * Uses 2D cross product of forward direction vs entry direction to sort left-to-right.
+   */
+  private computeSpatialLabels(
+    switchPiece: TrackPiece,
+    exitPointName: string,
+    connections: { pieceId: string; pointName: string }[]
+  ): { index: number; label: string }[] {
+    // Get the forward direction at the exit point (rotated to world coordinates)
+    const archetype = getArchetype(switchPiece.archetypeCode);
+    if (!archetype) return connections.map((_, i) => ({ index: i, label: String(i) }));
+
+    const cpDef = archetype.connectionPoints.find(cp => cp.name === exitPointName);
+    if (!cpDef) return connections.map((_, i) => ({ index: i, label: String(i) }));
+
+    // The connection point direction is outward-pointing; rotate to world
+    const cos = Math.cos(switchPiece.rotation);
+    const sin = Math.sin(switchPiece.rotation);
+    const forwardX = cpDef.direction.x * cos - cpDef.direction.z * sin;
+    const forwardZ = cpDef.direction.x * sin + cpDef.direction.z * cos;
+
+    // For each connection, compute the entry direction at the connected piece
+    const scored: { index: number; cross: number }[] = [];
+    for (let i = 0; i < connections.length; i++) {
+      const conn = connections[i];
+      const connPiece = this.layout.pieces.find(p => p.id === conn.pieceId);
+      if (!connPiece) {
+        scored.push({ index: i, cross: 0 });
+        continue;
+      }
+      const connArchetype = getArchetype(connPiece.archetypeCode);
+      if (!connArchetype) {
+        scored.push({ index: i, cross: 0 });
+        continue;
+      }
+      const connCpDef = connArchetype.connectionPoints.find(cp => cp.name === conn.pointName);
+      if (!connCpDef) {
+        scored.push({ index: i, cross: 0 });
+        continue;
+      }
+
+      // The entry direction is opposite of the connected piece's outward direction
+      const connCos = Math.cos(connPiece.rotation);
+      const connSin = Math.sin(connPiece.rotation);
+      const entryX = -(connCpDef.direction.x * connCos - connCpDef.direction.z * connSin);
+      const entryZ = -(connCpDef.direction.x * connSin + connCpDef.direction.z * connCos);
+
+      // Cross product: positive = entry is to the left of forward
+      const cross = forwardX * entryZ - forwardZ * entryX;
+      scored.push({ index: i, cross });
+    }
+
+    // Sort descending by cross product (most positive = leftmost)
+    scored.sort((a, b) => b.cross - a.cross);
+
+    // Assign labels
+    const n = scored.length;
+    const labeled: { index: number; label: string }[] = [];
+    for (let i = 0; i < n; i++) {
+      let label: string;
+      if (n === 2) {
+        label = i === 0 ? 'Left' : 'Right';
+      } else if (n === 3) {
+        label = i === 0 ? 'Left' : i === 1 ? 'Center' : 'Right';
+      } else {
+        // 4+: Left, 2, 3, ..., Right
+        if (i === 0) label = 'Left';
+        else if (i === n - 1) label = 'Right';
+        else label = String(i + 1);
+      }
+      labeled.push({ index: scored[i].index, label });
+    }
+
+    return labeled;
+  }
+
+  /**
+   * Set a switch override for a train at a specific route key.
+   * Pre-sets the route in train.routesTaken so the first car uses this route.
+   */
+  setTrainSwitchOverride(trainId: string, routeKey: string, index: number): void {
+    const train = this.trains.find(t => t.id === trainId);
+    if (!train) return;
+    train.routesTaken.set(routeKey, index);
+  }
+
+  /**
+   * Clear a switch override for a train at a specific route key.
+   * Removes the entry from train.routesTaken, restoring normal switch logic.
+   */
+  clearTrainSwitchOverride(trainId: string, routeKey: string): void {
+    const train = this.trains.find(t => t.id === trainId);
+    if (!train) return;
+    train.routesTaken.delete(routeKey);
   }
 }

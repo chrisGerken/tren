@@ -33,6 +33,13 @@ export class TrainInspectorWidget extends InspectorWidget {
   // Track if user is dragging the slider
   private sliderActive: boolean = false;
 
+  // Switch selector state
+  private switchContainer!: HTMLSpanElement;
+  private switchButtons: HTMLButtonElement[] = [];
+  private currentSwitchRouteKey: string | null = null;
+  private currentSwitchOptions: { index: number; label: string }[] = [];
+  private selectedSwitchIndex: number | undefined = undefined;
+
   constructor(trainId: string, simulation: Simulation) {
     // Store before super() since buildContent needs them
     // But super() calls buildContent()... so we use a workaround
@@ -219,6 +226,11 @@ export class TrainInspectorWidget extends InspectorWidget {
       }
     });
     this.contentEl.appendChild(this.coupleBtn);
+
+    // Next Switch selector container
+    this.switchContainer = document.createElement('span');
+    this.switchContainer.className = 'inspector-switch-group';
+    this.contentEl.appendChild(this.switchContainer);
   }
 
   update(): void {
@@ -257,6 +269,102 @@ export class TrainInspectorWidget extends InspectorWidget {
     }
     if (this.coupleBtn.disabled !== coupleDisabled) {
       this.coupleBtn.disabled = coupleDisabled;
+    }
+
+    // Update next switch selector
+    this.updateSwitchSelector(train);
+  }
+
+  /**
+   * Update the next switch selector buttons.
+   * Only rebuilds DOM when the switch changes to avoid click-suppression.
+   */
+  private updateSwitchSelector(_train: Train): void {
+    const switchInfo = this.simulation.findNextSwitch(this.trainId);
+
+    if (!switchInfo) {
+      // No switch ahead — show "No switch" if not already showing
+      if (this.currentSwitchRouteKey !== '__none__') {
+        this.currentSwitchRouteKey = '__none__';
+        this.currentSwitchOptions = [];
+        this.selectedSwitchIndex = undefined;
+        this.switchButtons = [];
+        this.switchContainer.innerHTML = '';
+        const label = document.createElement('span');
+        label.className = 'inspector-switch-label';
+        label.textContent = 'Next Switch: None';
+        this.switchContainer.appendChild(label);
+      }
+      return;
+    }
+
+    // Check if we need to rebuild the button group
+    const optionsChanged = switchInfo.routeKey !== this.currentSwitchRouteKey ||
+      switchInfo.options.length !== this.currentSwitchOptions.length;
+
+    if (optionsChanged) {
+      this.currentSwitchRouteKey = switchInfo.routeKey;
+      this.currentSwitchOptions = switchInfo.options;
+      this.switchButtons = [];
+      this.switchContainer.innerHTML = '';
+
+      // Label
+      const label = document.createElement('span');
+      label.className = 'inspector-switch-label';
+      label.textContent = 'Next Switch:';
+      this.switchContainer.appendChild(label);
+
+      // Create buttons for each option
+      for (const opt of switchInfo.options) {
+        const btn = document.createElement('button');
+        btn.className = 'inspector-switch-btn';
+        btn.textContent = opt.label;
+        btn.addEventListener('click', () => {
+          this.onSwitchButtonClick(opt.index);
+        });
+        this.switchContainer.appendChild(btn);
+        this.switchButtons.push(btn);
+      }
+    }
+
+    // Update selected state (only mutate on change)
+    const newSelected = switchInfo.currentOverride;
+    if (newSelected !== this.selectedSwitchIndex) {
+      this.selectedSwitchIndex = newSelected;
+      for (let i = 0; i < this.switchButtons.length; i++) {
+        const optIndex = this.currentSwitchOptions[i]?.index;
+        const isSelected = optIndex === newSelected;
+        const cls = isSelected ? 'inspector-switch-btn selected' : 'inspector-switch-btn';
+        if (this.switchButtons[i].className !== cls) {
+          this.switchButtons[i].className = cls;
+        }
+      }
+    }
+  }
+
+  /**
+   * Handle switch button click — toggle override on/off
+   */
+  private onSwitchButtonClick(optionIndex: number): void {
+    if (!this.currentSwitchRouteKey || this.currentSwitchRouteKey === '__none__') return;
+
+    if (this.selectedSwitchIndex === optionIndex) {
+      // Deselect — remove override
+      this.simulation.clearTrainSwitchOverride(this.trainId, this.currentSwitchRouteKey);
+      this.selectedSwitchIndex = undefined;
+    } else {
+      // Select — set override
+      this.simulation.setTrainSwitchOverride(this.trainId, this.currentSwitchRouteKey, optionIndex);
+      this.selectedSwitchIndex = optionIndex;
+    }
+
+    // Immediately update button styles
+    for (let i = 0; i < this.switchButtons.length; i++) {
+      const optIdx = this.currentSwitchOptions[i]?.index;
+      const isSelected = optIdx === this.selectedSwitchIndex;
+      this.switchButtons[i].className = isSelected
+        ? 'inspector-switch-btn selected'
+        : 'inspector-switch-btn';
     }
   }
 
