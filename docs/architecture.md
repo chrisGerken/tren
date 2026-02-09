@@ -232,3 +232,9 @@ The `Simulation` class (`src/core/simulation.ts`) uses the LockManager:
 4. **On switch click:**
    - Check `isJunctionLocked()` before allowing change
    - Reject with status message if locked
+
+5. **Next switch detection (`findNextSwitch()`):**
+   - Walks ahead from a train's lead car through the track piece graph
+   - Returns info about the first virtual switch encountered (route key, spatially-labeled options, current override)
+   - Used by the train inspector widget to show a switch selector UI
+   - `setTrainSwitchOverride()` / `clearTrainSwitchOverride()` pre-set routes in `train.routesTaken`
