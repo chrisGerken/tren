@@ -1,0 +1,80 @@
+title        Sorting Box Cars
+description  Use decouplers and switches to sort some box cars
+
+max trains 1
+
+
+
+#
+# Main loop
+#
+
+generator  colorful cabs 2  cars 10  speed 20  every 5
+str * 3
+
+
+str * 18
+offramp : str
+str * 1
+
+
+crvl * 4
+
+str * 6
+
+crvl * 4
+
+str * 19
+onramp: str
+
+crvl * 4
+
+str * 6
+
+crvl * 4
+
+
+
+#
+# Offramp
+#
+
+new
+$offramp.in
+
+crvr ; crvl
+
+crvr18 * 4
+
+gangway: str
+
+crvl18 * 4
+str
+decoupler
+str * 6
+bump
+
+
+#
+# Basura
+#
+
+new
+$gangway.in
+
+str * 2
+
+tunnel
+
+str3 * 3
+
+tunnel
+
+str * 3
+
+bin
+
+
+
+
+ 

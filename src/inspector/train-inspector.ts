@@ -40,6 +40,9 @@ export class TrainInspectorWidget extends InspectorWidget {
   private currentSwitchOptions: { index: number; label: string }[] = [];
   private selectedSwitchIndex: number | undefined = undefined;
 
+  // Callback when a switch route is selected via the inspector
+  onSwitchRouteChanged?: (routeKey: string, connectionIndex: number) => void;
+
   constructor(trainId: string, simulation: Simulation) {
     // Store before super() since buildContent needs them
     // But super() calls buildContent()... so we use a workaround
@@ -356,6 +359,8 @@ export class TrainInspectorWidget extends InspectorWidget {
       // Select — set override
       this.simulation.setTrainSwitchOverride(this.trainId, this.currentSwitchRouteKey, optionIndex);
       this.selectedSwitchIndex = optionIndex;
+      // Sync 3D switch indicators to match
+      this.onSwitchRouteChanged?.(this.currentSwitchRouteKey, optionIndex);
     }
 
     // Immediately update button styles

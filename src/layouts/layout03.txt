@@ -4,7 +4,6 @@ description Several small layouts connected by one large loop
 max trains 8
 lockahead distance 10 count 4
 
-18  22  24
 def crvr15  right  radius 15  arc 22.5
 def crvr20  right  radius 20  arc 22.5
 def crvr26  right  radius 26  arc 22.5

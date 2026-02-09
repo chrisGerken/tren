@@ -1184,6 +1184,7 @@ An HTML/CSS overlay system at the bottom of the simulation window for inspecting
 - The tail car naturally clears the entry from `routesTaken` after passing, so the override is consumed once
 - Walk-ahead algorithm mirrors `acquireLeadingLocks()`: starts from lead car, follows track graph, handles crossings (x90/x45) by staying on same track number, limited to 50 pieces
 - DOM is only rebuilt when the switch changes (different routeKey), not every frame, to avoid the textContent click-suppression issue
+- When a route button is selected (not deselected), an `onSwitchRouteChanged` callback notifies main.ts to update the 3D switch indicators via `setSelectedRouteByKey()` + `renderLayout()`, syncing the green/red dots with the inspector's selection. Deselect does not fire the callback since it only clears the train's override without changing the global switch position.
 
 **Extensibility:**
 - New inspector types (switch, generator, etc.) extend `InspectorWidget`

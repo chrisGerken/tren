@@ -238,3 +238,4 @@ The `Simulation` class (`src/core/simulation.ts`) uses the LockManager:
    - Returns info about the first virtual switch encountered (route key, spatially-labeled options, current override)
    - Used by the train inspector widget to show a switch selector UI
    - `setTrainSwitchOverride()` / `clearTrainSwitchOverride()` pre-set routes in `train.routesTaken`
+   - Inspector fires `onSwitchRouteChanged` callback on select to sync 3D switch indicator colors

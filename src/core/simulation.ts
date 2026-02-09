@@ -901,59 +901,56 @@ export class Simulation {
 
   /**
    * Compute spatial labels (Left/Right/Center) for switch connections.
-   * Uses 2D cross product of forward direction vs entry direction to sort left-to-right.
+   * Classifies each connected piece as effectively left, straight, or right
+   * based on its archetype code and which connection point joins the switch.
    */
   private computeSpatialLabels(
-    switchPiece: TrackPiece,
-    exitPointName: string,
+    _switchPiece: TrackPiece,
+    _exitPointName: string,
     connections: { pieceId: string; pointName: string }[]
   ): { index: number; label: string }[] {
-    // Get the forward direction at the exit point (rotated to world coordinates)
-    const archetype = getArchetype(switchPiece.archetypeCode);
-    if (!archetype) return connections.map((_, i) => ({ index: i, label: String(i) }));
-
-    const cpDef = archetype.connectionPoints.find(cp => cp.name === exitPointName);
-    if (!cpDef) return connections.map((_, i) => ({ index: i, label: String(i) }));
-
-    // The connection point direction is outward-pointing; rotate to world
-    const cos = Math.cos(switchPiece.rotation);
-    const sin = Math.sin(switchPiece.rotation);
-    const forwardX = cpDef.direction.x * cos - cpDef.direction.z * sin;
-    const forwardZ = cpDef.direction.x * sin + cpDef.direction.z * cos;
-
-    // For each connection, compute the entry direction at the connected piece
-    const scored: { index: number; cross: number }[] = [];
+    // For each connection, classify as left/straight/right based on archetype
+    const scored: { index: number; group: number; radiusKey: number }[] = [];
     for (let i = 0; i < connections.length; i++) {
       const conn = connections[i];
       const connPiece = this.layout.pieces.find(p => p.id === conn.pieceId);
       if (!connPiece) {
-        scored.push({ index: i, cross: 0 });
-        continue;
-      }
-      const connArchetype = getArchetype(connPiece.archetypeCode);
-      if (!connArchetype) {
-        scored.push({ index: i, cross: 0 });
-        continue;
-      }
-      const connCpDef = connArchetype.connectionPoints.find(cp => cp.name === conn.pointName);
-      if (!connCpDef) {
-        scored.push({ index: i, cross: 0 });
+        scored.push({ index: i, group: 1, radiusKey: 0 });
         continue;
       }
 
-      // The entry direction is opposite of the connected piece's outward direction
-      const connCos = Math.cos(connPiece.rotation);
-      const connSin = Math.sin(connPiece.rotation);
-      const entryX = -(connCpDef.direction.x * connCos - connCpDef.direction.z * connSin);
-      const entryZ = -(connCpDef.direction.x * connSin + connCpDef.direction.z * connCos);
+      const code = connPiece.archetypeCode.toLowerCase();
+      const match = code.match(/^crv([lr])(\d+)?$/);
+      if (!match) {
+        // Straight or unrecognized piece — center group
+        scored.push({ index: i, group: 1, radiusKey: 0 });
+        continue;
+      }
 
-      // Cross product: positive = entry is to the left of forward
-      const cross = forwardX * entryZ - forwardZ * entryX;
-      scored.push({ index: i, cross });
+      const physicalDir = match[1]; // 'l' or 'r'
+      const radius = match[2] ? parseInt(match[2], 10) : 22;
+      const isInPoint = conn.pointName.startsWith('in');
+
+      // Determine effective direction:
+      // Connected at 'in' point = normal traversal, connected at 'out' = reversed
+      let effectivelyLeft: boolean;
+      if (isInPoint) {
+        effectivelyLeft = physicalDir === 'l';
+      } else {
+        effectivelyLeft = physicalDir === 'r'; // reversed: right becomes left
+      }
+
+      if (effectivelyLeft) {
+        // Group 0 = left, radius ascending (tightest curve = leftmost)
+        scored.push({ index: i, group: 0, radiusKey: radius });
+      } else {
+        // Group 2 = right, -radius so ascending sort = descending radius
+        scored.push({ index: i, group: 2, radiusKey: -radius });
+      }
     }
 
-    // Sort descending by cross product (most positive = leftmost)
-    scored.sort((a, b) => b.cross - a.cross);
+    // Sort by (group ascending, radiusKey ascending)
+    scored.sort((a, b) => a.group - b.group || a.radiusKey - b.radiusKey);
 
     // Assign labels
     const n = scored.length;

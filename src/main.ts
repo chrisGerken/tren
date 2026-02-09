@@ -128,6 +128,12 @@ scene.setTrainDblClickCallback((trainId) => {
   if (inspectorManager.hasWidgetForTarget(trainId)) return;
 
   const widget = new TrainInspectorWidget(trainId, simulation);
+  widget.onSwitchRouteChanged = (routeKey, connectionIndex) => {
+    setSelectedRouteByKey(routeKey, connectionIndex);
+    if (currentLayout) {
+      renderLayout(scene, currentLayout);
+    }
+  };
   inspectorManager.addWidget(widget);
 });
 
