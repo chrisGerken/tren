@@ -326,6 +326,17 @@ Movement distance is signed based on travel direction:
 
 Negative distance causes cars to traverse splines in reverse, naturally handling backward movement through the existing section transition system (underflow handling).
 
+### Same-Polarity Junctions (sectionDirection)
+
+When a train crosses a same-polarity connection (out↔out or in↔in, typically created by loop close `>` syntax), each car's `sectionDirection` field is toggled from `1` to `-1` (or vice versa).
+
+- **`sectionDirection = 1`**: Normal traversal. Distance increases from 'in' toward 'out'.
+- **`sectionDirection = -1`**: Reversed traversal. Positive velocity causes distance to decrease from 'out' toward 'in'. The car's visual rotation is flipped by π to face the actual travel direction.
+
+This allows trains to seamlessly cross same-polarity junctions — the train continues in the same physical direction while the spline traversal direction reverses. Two consecutive same-polarity junctions cancel out, restoring normal direction.
+
+**Switch route keys** are always determined by the exit point type ('out' → 'fwd', 'in' → 'bwd'), independent of `sectionDirection`. This ensures trains respect UI switch settings regardless of their spline traversal direction.
+
 ## Coupling
 
 Trains can couple (merge) with other stopped trains to form longer consists.

@@ -279,17 +279,16 @@ Virtual switches (connection points with multiple connections) are visually indi
 - `allPairsSeparated()` checks if all indicator pairs meet separation threshold
 - `getPositionAtDistance()` computes world position along track spline
 - `selectedRoutes` Map tracks which route is selected at each switch point
-- Key format: `${pieceId}.${pointName}`, value: selected connection index
+- Key format: `junction.${canonicalJunctionId}.${direction}`, value: selected connection index
+- Canonical junction ID: lexicographically first `pieceId.pointName` among all connections at the junction, ensuring all inbound tracks share the same switch state
+- Direction: `fwd` for 'out' points, `bwd` for 'in' points — determines which route key trains use based on exit point
 
 **Click interaction:**
 - Click any switch indicator (red or green) to select that route
 - `TrackScene` uses raycasting to detect clicks on indicator meshes
-- Each indicator mesh stores `userData` with `pieceId`, `pointName`, `connectionIndex`
+- Each indicator mesh stores `userData` with `routeKey` and `connectionIndex`
 - Click callback updates `selectedRoutes` and triggers re-render
 - Status bar shows which switch was toggled
-
-**Future work:**
-- Integration with train routing logic
 
 ## Centralized Logger
 
@@ -1190,6 +1189,51 @@ An HTML/CSS overlay system at the bottom of the simulation window for inspecting
 - New inspector types (switch, generator, etc.) extend `InspectorWidget`
 - Manager is type-agnostic — works with any widget subclass
 - `targetId` property enables duplicate prevention across widget types
+
+## Same-Polarity Junction Handling
+
+When two track pieces connect with the same polarity (out↔out or in↔in), such as via `> $label.out` loop close, trains need to traverse the connected piece in reverse spline direction while maintaining their physical heading.
+
+**Problem:**
+- Auto-connect requires opposite directions, so same-polarity connections only arise from explicit loop close (`>`) statements
+- When a train exits piece A via `out` and the connection leads to piece B's `out`, the train enters B at the spline endpoint
+- Without correction, the car would either visually flip direction or fail to traverse the piece
+
+**Solution — `sectionDirection` field on Car:**
+- Each car has a `sectionDirection` field: `1` (normal, in→out) or `-1` (reversed, out→in)
+- In `moveCar()`, distance is multiplied by `sectionDirection`: `distanceAlongSection += distance * sectionDirection`
+- When `sectionDirection = -1`, positive velocity causes distance to decrease (traverse out→in)
+- The visual rotation adds π when reversed, so the car faces its actual travel direction
+
+**Polarity detection:**
+- `isSamePolarity(pointA, pointB)` checks if both points are 'out' type or both 'in' type
+- At each piece transition, if the exit point and entry point have the same polarity, `sectionDirection` is toggled (multiplied by -1)
+- Two consecutive same-polarity junctions cancel out, restoring normal direction
+
+**Switch route key alignment:**
+- The `travelDirection` parameter for switch selection is always based on the exit point ('out' = 'forward', 'in' = 'backward'), NOT on the train's physical direction or `sectionDirection`
+- This ensures the switch route key matches the renderer's indicator labels, which are also based on the connection point type
+- Without this alignment, reversed trains would look up a different route key than the one set by the UI, causing them to ignore switch settings
+
+**Design alternatives considered:**
+- **Pass-through approach**: Skip the same-polarity piece entirely via recursive `getNextSection()`. Rejected because it teleports the car past physical track, causing visual jumps.
+- **Zero-length reverser piece**: Insert a virtual direction-reversing piece at same-polarity junctions. Rejected as over-engineered; `sectionDirection` on Car is simpler.
+- **Entry point flipping**: Return `getOppositePoint()` as the entry when same polarity detected. Rejected because it places the car at the wrong spatial position.
+
+**Depth limit:**
+- No recursion needed; the `sectionDirection` toggle is applied at each transition naturally
+
+## Virtual Switch Connection Grouping Fix
+
+Previously, connections at a switch point were split into forward (entering via 'in') and backward (entering via 'out') groups. Each group was treated as a separate switch. This caused a bug where a junction with 1 forward + 1 backward connection (e.g., offramp.in with one main track and one sidetrack) detected no switch in either group.
+
+**Fix:** All valid connections at a point are treated as a single switch group regardless of entry point direction. The direction (fwd/bwd) only affects the route key, not the connection filtering. This correctly detects virtual switches at junction points where connections have mixed polarities.
+
+## Generator Spawn Timer Fix
+
+Previously, the generator's `lastSpawnTime` was always reset when the spawn interval elapsed, even if the spawn failed (due to `max trains` limit). This caused synchronized generators to starve — the first generator always won the race, and later generators never spawned.
+
+**Fix:** Only reset `lastSpawnTime` when `spawnTrain()` returns `true` (successful spawn). Failed spawns keep trying on subsequent frames until they succeed.
 
 ## Open Questions
 

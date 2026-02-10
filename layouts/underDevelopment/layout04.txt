@@ -40,7 +40,7 @@ crvl * 4
 new
 $offramp.in
 
-crvr ; crvl
+ramp: crvr ; crvl
 
 str * 3
 basura: str
