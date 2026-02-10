@@ -417,6 +417,15 @@ cross connect $one $two</code></pre>
     <h3>Switch Interaction</h3>
     <p>At virtual switches (where multiple tracks connect to one point), click any route indicator to select that route. Trains will follow the selected route (green indicator).</p>
     <p><strong>Note:</strong> When a train is crossing a switch, the entire train will follow the route taken by the first car, even if you change the switch while the train is crossing.</p>
+
+    <h3>Same-Polarity Connections</h3>
+    <p>The loop close operator (<code>&gt;</code>) can create same-polarity connections (out↔out or in↔in) when the target point has the same type as the current output. Trains crossing these junctions automatically reverse their spline traversal direction while maintaining their physical heading. This is analogous to polarity reversal in real model train layouts.</p>
+    <pre><code>gen2: crvl              # Part of main loop
+
+new
+generator colorful
+str * 3
+&gt; $gen2.out             # out↔out connection</code></pre>
   </div>
 
   <div class="section">

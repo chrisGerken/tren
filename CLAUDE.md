@@ -66,7 +66,7 @@ The `cross connect $label1 $label2` statement creates a shared lockable point wh
 
 ## Train Movement
 
-Trains are ordered car lists (consists). The primary cab (first cab in train) controls speed and direction. Each car maintains its own position along the track section, querying the spline for position and tangent each frame. Cars transition between sections independently when crossing boundaries.
+Trains are ordered car lists (consists). The primary cab (first cab in train) controls speed and direction. Each car maintains its own position along the track section, querying the spline for position and tangent each frame. Cars transition between sections independently when crossing boundaries. Each car has a `sectionDirection` field (1 or -1) that toggles at same-polarity junctions (out↔out or in↔in from loop close), reversing spline traversal while maintaining physical heading.
 
 **Log level:** `log debug|info|warn|error` — controls browser console output verbosity (default: `warn`). `logging` is accepted as alias for `log`, `warning` as alias for `warn`.
 

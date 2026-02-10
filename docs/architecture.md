@@ -137,6 +137,12 @@ When a train approaches a branch point, the system must determine which route to
 - Automatic routing based on destination
 - Signal-based routing
 
+All connections at a switch point are treated as a single group regardless of their entry point direction (in/out). The route key includes a direction component (`fwd` for 'out' exits, `bwd` for 'in' exits) using a canonical junction ID shared by all inbound tracks at the junction.
+
+### Same-Polarity Junctions
+
+Connections with the same polarity (out↔out or in↔in) arise from explicit loop close (`>`) syntax. Each car maintains a `sectionDirection` field (`1` or `-1`) that toggles when crossing these junctions. This reverses the spline traversal direction while preserving the car's physical heading (rotation is flipped by π when `sectionDirection = -1`).
+
 ## Auto-Connect
 
 After a layout is fully specified, auto-connect scans all connection points on all track pieces and automatically joins any two that meet the connection criteria.

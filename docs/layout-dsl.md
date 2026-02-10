@@ -927,6 +927,23 @@ Use auto-connect when:
 - You want concise layout definitions
 - Small accumulated errors are within tolerance
 
+### Same-Polarity Connections (Loop Close)
+
+The `>` loop close operator can create same-polarity connections (out↔out or in↔in) when the nearest connection point has the same type as the current output:
+
+```
+# Sidetrack connecting to main loop via out↔out
+crvl * 6
+gen2: crvl              # Main loop piece
+
+new
+generator colorful cabs 2 cars 10 speed 20 every 5
+str * 3
+> $gen2.out             # Creates out↔out connection
+```
+
+Trains crossing a same-polarity junction automatically reverse their spline traversal direction while maintaining their physical heading. Each car tracks a `sectionDirection` field (`1` or `-1`) that toggles at same-polarity junctions. This is analogous to polarity reversal in real model train layouts where tracks meet from opposite electrical directions.
+
 ## Building Patterns
 
 ### Simple Loop
