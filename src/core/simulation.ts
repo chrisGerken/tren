@@ -235,11 +235,15 @@ export class Simulation {
           this.resolvedFrequencies.set(piece.id, frequency);
         }
         if (timeSinceLastSpawn >= frequency) {
-          // Timer fires: always reset timer, but only spawn if under max trains
-          this.spawnTrain(piece);
-          config.lastSpawnTime = this.simulationTime;
-          // Resolve a new frequency for the next spawn interval
-          this.resolvedFrequencies.set(piece.id, resolveIntegerValue(config.frequency, 10));
+          // Timer fires: only reset timer if spawn succeeds.
+          // When spawn fails (max trains, track blocked), keep the timer pending
+          // so this generator retries next frame — prevents starvation when
+          // multiple generators compete for limited train slots.
+          if (this.spawnTrain(piece)) {
+            config.lastSpawnTime = this.simulationTime;
+            // Resolve a new frequency for the next spawn interval
+            this.resolvedFrequencies.set(piece.id, resolveIntegerValue(config.frequency, 10));
+          }
         }
       }
     }
@@ -317,6 +321,7 @@ export class Simulation {
         worldPosition: vec3(0, 0, 0),
         rotation: 0,
         facingForward: true,
+        sectionDirection: 1,
       };
       train.cars.push(car);
       currentDistance -= CAB_LENGTH / 2 + CAR_GAP; // Move from center to back edge + gap
@@ -337,6 +342,7 @@ export class Simulation {
         rotation: 0,
         color: getRandomCarColor(colorMode),  // Assign color once at creation based on colorMode
         facingForward: true,
+        sectionDirection: 1,
       };
       train.cars.push(car);
       currentDistance -= CAR_LENGTH / 2 + CAR_GAP; // Move from center to back edge + gap

@@ -915,13 +915,6 @@ function isInPoint(pointName: string): boolean {
 }
 
 /**
- * Check if a connection point name is an "out" type
- */
-function isOutPoint(pointName: string): boolean {
-  return pointName === 'out' || pointName === 'out1' || pointName === 'out2';
-}
-
-/**
  * Render switch indicators for a connection point
  * Creates TWO independent sets of indicators if there are multiple forward AND backward connections
  */
@@ -934,24 +927,17 @@ function renderSwitchIndicators(
 ): THREE.Mesh[] {
   const indicators: THREE.Mesh[] = [];
 
-  // Separate connections into forward (entering via 'in') and backward (entering via 'out')
-  const forwardConnections = allConnections.filter(c => isInPoint(c.pointName));
-  const backwardConnections = allConnections.filter(c => isOutPoint(c.pointName));
-
-  // Render forward switch indicators if multiple forward connections
-  if (forwardConnections.length > 1) {
-    const fwdIndicators = renderDirectionalSwitchIndicators(
-      piece, pointName, 'fwd', forwardConnections, pieceMap, allConnections
+  // Render switch indicators when there are multiple connections at this point.
+  // Connections may mix 'in' and 'out' entry points at virtual switch junctions
+  // (e.g., an offramp where one route enters via 'out' and another via 'in').
+  // The direction for the route key is derived from the point name:
+  // 'in' points are exits for backward travel, 'out' points for forward travel.
+  if (allConnections.length > 1) {
+    const direction: 'fwd' | 'bwd' = isInPoint(pointName) ? 'bwd' : 'fwd';
+    const switchIndicators = renderDirectionalSwitchIndicators(
+      piece, pointName, direction, allConnections, pieceMap, allConnections
     );
-    indicators.push(...fwdIndicators);
-  }
-
-  // Render backward switch indicators if multiple backward connections
-  if (backwardConnections.length > 1) {
-    const bwdIndicators = renderDirectionalSwitchIndicators(
-      piece, pointName, 'bwd', backwardConnections, pieceMap, allConnections
-    );
-    indicators.push(...bwdIndicators);
+    indicators.push(...switchIndicators);
   }
 
   return indicators;

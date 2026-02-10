@@ -93,6 +93,7 @@ export interface Car {
   rotation: number;                // Rotation in radians (heading)
   color?: number;                  // Car color (hex, assigned at creation for non-cabs)
   facingForward: boolean;          // True if car faces same direction as original train travel
+  sectionDirection: 1 | -1;       // 1 = traverse spline in→out, -1 = traverse out→in (flipped at same-polarity junctions)
 }
 
 /** Train consist (ordered list of cars) */

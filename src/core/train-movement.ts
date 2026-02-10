@@ -106,7 +106,9 @@ export function updateCarWorldPosition(car: Car, layout: Layout): void {
   const result = getPositionOnSection(piece, sectionIndex, car.distanceAlongSection);
   if (result) {
     car.worldPosition = result.position;
-    car.rotation = result.rotation;
+    // When sectionDirection is -1, the car traverses the spline in reverse (out→in),
+    // so flip the visual rotation by π to face the actual travel direction
+    car.rotation = result.rotation + (car.sectionDirection === -1 ? Math.PI : 0);
   }
 }
 
@@ -144,6 +146,17 @@ export function getSectionIndexForEntry(entryPoint: string | undefined): number 
  * @param travelDirection - 'forward' if traveling in->out, 'backward' if traveling out->in
  * @param routesToClearAfterLastCar - If provided, routes used from trainRoutes will be added here
  */
+/**
+ * Check if two connection points have the same polarity (both 'in' or both 'out').
+ * Same-polarity connections occur when tracks meet from opposite directions
+ * (e.g., loop close connecting out↔out). The car's sectionDirection is flipped
+ * at these junctions so it traverses the next piece in the correct direction.
+ */
+export function isSamePolarity(pointA: string, pointB: string): boolean {
+  return (isOutPoint(pointA) && isOutPoint(pointB)) ||
+         (isInPoint(pointA) && isInPoint(pointB));
+}
+
 export function getNextSection(
   pieceId: string,
   exitPoint: string,
@@ -152,7 +165,7 @@ export function getNextSection(
   trainRoutes?: Map<string, number>,
   previousPieceId?: string,
   travelDirection?: 'forward' | 'backward',
-  routesToClearAfterLastCar?: Set<string>
+  routesToClearAfterLastCar?: Set<string>,
 ): { pieceId: string; entryPoint: string } | null {
   const piece = layout.pieces.find(p => p.id === pieceId);
   if (!piece) return null;
@@ -177,50 +190,14 @@ export function getNextSection(
   }
 
   // Multiple connections - this is a switch
-  // Separate into "forward" (entering via 'in') and "backward" (entering via 'out') groups
-  const forwardConnections = validConnections.filter(c => isInPoint(c.pointName));
-  const backwardConnections = validConnections.filter(c => isOutPoint(c.pointName));
+  // Use all valid connections as switch candidates regardless of entry point direction.
+  // At virtual switch junctions, connections may mix 'in' and 'out' entry points —
+  // e.g., a backward-traveling train at an offramp junction may diverge into a
+  // forward-entry connection. Both are valid routes for the switch.
+  const connections = validConnections;
+  const switchDirection: 'fwd' | 'bwd' = travelDirection === 'backward' ? 'bwd' : 'fwd';
 
-  // Determine which group to use based on travel direction
-  // Forward travel should use forward connections (entering next piece via 'in')
-  // Backward travel should use backward connections (entering next piece via 'out')
-  let connections: typeof validConnections;
-  let switchDirection: 'fwd' | 'bwd';
-
-  if (travelDirection === 'backward') {
-    // Backward travel prefers backward connections
-    if (backwardConnections.length > 0) {
-      connections = backwardConnections;
-      switchDirection = 'bwd';
-    } else {
-      connections = forwardConnections;
-      switchDirection = 'fwd';
-    }
-  } else {
-    // Forward travel (default) prefers forward connections
-    if (forwardConnections.length > 0) {
-      connections = forwardConnections;
-      switchDirection = 'fwd';
-    } else {
-      connections = backwardConnections;
-      switchDirection = 'bwd';
-    }
-  }
-
-  if (connections.length === 0) {
-    // Shouldn't happen, but fall back to all valid
-    connections = validConnections;
-    switchDirection = 'fwd';
-  }
-
-  if (connections.length === 1) {
-    return {
-      pieceId: connections[0].pieceId,
-      entryPoint: connections[0].pointName,
-    };
-  }
-
-  // Multiple connections in the same direction group - use switch
+  // Multiple connections - use switch
   // Use canonical junction ID so all pieces at this junction share the same switch state
   // The canonical ID includes piece.point pairs to distinguish different connection points on same piece
   const junctionPoints = allConnections.map(c => `${c.pieceId}.${c.pointName}`);
@@ -289,7 +266,9 @@ export function moveCar(
   trainRoutes?: Map<string, number>,
   routesToClearAfterLastCar?: Set<string>
 ): void {
-  car.distanceAlongSection += distance;
+  // Apply sectionDirection: when -1, positive distance decreases distanceAlongSection
+  // (car traverses spline from out→in instead of in→out)
+  car.distanceAlongSection += distance * car.sectionDirection;
 
   let piece = layout.pieces.find(p => p.id === car.currentPieceId);
   if (!piece) return;
@@ -310,7 +289,8 @@ export function moveCar(
     if (car.entryPoint) {
       // Exit via opposite of where we entered
       exitPoint = getOppositePoint(car.entryPoint);
-      // Travel direction: if we entered via 'in' and exit via 'out', we're going forward
+      // Travel direction matches exit point (not physical train direction)
+      // so that switch route keys match the renderer's indicators
       travelDirection = isInPoint(car.entryPoint) ? 'forward' : 'backward';
     } else {
       // No entry point recorded (e.g., spawned here) - use distance to guess
@@ -328,6 +308,11 @@ export function moveCar(
       return;
     }
 
+    // Flip sectionDirection at same-polarity junctions
+    if (isSamePolarity(exitPoint, nextSection.entryPoint)) {
+      car.sectionDirection = (car.sectionDirection === 1 ? -1 : 1) as 1 | -1;
+    }
+
     car.previousPieceId = car.currentPieceId;
     car.currentPieceId = nextSection.pieceId;
     car.entryPoint = nextSection.entryPoint;
@@ -337,7 +322,8 @@ export function moveCar(
     sectionLength = getSectionLength(piece, sectionIndex);
   }
 
-  // Handle overflow (moving past end of section - forward direction)
+  // Handle overflow (moving past end of section at 'out' end)
+  // With sectionDir=1: forward train overflows here. With sectionDir=-1: backward train overflows here.
   while (car.distanceAlongSection >= sectionLength && sectionLength > 0) {
     const overflow = car.distanceAlongSection - sectionLength;
     const exitPoint = 'out';
@@ -351,6 +337,11 @@ export function moveCar(
       return;
     }
 
+    // Flip sectionDirection at same-polarity junctions
+    if (isSamePolarity(exitPoint, nextSection.entryPoint)) {
+      car.sectionDirection = (car.sectionDirection === 1 ? -1 : 1) as 1 | -1;
+    }
+
     car.previousPieceId = car.currentPieceId;
     car.currentPieceId = nextSection.pieceId;
     car.entryPoint = nextSection.entryPoint;
@@ -360,10 +351,10 @@ export function moveCar(
       const newSectionIndex = getSectionIndexForEntry(nextSection.entryPoint);
       const newSectionLength = getSectionLength(newPiece, newSectionIndex);
       if (isOutPoint(nextSection.entryPoint)) {
-        // Entering from 'out' end - we're at the end, going backwards on this piece
+        // Entering from 'out' end - position at the end of the spline
         car.distanceAlongSection = newSectionLength - overflow;
       } else {
-        // Entering from 'in' - start at beginning, going forward
+        // Entering from 'in' - position at the beginning
         car.distanceAlongSection = overflow;
       }
       sectionLength = newSectionLength;
@@ -373,7 +364,8 @@ export function moveCar(
     }
   }
 
-  // Handle underflow (moving past start of section - backward direction)
+  // Handle underflow (moving past start of section at 'in' end)
+  // With sectionDir=-1: forward train underflows here. With sectionDir=1: backward train underflows here.
   while (car.distanceAlongSection < 0 && sectionLength > 0) {
     const exitPoint = 'in';
 
@@ -397,16 +389,21 @@ export function moveCar(
         break;
       }
 
+      // Flip sectionDirection at same-polarity junctions
+      if (isSamePolarity(exitPoint, nextSection.entryPoint)) {
+        car.sectionDirection = (car.sectionDirection === 1 ? -1 : 1) as 1 | -1;
+      }
+
       const underflow = -car.distanceAlongSection;
       car.previousPieceId = car.currentPieceId;
       car.currentPieceId = nextSection.pieceId;
       car.entryPoint = nextSection.entryPoint;
 
       if (isInPoint(nextSection.entryPoint)) {
-        // Entering via 'in' while going backward - start at beginning
+        // Entering via 'in' - position at the beginning
         car.distanceAlongSection = underflow;
       } else {
-        // Entering via 'out' - we're at the end
+        // Entering via 'out' - position at the end
         car.distanceAlongSection = nextSectionLength - underflow;
       }
       sectionLength = nextSectionLength;
