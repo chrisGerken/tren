@@ -18,7 +18,7 @@ The `title` statement provides a short name for the layout, used in the UI for l
 title My Railroad Layout
 ```
 
-Only one title statement is allowed per layout. If no title is specified, the default is "Simulador de Tren".
+Only one title statement is allowed per layout. If no title is specified, the default is "No Title".
 
 ### Description
 
@@ -644,12 +644,15 @@ The flex connect statement automatically creates labeled pieces that can be refe
 
 - `{label1}_{label2}_str` - The straight piece (if created)
 - `{label1}_{label2}_crv` - The curve piece (if created)
+- `{label1}_{label2}_crv1` - The first curve piece (S-curve only)
+- `{label1}_{label2}_crv2` - The second curve piece (S-curve only)
 
 For example, `flex connect $f1.out $f2.in` creates pieces labeled `f1_f2_str` and `f1_f2_crv` that you can reference as `$f1_f2_str` or `$f1_f2_crv`.
 
-**Note:** In edge cases where only one piece is needed:
+**Note:** In edge cases where the standard two-piece solution doesn't apply:
 - **Straight-only**: When endpoints are collinear (same direction, aligned path), only the `_str` label is created
 - **Curve-only**: When endpoints are very close and require only a curve, only the `_crv` label is created
+- **Double-curve (S-curve)**: When endpoints are on parallel tracks with a lateral offset (same direction but not collinear), two curve pieces (`_crv1` and `_crv2`) are created forming an S-curve crossover
 
 ### How It Works
 
@@ -658,8 +661,8 @@ The flex connect solver:
 2. Checks for edge cases:
    - **Straight-only**: If endpoints are collinear (same direction, aligned path), creates a single straight piece
    - **Curve-only**: If the calculated straight length is very small (<0.5"), creates just a curve
-3. Otherwise, finds a valid combination of one curve and one straight piece
-4. Tries four configurations: [straight, left curve], [straight, right curve], [left curve, straight], [right curve, straight]
+3. For angled endpoints, finds a valid combination of one curve and one straight piece
+4. For parallel tracks with lateral offset (same direction but not aligned), creates a double-curve S-shape
 5. Selects the solution with the smoothest curve (largest radius)
 6. Creates custom runtime track pieces with the calculated geometry
 7. Labels the pieces for later reference
@@ -943,6 +946,66 @@ str * 3
 ```
 
 Trains crossing a same-polarity junction automatically reverse their spline traversal direction while maintaining their physical heading. Each car tracks a `sectionDirection` field (`1` or `-1`) that toggles at same-polarity junctions. This is analogous to polarity reversal in real model train layouts where tracks meet from opposite electrical directions.
+
+## Array
+
+The `array` statement creates multiple evenly-spaced labeled placeholders, useful for building parallel tracks (passing sidings, yards, double-track mainlines).
+
+### Syntax
+
+```
+array count N angle A distance D prefix P
+```
+
+Parameters (case-insensitive, any order, all required):
+- `count N` — total number of placeholders to create (N >= 1)
+- `angle A` — degrees relative to current track direction for the array line
+- `distance D` — spacing in inches between consecutive placeholders
+- `prefix P` — label prefix; placeholders are labeled P1, P2, ..., PN
+
+### Behavior
+
+1. The first placeholder is placed at the current position (like `ph`), connected to the current track chain
+2. Additional placeholders are placed along the array line (currentRotation + angle)
+3. All placeholders share the same rotation (direction) as the first
+4. Each is labeled `{prefix}1`, `{prefix}2`, ..., `{prefix}{count}`
+5. Builder state continues from the first placeholder (unchanged, as if only `ph` was placed)
+6. Use `$prefix_2.out`, `$prefix_3.out`, etc. to build tracks from additional placeholders
+
+### Example: Three Parallel Sidings
+
+```
+# Main line feeds into array
+gen ; str x 3
+array count 3 angle 90 distance 12 prefix track_
+
+# Continue main line from first placeholder
+str x 10
+bump
+
+# Build from second placeholder
+$track_2.out
+str x 5 ; bump
+
+# Build from third placeholder
+$track_3.out
+str x 5 ; bump
+```
+
+This creates three parallel tracks spaced 12" apart, perpendicular to the main line direction.
+
+### Example: Angled Fan
+
+```
+gen ; str x 3
+array count 4 angle 45 distance 8 prefix yard_
+
+str x 5 ; bump
+
+$yard_2.out ; str x 5 ; bump
+$yard_3.out ; str x 5 ; bump
+$yard_4.out ; str x 5 ; bump
+```
 
 ## Building Patterns
 

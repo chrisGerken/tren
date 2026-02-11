@@ -128,6 +128,25 @@ The UI presents both bundled and user layouts in a unified list, possibly with v
 
 Layout files use the [Layout DSL](layout-dsl.md) text format with a `.layout` extension. The parser validates the file on import, rejecting malformed layouts with an error message.
 
+## Dynamic Layout Manifest (Manifest Elimination)
+
+The bundled layout list was originally maintained in a `src/layouts/manifest.json` file that duplicated title, description, and filename information already present in the layout files themselves. This was error-prone (entries could fall out of sync with actual file contents) and required manual updates when adding new layouts.
+
+**Solution:** Eliminate `manifest.json` entirely. The layout list is now derived dynamically at runtime:
+
+1. **File discovery**: Vite's `import.meta.glob('./layouts/*.txt', ...)` already discovers all `.txt` files at build time and populates the `bundledLayouts` map — no separate file list needed.
+
+2. **Metadata extraction**: An `extractLayoutMetadata(content, filename)` function scans raw layout text line-by-line, matching `title` and `description` DSL statements (case-insensitive, comment-aware). This is a lightweight scanner, not the full parser — it doesn't need to understand track pieces or connections.
+
+3. **Defaults**: If no `title` statement is found, the default is `"No Title"`. If no `description` statement is found, the default is the layout filename (e.g., `"layout03.txt"`).
+
+4. **Sorting**: The manifest entries are sorted alphabetically by title for consistent display order in the dialog.
+
+**Design decisions:**
+- The `LayoutManifest` and `LayoutManifestEntry` interfaces remain unchanged — downstream consumers (dialog rendering, Run/Save buttons) required no changes
+- The metadata scanner is intentionally separate from the full parser to avoid circular dependencies and to keep dialog loading fast
+- New layout files added to `src/layouts/` are automatically discovered without any configuration changes
+
 ## User Interaction
 
 ### Input Methods
@@ -184,7 +203,7 @@ description A simple oval with passing siding.
 ```
 
 **Design decisions:**
-- Title defaults to "Simulador de Tren" if not specified
+- Title defaults to "No Title" if not specified; description defaults to the layout filename
 - Only one title statement allowed per layout (error if duplicate)
 - Multiple description statements are concatenated with spaces
 - Metadata is stored in the `Layout` interface and available for UI display
@@ -595,9 +614,9 @@ let outlineMaterial: THREE.LineBasicMaterial | null = null;
 The `flex connect` statement creates custom track pieces to bridge gaps between two labeled connection points.
 
 **Design decisions:**
-- Creates one curve and one straight piece (or just one for edge cases)
-- Uses geometric solver to find optimal curve+straight or straight+curve combination
-- Auto-generates labels: `{label1}_{label2}_str` and `{label1}_{label2}_crv`
+- Creates one curve and one straight piece, two curves (S-curve), or just one piece for edge cases
+- Uses geometric solver to find optimal combination
+- Auto-generates labels: `{label1}_{label2}_str` and `{label1}_{label2}_crv` (or `_crv1`/`_crv2` for S-curves)
 - Processed after all regular pieces are placed, before auto-connect
 
 **Geometric solver algorithm:**
@@ -609,8 +628,20 @@ The `flex connect` statement creates custom track pieces to bridge gaps between 
 3. For normal cases, solve linear system using Cramer's rule:
    - Straight+Curve: `L * D1 + R * (perp1 - perp2) = delta`
    - Curve+Straight: `L * D2 + R * (perp1 - perp2) = delta`
-4. Select solution with largest radius (smoothest curve)
-5. Reject solutions with arc angle > 270° or radius < 5 inches
+4. For parallel tracks with lateral offset (D1 ≈ D2 but not collinear), use S-curve solver (curve+curve)
+5. Select solution with largest radius (smoothest curve)
+6. Reject solutions with arc angle > 270° or radius < 5 inches
+
+**Double-curve (S-curve) solver:**
+- Triggers when D1 ≈ D2 (parallel tracks) with a lateral offset — exactly the case where straight+curve and curve+straight fail because perpRight(D1) ≈ perpRight(D2) makes the determinant near zero
+- Creates two symmetric curves of equal radius forming an S-curve crossover
+- Geometry: project delta onto D1 (forward distance `f`) and perpRight(D1) (lateral distance `h`):
+  - Arc angle: `θ = 2 * atan(|h| / f)`
+  - Radius: `R = f / (2 * sin(θ))`
+- First curve goes toward the other track (right if h > 0, left if h < 0)
+- Second curve goes opposite direction to re-align with original heading
+- Labels: `{label1}_{label2}_crv1` and `{label1}_{label2}_crv2`
+- Typical use case: crossovers between parallel tracks (passing sidings, double-track mainlines)
 
 **Arc angle calculation fix:**
 - Original bug: When solver chose "right" curve but geometric angle was positive, arc was forced to go 360° - θ instead of θ
@@ -1277,6 +1308,35 @@ Several usability improvements to the train inspector widget:
 - Triangle size increased from 0.8 to 1.13 (factor of √2), doubling the clickable area
 - The triangle mesh IS the raycasting click target, so enlarging the geometry directly improves click usability
 - No change to the offset distance or visual style beyond the size increase
+
+## Array Statement
+
+The `array` statement automates creation of multiple evenly-spaced starting points for parallel tracks (passing sidings, yards, double-track mainlines).
+
+**DSL syntax:**
+```
+array count 3 angle 90 distance 12 prefix siding_
+```
+
+**Design decisions:**
+- Places N labeled placeholders (`ph`) at regular intervals along a line
+- The first placeholder connects to the current track chain (via `placePiece`)
+- Additional placeholders are positioned geometrically but not connected to the chain
+- All placeholders share the same rotation as the first, so tracks built from them run in the same direction
+- The array line direction is `currentRotation + angle` (in degrees), allowing perpendicular or angled arrays
+- Builder state continues from the first placeholder, preserving normal chaining behavior
+- Users reference `$prefix_2.out`, `$prefix_3.out`, etc. to start tracks from additional placeholders
+- All four parameters (count, angle, distance, prefix) are required to avoid ambiguity
+
+**Implementation:**
+1. **Lexer:** Three new token types: `ARRAY`, `ANGLE`, `PREFIX` (reuses existing `COUNT` and `DISTANCE`)
+2. **Parser:** `ArrayStatement` interface with count, angle, distance, prefix fields. `parseArrayStatement()` consumes parameters in any order and validates all are present.
+3. **Builder:** `processArray()` places first placeholder via `placePiece()` (for chain integration), then creates additional `TrackPiece` objects at calculated positions. Each is labeled `{prefix}{N}` and registered in `labeledPieces`.
+
+**Why placeholders (not arbitrary pieces):**
+- Placeholders are zero-length junction points — they don't add physical track
+- Users build from each placeholder independently, choosing piece types and directions
+- This matches the existing virtual switch pattern where `ph` serves as a pure junction point
 
 ## Open Questions
 

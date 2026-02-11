@@ -43,6 +43,9 @@ export enum TokenType {
   RADIUS = 'RADIUS',           // radius keyword (for define - curve radius)
   ARC = 'ARC',                 // arc keyword (for define - curve arc angle)
   LENGTH = 'LENGTH',           // length keyword (for define - straight length)
+  ARRAY = 'ARRAY',             // array keyword (for array statement)
+  ANGLE = 'ANGLE',             // angle keyword (for array statement)
+  PREFIX = 'PREFIX',           // prefix keyword (for array statement)
   LOG = 'LOG',                 // log/logging keyword (for log level configuration)
   EOF = 'EOF',
 }
@@ -549,6 +552,36 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
       if (lowerValue === 'length') {
         tokens.push({
           type: TokenType.LENGTH,
+          value: value,
+          line: lineNum,
+          column: startPos + 1,
+        });
+        continue;
+      }
+
+      if (lowerValue === 'array') {
+        tokens.push({
+          type: TokenType.ARRAY,
+          value: value,
+          line: lineNum,
+          column: startPos + 1,
+        });
+        continue;
+      }
+
+      if (lowerValue === 'angle') {
+        tokens.push({
+          type: TokenType.ANGLE,
+          value: value,
+          line: lineNum,
+          column: startPos + 1,
+        });
+        continue;
+      }
+
+      if (lowerValue === 'prefix') {
+        tokens.push({
+          type: TokenType.PREFIX,
           value: value,
           line: lineNum,
           column: startPos + 1,

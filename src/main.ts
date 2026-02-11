@@ -6,8 +6,6 @@ import { open, save } from '@tauri-apps/api/dialog';
 import { readTextFile, writeTextFile, writeBinaryFile } from '@tauri-apps/api/fs';
 
 // Import bundled layouts dynamically using Vite's import.meta.glob
-import manifestJson from './layouts/manifest.json';
-
 const layoutModules = import.meta.glob('./layouts/*.txt', { eager: true, query: '?raw', import: 'default' });
 
 // Map of layout filenames to their imported content
@@ -414,10 +412,47 @@ let selectedLayoutFile: string | null = null;
 let loadedManifest: LayoutManifest | null = null;
 
 /**
- * Get the layouts manifest (bundled at build time)
+ * Extract title and description from raw layout DSL text without invoking the full parser.
+ */
+function extractLayoutMetadata(content: string, filename: string): { title: string; description: string } {
+  let title = 'No Title';
+  let description = filename;
+
+  for (const rawLine of content.split('\n')) {
+    // Strip comments
+    const line = rawLine.replace(/#.*$/, '').trim();
+    if (!line) continue;
+
+    const lower = line.toLowerCase();
+    if (lower.startsWith('title ')) {
+      title = line.substring(6).trim();
+    } else if (lower.startsWith('description ')) {
+      description = line.substring(12).trim();
+    }
+  }
+
+  return { title, description };
+}
+
+/**
+ * Build the layouts manifest dynamically from bundled layout files.
  */
 function getLayoutsManifest(): LayoutManifest {
-  return manifestJson as LayoutManifest;
+  const entries: LayoutManifestEntry[] = [];
+
+  for (const [filename, content] of Object.entries(bundledLayouts)) {
+    const meta = extractLayoutMetadata(content, filename);
+    entries.push({
+      file: filename,
+      title: meta.title,
+      description: meta.description,
+    });
+  }
+
+  // Sort alphabetically by title for consistent ordering
+  entries.sort((a, b) => a.title.localeCompare(b.title));
+
+  return { layouts: entries };
 }
 
 /**

@@ -262,6 +262,39 @@ bump</code></pre>
   </div>
 
   <div class="section">
+    <h2>Array (Parallel Tracks)</h2>
+    <p>The <code>array</code> statement creates multiple evenly-spaced labeled placeholders for building parallel tracks:</p>
+    <pre><code>array count 3 angle 90 distance 12 prefix track_</code></pre>
+    <p><strong>Parameters</strong> (any order, all required):</p>
+    <ul>
+      <li><code>count N</code> &mdash; number of placeholders to create</li>
+      <li><code>angle A</code> &mdash; degrees relative to current track direction for the array line</li>
+      <li><code>distance D</code> &mdash; spacing in inches between placeholders</li>
+      <li><code>prefix P</code> &mdash; label prefix (placeholders labeled P1, P2, &hellip;, PN)</li>
+    </ul>
+
+    <h3>Behavior</h3>
+    <ul>
+      <li>First placeholder connects to the current track chain</li>
+      <li>Additional placeholders are placed along the array line direction</li>
+      <li>All placeholders share the same rotation as the first</li>
+      <li>Builder continues from the first placeholder</li>
+      <li>Use <code>$prefix_2.out</code>, <code>$prefix_3.out</code>, etc. to build from additional placeholders</li>
+    </ul>
+
+    <h3>Example: Three Parallel Sidings</h3>
+    <pre><code>gen ; str x 3
+array count 3 angle 90 distance 12 prefix siding_
+
+# Main line from first placeholder
+str x 10 ; bump
+
+# Build from each additional siding
+$siding_2.out ; str x 5 ; bump
+$siding_3.out ; str x 5 ; bump</code></pre>
+  </div>
+
+  <div class="section">
     <h2>Starting New Segments</h2>
     <p>The <code>new</code> statement begins a new track segment:</p>
     <pre><code>new                     # Start at origin, 0° rotation
@@ -312,6 +345,7 @@ crvl x 16               # Full circle of curves
       <li><strong>Straight + Curve</strong> or <strong>Curve + Straight</strong> - for most gaps</li>
       <li><strong>Straight-only</strong> - when endpoints are collinear (same direction, aligned path)</li>
       <li><strong>Curve-only</strong> - when the straight portion would be very short (&lt;0.5")</li>
+      <li><strong>Double-Curve (S-curve)</strong> - when endpoints are on parallel tracks with a lateral offset (e.g., crossovers between parallel tracks)</li>
     </ul>
 
     <h3>Auto-Generated Labels</h3>
@@ -319,9 +353,11 @@ crvl x 16               # Full circle of curves
     <ul>
       <li><code>{label1}_{label2}_str</code> - The straight piece (if created)</li>
       <li><code>{label1}_{label2}_crv</code> - The curve piece (if created)</li>
+      <li><code>{label1}_{label2}_crv1</code> - First curve (S-curve only)</li>
+      <li><code>{label1}_{label2}_crv2</code> - Second curve (S-curve only)</li>
     </ul>
     <p>For example, <code>flex connect $f1.out $f2.in</code> creates <code>$f1_f2_str</code> and <code>$f1_f2_crv</code>.</p>
-    <p><strong>Note:</strong> In edge cases, only one piece may be created (straight-only or curve-only).</p>
+    <p><strong>Note:</strong> In edge cases, the number of pieces varies: straight-only, curve-only, or double-curve (S-curve for parallel tracks).</p>
 
     <h3>Example</h3>
     <pre><code># Almost-complete loop

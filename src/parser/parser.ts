@@ -19,7 +19,8 @@ export type Statement =
   | FlexConnectStatement
   | CrossConnectStatement
   | DefineStatement
-  | LogStatement;
+  | LogStatement
+  | ArrayStatement;
 
 export interface NewStatement {
   type: 'new';
@@ -138,6 +139,15 @@ export interface LogStatement {
   line: number;
 }
 
+export interface ArrayStatement {
+  type: 'array';
+  count: number;
+  angle: number;      // degrees
+  distance: number;   // inches
+  prefix: string;
+  line: number;
+}
+
 /**
  * Parse DSL text into an array of statements
  */
@@ -204,6 +214,9 @@ class Parser {
 
       case TokenType.SPLICE:
         return this.parseSpliceStatement();
+
+      case TokenType.ARRAY:
+        return this.parseArrayStatement();
 
       case TokenType.LABEL_DEF:
         return this.parseLabeledPiece();
@@ -575,6 +588,63 @@ class Parser {
       type: 'splice',
       label: ref?.label,
       point: ref?.point,
+      line: token.line,
+    };
+  }
+
+  private parseArrayStatement(): ArrayStatement {
+    const token = this.advance(); // consume 'array'
+
+    let count: number | undefined;
+    let angle: number | undefined;
+    let distance: number | undefined;
+    let prefix: string | undefined;
+
+    // Parse parameters in any order
+    while (this.check(TokenType.COUNT) || this.check(TokenType.ANGLE) || this.check(TokenType.DISTANCE) || this.check(TokenType.PREFIX)) {
+      if (this.check(TokenType.COUNT)) {
+        this.advance(); // consume 'count'
+        if (this.check(TokenType.NUMBER)) {
+          count = parseInt(this.advance().value, 10);
+        }
+      } else if (this.check(TokenType.ANGLE)) {
+        this.advance(); // consume 'angle'
+        if (this.check(TokenType.NUMBER)) {
+          angle = parseFloat(this.advance().value);
+        }
+      } else if (this.check(TokenType.DISTANCE)) {
+        this.advance(); // consume 'distance'
+        if (this.check(TokenType.NUMBER)) {
+          distance = parseFloat(this.advance().value);
+        }
+      } else if (this.check(TokenType.PREFIX)) {
+        this.advance(); // consume 'prefix'
+        if (this.check(TokenType.IDENTIFIER)) {
+          prefix = this.advance().value;
+        }
+      }
+    }
+
+    // Validate all parameters were provided
+    if (count === undefined) {
+      throw new Error(`'array' requires 'count' parameter at line ${token.line}`);
+    }
+    if (angle === undefined) {
+      throw new Error(`'array' requires 'angle' parameter at line ${token.line}`);
+    }
+    if (distance === undefined) {
+      throw new Error(`'array' requires 'distance' parameter at line ${token.line}`);
+    }
+    if (prefix === undefined) {
+      throw new Error(`'array' requires 'prefix' parameter at line ${token.line}`);
+    }
+
+    return {
+      type: 'array',
+      count,
+      angle,
+      distance,
+      prefix,
       line: token.line,
     };
   }
