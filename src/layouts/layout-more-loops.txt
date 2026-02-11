@@ -1,5 +1,5 @@
-title More loops and switches
-description Slightly more complex example with more loops and switches
+title Layout: More loops and switches
+description Slightly more complex example with more loops, switches, tunnels and a simple yard
 
 max trains 6
 lockahead distance 10 count 4

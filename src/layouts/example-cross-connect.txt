@@ -1,5 +1,5 @@
-title Cross Connect Example
-description Demonstrates cross connect for track intersections with collision prevention
+title Example: Cross Connect
+description Using cross connect for track intersections with collision prevention
 
 max trains 6
 gen cabs 1-2  cars 2-4  every 10

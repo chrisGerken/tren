@@ -1,0 +1,17 @@
+# Semaphore Test Layout
+# Tests the new semaphore (manual signal) feature
+#
+# Click the green dot to lock the semaphore (turns red, trains stop)
+# Click the red dot to unlock (turns green, trains can pass)
+
+title Example: Semaphore
+description Using a SEMAPHORE to let the use stop trains at a given point in the layout
+
+# Layout section with semaphore
+
+gen colorful cabs 1 cars 3-5 speed 15 every 10 
+str * 25
+semaphore         # This is the semaphore - click the dot to toggle
+str x 5
+bin
+

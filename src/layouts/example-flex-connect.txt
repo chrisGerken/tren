@@ -1,5 +1,5 @@
-title Sample with flex connect
-description How to fill a non-standard gap between two tracks
+title Example: Flex Connect
+description Using FLEX CONNECT to fill a non-standard gap between two tracks
 
 after: str
 str

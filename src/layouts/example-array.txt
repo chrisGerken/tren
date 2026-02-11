@@ -1,5 +1,5 @@
 title Example: Array
-description An example of how to use the ARRAY statement; cameo by the FLEX CONNECT statement
+description Using ARRAY statement for parallel tracks; cameo by the FLEX CONNECT statement
 
 # Create 3 parallel track starting points, 12" apart, perpendicular to track                                                                │
 gen ; str x 3                                                                                                                               │

@@ -1,4 +1,4 @@
-title Larger System
+title Layout: Larger System
 description Several small layouts connected by one large loop
 
 max trains 8
