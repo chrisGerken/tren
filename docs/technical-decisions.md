@@ -1338,6 +1338,55 @@ array count 3 angle 90 distance 12 prefix siding_
 - Users build from each placeholder independently, choosing piece types and directions
 - This matches the existing virtual switch pattern where `ph` serves as a pure junction point
 
+## Prefab and Use (Reusable Templates)
+
+The `prefab` and `use` statements provide a text-level macro system for reusable layout fragments.
+
+**DSL syntax:**
+```
+prefab siding {
+  $[label]: ph
+  str x 3
+  bump
+}
+
+use siding label "junction1"
+# Expands to: $junction1: ph ; str x 3 ; bump
+```
+
+**Design decisions:**
+- **Text-level macro expansion** (not token-level or AST-level): Simpler, more flexible. `[key]` placeholders can appear anywhere — in label names (`$[label]`), piece codes, or parameter values. The body is stored as raw text until expansion time.
+- **`{` required on same line**: The opening brace must appear on the same line as the `prefab` keyword. This simplifies parsing — the lexer can detect prefab blocks during line processing and collect the body before normal tokenization. The closing `}` can be on any subsequent line.
+- **Comment-aware `}` matching**: When scanning for the closing brace, comments are stripped first (using the same `#` comment rule). A `}` inside a comment is ignored. The first `}` in non-comment text closes the block.
+- **No nesting**: PREFAB bodies cannot contain other PREFAB definitions. However, USE inside a PREFAB body is fine — it expands at USE time when the body is parsed.
+- **Duplicate name rejection**: Defining a prefab with a name that already exists throws an error at build time. This prevents silent overwriting.
+- **Expansion via `parse()`**: The USE handler performs string substitution (`[key]` → value using `String.split().join()`), then calls the existing `parse()` function to tokenize and parse the expanded text. The resulting statements are processed inline via `processStatement()`, reusing all existing builder logic.
+
+**Implementation:**
+
+1. **Lexer (`src/parser/lexer.ts`):**
+   - New token types: `PREFAB`, `USE`
+   - `tokenize()` detects `prefab`/`prefabrication` lines before normal processing
+   - Extracts name (IDENTIFIER) and body (STRING) across multiple lines
+   - Quoted string handling (`"..."` and `'...'`) added to `tokenizeStatement()` for USE parameter values
+   - `use` keyword recognized in `tokenizeStatement()`
+
+2. **Parser (`src/parser/parser.ts`):**
+   - `PrefabStatement` interface: `{ type: 'prefab', name, body, line }`
+   - `UseStatement` interface: `{ type: 'use', name, params: Record<string, string>, line }`
+   - `parsePrefabStatement()`: Consumes PREFAB, IDENTIFIER, STRING tokens
+   - `parseUseStatement()`: Consumes USE, IDENTIFIER, then key-value pairs (IDENTIFIER/STRING for keys, IDENTIFIER/NUMBER/STRING for values)
+
+3. **Builder (`src/parser/builder.ts`):**
+   - `BuilderState.prefabs`: `Map<string, string>` storing name → raw body text
+   - `processPrefab()`: Validates uniqueness, stores body text
+   - `processUse()`: Looks up body, substitutes `[key]` → value, calls `parse()`, processes resulting statements inline
+
+**Why text-level substitution:**
+- Token-level substitution would require the body to be valid tokens, preventing flexible placeholder usage like `$[label]`
+- AST-level substitution would require new AST node types for parameterized fragments
+- Text substitution is the simplest approach and naturally supports any placement of `[key]` within DSL syntax
+
 ## Open Questions
 
 These will be addressed in user scenario discussions:

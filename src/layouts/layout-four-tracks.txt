@@ -1,0 +1,104 @@
+title Layout: Four Tracks Spiraling
+description A thicker loop and other stuff
+
+max trains 10
+random
+
+def crvl15  left  radius 15  arc 22.5
+def crvr15  right radius 15  arc 22.5
+def crvl19  left  radius 19  arc 22.5
+def crvr19  right radius 19  arc 22.5
+def crvl23  left  radius 23  arc 22.5
+def crvr23  right radius 23  arc 22.5
+def crvl27  left  radius 27  arc 22.5
+def crvr27  right radius 27  arc 22.5
+
+def str24   straight length 24
+def str42   straight length 42
+
+# Create 4 parallel track starting points, 4" apart
+
+array count 5 angle 90 distance 4 prefix main_
+
+# Track 1
+new from $main_1.out
+str; p1_1: str; str * 2; p1_2: str; str * 4; p1_3: str; str * 2 ; p1_4: str ; str * 7
+crvl27 * 4
+str * 4
+str42
+crvr15 * 12
+str ; tunnel ; str24 ; tunnel ; str
+str * 20
+crvl27 * 4
+str * 4
+crvl27 * 4
+# > $main_1.in
+
+# Track 2
+new from $main_2.out
+str; p2_1: str; str * 2; p2_2: str; str * 4; p2_3: str; str * 2 ; p2_4: str ; str * 7
+crvl23 * 4
+str * 4
+str42
+crvr19 * 12
+str ; tunnel ; str24 ; tunnel ; str
+str * 20
+crvl23 * 4
+str * 4
+crvl23 * 4
+# > $main_1.in
+
+# Track 3
+new from $main_3.out
+str; p3_1: str; str * 2; p3_2: str; str * 4; p3_3: str; str * 2 ; p3_4: str ; str * 7
+crvl19 * 4
+str * 4
+str42
+crvr23 * 12
+str ; tunnel ; str24 ; tunnel ; str
+str * 20
+crvl19 * 4
+str * 4
+crvl19 * 4
+# > $main_3.in
+
+# Track 4
+new from $main_4.out
+str; p4_1: str; str * 2; p4_2: str; str * 4; p4_3: str; str * 2 ; p4_4: str ; str * 7
+crvl15 * 4
+str * 4
+str42
+crvr27 * 12
+str ; tunnel ; str24 ; tunnel ; str
+str * 20
+crvl15 * 4
+str * 4
+crvl15 * 4
+# > $main_4.in
+
+# Track 5
+
+new from $main_5.out
+str; p5_1: str; str * 2; p5_2: str; str * 4; p5_3: str; str * 2 ; p5_4: str ; str * 5
+bin
+
+# Switches
+
+flex connect $p1_1.out  $p2_2.in
+flex connect $p2_1.out  $p3_2.in
+flex connect $p3_1.out  $p4_2.in
+flex connect $p4_1.out  $p5_2.in
+
+# flex connect $p4_3.out  $p3_4.in
+# flex connect $p3_3.out  $p2_4.in
+# flex connect $p2_3.out  $p1_4.in
+
+
+# Generator
+
+new
+generator  black cabs 2  cars 6-20  speed 14  every 20
+str 
+crvl27
+crvr27
+> $p1_3.in;

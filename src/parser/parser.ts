@@ -20,7 +20,9 @@ export type Statement =
   | CrossConnectStatement
   | DefineStatement
   | LogStatement
-  | ArrayStatement;
+  | ArrayStatement
+  | PrefabStatement
+  | UseStatement;
 
 export interface NewStatement {
   type: 'new';
@@ -148,6 +150,20 @@ export interface ArrayStatement {
   line: number;
 }
 
+export interface PrefabStatement {
+  type: 'prefab';
+  name: string;
+  body: string;   // Raw DSL text to be expanded later
+  line: number;
+}
+
+export interface UseStatement {
+  type: 'use';
+  name: string;
+  params: Record<string, string>;  // key → value map
+  line: number;
+}
+
 /**
  * Parse DSL text into an array of statements
  */
@@ -217,6 +233,12 @@ class Parser {
 
       case TokenType.ARRAY:
         return this.parseArrayStatement();
+
+      case TokenType.PREFAB:
+        return this.parsePrefabStatement();
+
+      case TokenType.USE:
+        return this.parseUseStatement();
 
       case TokenType.LABEL_DEF:
         return this.parseLabeledPiece();
@@ -647,6 +669,46 @@ class Parser {
       prefix,
       line: token.line,
     };
+  }
+
+  private parsePrefabStatement(): PrefabStatement {
+    const token = this.advance(); // consume 'prefab'
+
+    if (!this.check(TokenType.IDENTIFIER)) {
+      throw new Error(`Expected prefab name after '${token.value}' at line ${token.line}`);
+    }
+    const name = this.advance().value;
+
+    if (!this.check(TokenType.STRING)) {
+      throw new Error(`Expected prefab body after name '${name}' at line ${token.line}`);
+    }
+    const body = this.advance().value;
+
+    return { type: 'prefab', name, body, line: token.line };
+  }
+
+  private parseUseStatement(): UseStatement {
+    const token = this.advance(); // consume 'use'
+
+    if (!this.check(TokenType.IDENTIFIER)) {
+      throw new Error(`Expected prefab name after 'use' at line ${token.line}`);
+    }
+    const name = this.advance().value;
+
+    const params: Record<string, string> = {};
+
+    // Parse key-value pairs: key value [key value ...]
+    while (this.check(TokenType.IDENTIFIER) || this.check(TokenType.STRING)) {
+      const key = this.advance().value;
+
+      if (!this.check(TokenType.IDENTIFIER) && !this.check(TokenType.NUMBER) && !this.check(TokenType.STRING)) {
+        throw new Error(`Expected value for parameter '${key}' in 'use ${name}' at line ${token.line}`);
+      }
+      const value = this.advance().value;
+      params[key] = value;
+    }
+
+    return { type: 'use', name, params, line: token.line };
   }
 
   private parseLabeledPiece(): PieceStatement {

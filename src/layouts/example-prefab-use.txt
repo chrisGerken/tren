@@ -1,0 +1,18 @@
+title Example: Prefab
+description Using PREFAB to reuse blocks of track in a layout
+
+PREFAB siding {                                                                                                                              
+    [label]: ph                                                                                                                               
+    str x 3                                                                                                                                    
+    bin                                                                                                                                       
+  }                                                                                                                                            
+                                                                                                                                               
+
+# Begin track layout
+
+  gen ; str x 3                                                                                                                                
+  USE siding label "junction1"                                                                                                                 
+                                                                                                                                               
+  $junction1.out                                                                                                                               
+  crvl x 3                                                                                                                                     
+  bin         

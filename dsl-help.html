@@ -295,6 +295,38 @@ $siding_3.out ; str x 5 ; bump</code></pre>
   </div>
 
   <div class="section">
+    <h2>Prefab and Use (Reusable Templates)</h2>
+    <p>The <code>prefab</code> statement defines a reusable block of DSL statements with placeholder parameters. The <code>use</code> statement expands it.</p>
+
+    <h3>Defining a Prefab</h3>
+    <pre><code>prefab siding {
+  $[label]: ph
+  str x 3
+  bump
+}</code></pre>
+    <p>The body is stored as raw text. The opening <code>{</code> must be on the same line as <code>prefab</code>. The closing <code>}</code> can be on any subsequent line. <code>prefabrication</code> is accepted as an alias.</p>
+
+    <h3>Using a Prefab</h3>
+    <pre><code>use siding label "junction1"</code></pre>
+    <p>Each <code>[key]</code> placeholder in the body is replaced with the corresponding value. The expanded text is then parsed as normal DSL.</p>
+    <p>The above expands to: <code>$junction1: ph ; str x 3 ; bump</code></p>
+
+    <h3>Key Points</h3>
+    <ul>
+      <li><code>[key]</code> placeholders can appear anywhere &mdash; in label names, piece codes, or parameter values</li>
+      <li>Values containing spaces must be quoted: <code>"my value"</code></li>
+      <li>Prefab bodies cannot contain other <code>prefab</code> definitions (but can contain <code>use</code>)</li>
+      <li>Duplicate prefab names are not allowed</li>
+    </ul>
+
+    <h3>Example</h3>
+    <pre><code>prefab spur { str x [count] ; bump }
+
+gen ; str x 3
+use spur count 5           # Expands to: str x 5 ; bump</code></pre>
+  </div>
+
+  <div class="section">
     <h2>Starting New Segments</h2>
     <p>The <code>new</code> statement begins a new track segment:</p>
     <pre><code>new                     # Start at origin, 0° rotation

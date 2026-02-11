@@ -2,7 +2,7 @@
  * Layout Builder - transforms AST into placed track pieces
  */
 
-import { parse, Statement, PieceStatement, NewStatement, ReferenceStatement, LoopCloseStatement, TitleStatement, DescriptionStatement, LockAheadStatement, SpliceStatement, RandomStatement, MaxTrainsStatement, FlexConnectStatement, CrossConnectStatement, DefineStatement, LogStatement, ArrayStatement } from './parser';
+import { parse, Statement, PieceStatement, NewStatement, ReferenceStatement, LoopCloseStatement, TitleStatement, DescriptionStatement, LockAheadStatement, SpliceStatement, RandomStatement, MaxTrainsStatement, FlexConnectStatement, CrossConnectStatement, DefineStatement, LogStatement, ArrayStatement, PrefabStatement, UseStatement } from './parser';
 import { Layout, TrackPiece, Vec3, vec2, ConnectionPointDef, RangeValue as TypeRangeValue } from '../core/types';
 import { getArchetype, registerRuntimeArchetype } from '../core/archetypes';
 import type { TrackArchetype } from '../core/archetypes';
@@ -70,6 +70,7 @@ interface BuilderState {
   pendingSplices: SpliceInfo[];
   pendingFlexConnects: FlexConnectInfo[];
   pendingCrossConnects: CrossConnectInfo[];
+  prefabs: Map<string, string>;  // name → raw body text
 }
 
 /**
@@ -110,6 +111,7 @@ class LayoutBuilder {
       pendingSplices: [],
       pendingFlexConnects: [],
       pendingCrossConnects: [],
+      prefabs: new Map(),
     };
   }
 
@@ -199,6 +201,12 @@ class LayoutBuilder {
       case 'array':
         this.processArray(stmt);
         break;
+      case 'prefab':
+        this.processPrefab(stmt);
+        break;
+      case 'use':
+        this.processUse(stmt);
+        break;
     }
   }
 
@@ -211,6 +219,32 @@ class LayoutBuilder {
       'error': LogLevel.ERROR,
     };
     setLogLevel(levelMap[stmt.level]);
+  }
+
+  private processPrefab(stmt: PrefabStatement): void {
+    if (this.state.prefabs.has(stmt.name)) {
+      throw new Error(`Duplicate prefab name '${stmt.name}' at line ${stmt.line}`);
+    }
+    this.state.prefabs.set(stmt.name, stmt.body);
+  }
+
+  private processUse(stmt: UseStatement): void {
+    const body = this.state.prefabs.get(stmt.name);
+    if (body === undefined) {
+      throw new Error(`Unknown prefab '${stmt.name}' at line ${stmt.line}`);
+    }
+
+    // Perform text substitution: replace [key] with value
+    let expandedText = body;
+    for (const [key, value] of Object.entries(stmt.params)) {
+      expandedText = expandedText.split(`[${key}]`).join(value);
+    }
+
+    // Parse the expanded text into statements and process them
+    const innerStatements = parse(expandedText);
+    for (const innerStmt of innerStatements) {
+      this.processStatement(innerStmt);
+    }
   }
 
   private processArray(stmt: ArrayStatement): void {

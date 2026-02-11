@@ -47,6 +47,8 @@ export enum TokenType {
   ANGLE = 'ANGLE',             // angle keyword (for array statement)
   PREFIX = 'PREFIX',           // prefix keyword (for array statement)
   LOG = 'LOG',                 // log/logging keyword (for log level configuration)
+  PREFAB = 'PREFAB',           // prefab/prefabrication keyword (for prefab definition)
+  USE = 'USE',                 // use keyword (for prefab expansion)
   EOF = 'EOF',
 }
 
@@ -71,6 +73,69 @@ export function tokenize(input: string): Token[] {
     const commentIndex = line.indexOf('#');
     if (commentIndex !== -1) {
       line = line.substring(0, commentIndex);
+    }
+
+    // Check for PREFAB block start
+    const trimmedLine = line.trim();
+    const prefabMatch = trimmedLine.match(/^(prefab|prefabrication)\s+/i);
+    if (prefabMatch) {
+      const prefabLineNum = lineNum + 1;
+      const afterKeyword = trimmedLine.substring(prefabMatch[0].length);
+
+      // Extract the name (next identifier)
+      const nameMatch = afterKeyword.match(/^([a-zA-Z_][a-zA-Z0-9_]*)\s*/);
+      if (!nameMatch) {
+        throw new Error(`Expected prefab name after '${prefabMatch[1]}' at line ${prefabLineNum}`);
+      }
+      const name = nameMatch[1];
+      const afterName = afterKeyword.substring(nameMatch[0].length);
+
+      // Expect opening brace on same line
+      if (!afterName.startsWith('{')) {
+        throw new Error(`Expected '{' after prefab name '${name}' at line ${prefabLineNum}`);
+      }
+
+      // Collect body text from after '{' until matching '}'
+      let bodyText = afterName.substring(1); // everything after '{'
+      let foundClose = false;
+
+      // Check if closing brace is on the same line (strip comments first)
+      const closeIdx = bodyText.indexOf('}');
+      if (closeIdx !== -1) {
+        bodyText = bodyText.substring(0, closeIdx);
+        foundClose = true;
+      }
+
+      if (!foundClose) {
+        // Scan subsequent lines for closing brace
+        const bodyLines: string[] = [bodyText];
+        while (lineNum + 1 < lines.length) {
+          lineNum++;
+          let bodyLine = lines[lineNum];
+          // Strip comments for brace matching
+          const bodyCommentIdx = bodyLine.indexOf('#');
+          const strippedBodyLine = bodyCommentIdx !== -1 ? bodyLine.substring(0, bodyCommentIdx) : bodyLine;
+
+          const closeIdx = strippedBodyLine.indexOf('}');
+          if (closeIdx !== -1) {
+            bodyLines.push(strippedBodyLine.substring(0, closeIdx));
+            foundClose = true;
+            break;
+          } else {
+            bodyLines.push(strippedBodyLine);
+          }
+        }
+        bodyText = bodyLines.join('\n');
+      }
+
+      if (!foundClose) {
+        throw new Error(`Unclosed prefab block '${name}' starting at line ${prefabLineNum}`);
+      }
+
+      tokens.push({ type: TokenType.PREFAB, value: prefabMatch[1], line: prefabLineNum, column: 1 });
+      tokens.push({ type: TokenType.IDENTIFIER, value: name, line: prefabLineNum, column: prefabMatch[0].length + 1 });
+      tokens.push({ type: TokenType.STRING, value: bodyText.trim(), line: prefabLineNum, column: 1 });
+      continue;
     }
 
     // Split by semicolons and process each statement
@@ -99,6 +164,27 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
 
     const startPos = pos;
     const char = statement[pos];
+
+    // Quoted string: "..." or '...'
+    if (char === '"' || char === "'") {
+      const quote = char;
+      pos++; // skip opening quote
+      const start = pos;
+      while (pos < statement.length && statement[pos] !== quote) {
+        pos++;
+      }
+      const value = statement.substring(start, pos);
+      if (pos < statement.length) {
+        pos++; // skip closing quote
+      }
+      tokens.push({
+        type: TokenType.STRING,
+        value: value,
+        line: lineNum,
+        column: startPos + 1,
+      });
+      continue;
+    }
 
     // Label reference: $identifier
     if (char === '$') {
@@ -582,6 +668,16 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
       if (lowerValue === 'prefix') {
         tokens.push({
           type: TokenType.PREFIX,
+          value: value,
+          line: lineNum,
+          column: startPos + 1,
+        });
+        continue;
+      }
+
+      if (lowerValue === 'use') {
+        tokens.push({
+          type: TokenType.USE,
           value: value,
           line: lineNum,
           column: startPos + 1,

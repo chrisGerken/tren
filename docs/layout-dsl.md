@@ -947,6 +947,68 @@ str * 3
 
 Trains crossing a same-polarity junction automatically reverse their spline traversal direction while maintaining their physical heading. Each car tracks a `sectionDirection` field (`1` or `-1`) that toggles at same-polarity junctions. This is analogous to polarity reversal in real model train layouts where tracks meet from opposite electrical directions.
 
+## Prefab and Use (Reusable Templates)
+
+The `prefab` statement defines a named, reusable block of DSL statements with placeholder parameters. The `use` statement expands a previously defined prefab, substituting placeholders with provided values.
+
+### Defining a Prefab
+
+```
+prefab <name> {
+  <DSL statements using [key] placeholders>
+}
+```
+
+The body text between `{` and `}` is stored as raw text. The opening `{` must be on the same line as the `prefab` keyword. The closing `}` can be on any subsequent line. `prefabrication` is accepted as an alias for `prefab`.
+
+### Using a Prefab
+
+```
+use <name> key1 value1 key2 value2 ...
+```
+
+Each `[key]` placeholder in the body is replaced with the corresponding value. Values containing spaces must be quoted (`"my value"`). The expanded text is then parsed and processed as normal DSL statements.
+
+### Example: Reusable Siding
+
+```
+prefab siding {
+  $[label]: ph
+  str x 3
+  bump
+}
+
+gen ; str x 3
+use siding label "junction1"
+
+$junction1.out
+crvl x 3
+bump
+```
+
+The `use` statement expands to:
+```
+$junction1: ph
+str x 3
+bump
+```
+
+### Example: Single-Line Prefab
+
+```
+prefab straight_spur { str x [count] ; bump }
+
+use straight_spur count 5
+```
+
+### Key Points
+
+- **Placeholders** use `[key]` syntax and can appear anywhere in the body — in label names, piece codes, or parameter values
+- **No nesting**: PREFAB bodies cannot contain other PREFAB definitions. USE inside a PREFAB body is fine — it expands at USE time.
+- **Duplicate names** are not allowed — defining a prefab with the same name as an existing one is an error
+- **Comments** inside the body are preserved in the raw text and stripped normally during expansion
+- **Case insensitivity**: The `prefab` and `use` keywords are case-insensitive; the prefab name is case-sensitive
+
 ## Array
 
 The `array` statement creates multiple evenly-spaced labeled placeholders, useful for building parallel tracks (passing sidings, yards, double-track mainlines).
