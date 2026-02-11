@@ -3,7 +3,7 @@
  */
 
 import { open, save } from '@tauri-apps/api/dialog';
-import { readTextFile, writeTextFile } from '@tauri-apps/api/fs';
+import { readTextFile, writeTextFile, writeBinaryFile } from '@tauri-apps/api/fs';
 
 // Import bundled layouts dynamically using Vite's import.meta.glob
 import manifestJson from './layouts/manifest.json';
@@ -316,6 +316,44 @@ function toggleLabels(): void {
 if (labelsBtn) {
   labelsBtn.addEventListener('click', toggleLabels);
   // Labels are hidden by default
+}
+
+// Set up capture screenshot button
+const captureBtn = document.getElementById('capture-btn');
+if (captureBtn) {
+  captureBtn.addEventListener('click', async () => {
+    try {
+      // Render current frame to ensure canvas has content
+      scene.renderer.render(scene.scene, scene.camera);
+
+      // Get canvas data as PNG
+      const dataUrl = scene.renderer.domElement.toDataURL('image/png');
+      const base64 = dataUrl.split(',')[1];
+      const binaryStr = atob(base64);
+      const bytes = new Uint8Array(binaryStr.length);
+      for (let i = 0; i < binaryStr.length; i++) {
+        bytes[i] = binaryStr.charCodeAt(i);
+      }
+
+      // Open save dialog
+      const savePath = await save({
+        filters: [{ name: 'PNG Image', extensions: ['png'] }],
+        defaultPath: 'tren-capture.png',
+      });
+
+      if (!savePath) {
+        setStatus('Capture cancelled');
+        return;
+      }
+
+      // Write the file
+      await writeBinaryFile(savePath, bytes);
+      setStatus(`Screenshot saved: ${savePath}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setStatus(`Capture error: ${message}`);
+    }
+  });
 }
 
 // Initial render

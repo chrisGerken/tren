@@ -1235,6 +1235,49 @@ Previously, the generator's `lastSpawnTime` was always reset when the spawn inte
 
 **Fix:** Only reset `lastSpawnTime` when `spawnTrain()` returns `true` (successful spawn). Failed spawns keep trying on subsequent frames until they succeed.
 
+## Screenshot Capture
+
+The toolbar includes a "Capture" button that saves the current viewport as a PNG image.
+
+**Implementation:**
+1. Click handler calls `renderer.render(scene, camera)` to ensure current frame is on the canvas
+2. `renderer.domElement.toDataURL('image/png')` extracts the canvas as a data URL
+3. Data URL is decoded to a `Uint8Array` via `atob()` and byte conversion
+4. Tauri's `save()` dialog lets the user choose the save location (`.png` filter)
+5. Tauri's `writeBinaryFile()` writes the binary PNG data to disk
+
+**Design decisions:**
+- `preserveDrawingBuffer: true` is set on the WebGL renderer to ensure `toDataURL()` always returns the rendered image, not a blank canvas. Without this, Three.js clears the drawing buffer after presenting, so `toDataURL()` may return an empty image depending on timing.
+- The explicit `renderer.render()` call before capture is a belt-and-suspenders approach — combined with `preserveDrawingBuffer`, the capture is reliable regardless of when the last animation frame rendered.
+- The capture only includes the WebGL canvas (track and trains), not HTML overlays (toolbar, inspector widgets, CSS2D labels). This is a limitation of `canvas.toDataURL()`.
+
+**Tauri allowlist:** The `fs.writeFile` permission in `tauri.conf.json` covers `writeBinaryFile()`. The `dialog.save` permission enables the save dialog. File scope covers `$HOME/**`, `$DOCUMENT/**`, `$DESKTOP/**`.
+
+## Inspector Widget UI Refinements
+
+Several usability improvements to the train inspector widget:
+
+**Removed "ID:" label prefix:**
+- The train ID field previously showed "ID: #3" — the "ID:" prefix was redundant since the train number is self-explanatory
+- Changed to empty-string label so only "#3" appears
+
+**Direction button icon:**
+- Replaced text "Change Direction" with Unicode ⇄ (`\u21C4`) character
+- Added `title="Change Direction"` attribute for tooltip on hover
+- Increased `.inspector-dir-btn` font-size from 12px to 16px for icon readability
+
+**Speed slider +/- buttons:**
+- Added `−` (Unicode minus `\u2212`) and `+` buttons flanking the slider
+- Each click adjusts `train.desiredSpeed` by 1, clamped to the 0–48 range
+- Reuses the same update pattern as the slider `input` event (updates train, slider, and displayed value)
+- Exits stop state if speed is increased above 0 (same behavior as dragging the slider)
+- Styled with `.inspector-speed-adj-btn` class: compact padding, 18px min-width
+
+**Decoupler click area enlargement:**
+- Triangle size increased from 0.8 to 1.13 (factor of √2), doubling the clickable area
+- The triangle mesh IS the raycasting click target, so enlarging the geometry directly improves click usability
+- No change to the offset distance or visual style beyond the size increase
+
 ## Open Questions
 
 These will be addressed in user scenario discussions:

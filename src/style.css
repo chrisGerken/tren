@@ -292,6 +292,13 @@ html, body {
   font-variant-numeric: tabular-nums;
 }
 
+.inspector-speed-adj-btn {
+  font-size: 14px;
+  padding: 0 4px;
+  min-width: 18px;
+  line-height: 1;
+}
+
 .inspector-btn {
   background: none;
   border: none;
@@ -326,7 +333,7 @@ html, body {
 
 .inspector-dir-btn {
   background: #4a90d9;
-  font-size: 12px;
+  font-size: 16px;
   padding: 2px 8px;
 }
 

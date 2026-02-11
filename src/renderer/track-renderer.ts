@@ -666,7 +666,7 @@ function renderDecouplerWorld(
   const color = activated ? DECOUPLER_ACTIVE_COLOR : DECOUPLER_INACTIVE_COLOR;
 
   // Triangle dimensions
-  const triangleSize = 0.8;  // Size of each triangle
+  const triangleSize = 1.13;  // Size of each triangle (2x area vs original 0.8)
   const offset = 1.5;        // Distance from track center to triangle center
 
   // Perpendicular direction to track (in screen coords, Z-flipped)

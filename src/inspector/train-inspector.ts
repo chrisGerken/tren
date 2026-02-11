@@ -101,7 +101,7 @@ export class TrainInspectorWidget extends InspectorWidget {
     // Train ID
     this.idLabel = document.createElement('span');
     this.idLabel.className = 'inspector-field-value';
-    addField('ID:', this.idLabel);
+    addField('', this.idLabel);
 
     // Cabs count
     this.cabsLabel = document.createElement('span');
@@ -127,6 +127,27 @@ export class TrainInspectorWidget extends InspectorWidget {
     sliderLabel.textContent = 'Target Speed:';
     sliderContainer.appendChild(sliderLabel);
 
+    // Minus button
+    const minusBtn = document.createElement('button');
+    minusBtn.className = 'inspector-btn inspector-speed-adj-btn';
+    minusBtn.textContent = '\u2212';
+    minusBtn.title = 'Decrease speed';
+    minusBtn.addEventListener('click', () => {
+      const t = this.getTrain();
+      if (t) {
+        const val = Math.max(0, Math.round(t.desiredSpeed) - 1);
+        t.desiredSpeed = val;
+        this.slider.value = String(val);
+        this.sliderValue.textContent = String(val);
+        if (this.isStopped && val > 0) {
+          this.isStopped = false;
+          this.stopBtn.textContent = 'Stop';
+          this.stopBtn.className = 'inspector-btn inspector-stop-btn';
+        }
+      }
+    });
+    sliderContainer.appendChild(minusBtn);
+
     this.slider = document.createElement('input');
     this.slider.type = 'range';
     this.slider.className = 'inspector-slider';
@@ -139,6 +160,27 @@ export class TrainInspectorWidget extends InspectorWidget {
     this.sliderValue = document.createElement('span');
     this.sliderValue.className = 'inspector-field-value inspector-slider-value';
     sliderContainer.appendChild(this.sliderValue);
+
+    // Plus button
+    const plusBtn = document.createElement('button');
+    plusBtn.className = 'inspector-btn inspector-speed-adj-btn';
+    plusBtn.textContent = '+';
+    plusBtn.title = 'Increase speed';
+    plusBtn.addEventListener('click', () => {
+      const t = this.getTrain();
+      if (t) {
+        const val = Math.min(48, Math.round(t.desiredSpeed) + 1);
+        t.desiredSpeed = val;
+        this.slider.value = String(val);
+        this.sliderValue.textContent = String(val);
+        if (this.isStopped && val > 0) {
+          this.isStopped = false;
+          this.stopBtn.textContent = 'Stop';
+          this.stopBtn.className = 'inspector-btn inspector-stop-btn';
+        }
+      }
+    });
+    sliderContainer.appendChild(plusBtn);
 
     this.contentEl.appendChild(sliderContainer);
 
@@ -170,7 +212,8 @@ export class TrainInspectorWidget extends InspectorWidget {
     // Change Direction button (only enabled when stopped)
     this.changeDirBtn = document.createElement('button');
     this.changeDirBtn.className = 'inspector-btn inspector-dir-btn';
-    this.changeDirBtn.textContent = 'Change Direction';
+    this.changeDirBtn.textContent = '\u21C4';
+    this.changeDirBtn.title = 'Change Direction';
     this.changeDirBtn.addEventListener('click', () => {
       const t = this.getTrain();
       if (t && t.currentSpeed === 0) {
