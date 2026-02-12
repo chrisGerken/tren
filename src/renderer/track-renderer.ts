@@ -324,6 +324,7 @@ function renderTrackPiece(
   if (archetype.code === 'gen') {
     const worldPos = toWorld({ x: 0, y: 0, z: 0 });
     const genMesh = renderGeneratorWorld(worldPos);
+    genMesh.userData = { isGenerator: true, pieceId: piece.id };
     group.add(genMesh);
   } else if (archetype.code === 'bin') {
     const worldPos = toWorld({ x: 0, y: 0, z: 0 });

@@ -344,6 +344,8 @@ When a range is specified:
 
 Each train spawned by the generator gets its own random values, so trains from the same generator may have different speeds, car counts, etc.
 
+**Runtime Control:** All generator parameters can be adjusted while the simulation is running by double-clicking a generator piece to open the generator inspector widget. Sliders control cabs, cars, speed, and frequency; buttons toggle color mode and enable/disable state. Changes take effect on the next spawned train.
+
 ### Semaphore Syntax
 
 Semaphores are manual signal points where you can control train traffic by clicking to lock/unlock the signal:

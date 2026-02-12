@@ -97,8 +97,9 @@ flex connect $p4_1.out  $p5_2.in
 # Generator
 
 new
-generator  black cabs 2  cars 6-20  speed 14  every 20
-str 
+generator  black cabs 1-3  cars 6-20  speed 14  every 20
+str * 6
+semaphore
 crvl27
 crvr27
 > $p1_3.in;

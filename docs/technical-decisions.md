@@ -1221,6 +1221,33 @@ An HTML/CSS overlay system at the bottom of the simulation window for inspecting
 - Manager is type-agnostic — works with any widget subclass
 - `targetId` property enables duplicate prevention across widget types
 
+### Generator Inspector Widget
+
+Double-clicking a generator piece opens a `GeneratorInspectorWidget` at the bottom of the window, providing real-time control over generator parameters. Changes affect future train spawns immediately.
+
+**Detection:** Generator meshes in `track-renderer.ts` carry `userData = { isGenerator: true, pieceId }`. The `onDblClick` handler in `scene.ts` raycasts against the trackGroup after checking trains (trains take priority), looking for `userData.isGenerator`.
+
+**Layout (left to right):**
+1. Type label: "Generator" (green)
+2. Coordinates: `(x, z)` from the piece's world position
+3. Enable/Disable button: green "Enabled" / red "Disabled" toggle — writes `genConfig.enabled`
+4. Color button: cycles gray → colorful → black — writes `genConfig.colorMode`
+5. Cabs slider: 1–10 with +/- buttons — writes `genConfig.cabCount`
+6. Cars slider: 0–20 with +/- buttons — writes `genConfig.carCount`
+7. Speed slider: 1–48 with +/- buttons — writes `genConfig.speed`
+8. Every slider: 1–300 with +/- buttons — writes `genConfig.frequency`
+
+**Frequency cache invalidation:** The simulation caches resolved frequencies for range support. When `config.frequency` is a plain number (as set by the inspector), `checkSpawning()` reads it directly each tick, bypassing the cache entirely. This ensures slider changes take effect immediately.
+
+**Spawn-while-blocked:** `spawnTrain()` no longer aborts when lock acquisition fails. Trains are spawned inside the generator section and wait at speed 0 until the exit clears. A generator-occupied check prevents overlapping spawns: if any car from any train is still on the generator's piece, the spawn is deferred until the generator section is clear.
+
+**Design decisions:**
+- Widget holds a direct reference to the `TrackPiece` object (shared with the simulation), so mutations are immediately visible
+- Widget also holds a `Simulation` reference for `clearResolvedFrequency()` (kept for RangeValue cache clearing)
+- `update()` only syncs the enable button state (in case config is changed externally); no per-frame data like trains
+- `baseValue()` helper extracts the midpoint from a `RangeValue` for initial slider positioning
+- Follows the same constructor workaround as `TrainInspectorWidget`: `super()` calls `buildContent()` before fields are set, so a guard returns early and `buildContent()` is called again after field initialization
+
 ## Same-Polarity Junction Handling
 
 When two track pieces connect with the same polarity (out↔out or in↔in), such as via `> $label.out` loop close, trains need to traverse the connected piece in reverse spline direction while maintaining their physical heading.

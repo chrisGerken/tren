@@ -245,3 +245,10 @@ The `Simulation` class (`src/core/simulation.ts`) uses the LockManager:
    - Used by the train inspector widget to show a switch selector UI
    - `setTrainSwitchOverride()` / `clearTrainSwitchOverride()` pre-set routes in `train.routesTaken`
    - Inspector fires `onSwitchRouteChanged` callback on select to sync 3D switch indicator colors
+
+6. **Generator inspector (`GeneratorInspectorWidget`):**
+   - Double-click a generator mesh to open a widget controlling spawn parameters
+   - Sliders for cabs, cars, speed, frequency; buttons for color mode and enable/disable
+   - Writes directly to the `TrackPiece.genConfig` object (shared reference with the simulation)
+   - Frequency changes take effect immediately: `checkSpawning()` reads plain number values directly each tick
+   - `clearResolvedFrequency()` invalidates cached values for RangeValue frequency support

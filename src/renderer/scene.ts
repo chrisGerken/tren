@@ -19,6 +19,9 @@ export type DecouplerClickCallback = (pieceId: string) => void;
 // Callback type for train double-clicks
 export type TrainDblClickCallback = (trainId: string) => void;
 
+// Callback type for generator double-clicks
+export type GeneratorDblClickCallback = (pieceId: string) => void;
+
 export class TrackScene {
   scene: THREE.Scene;
   camera: THREE.OrthographicCamera;
@@ -35,6 +38,7 @@ export class TrackScene {
   private onSemaphoreClick?: SemaphoreClickCallback;
   private onDecouplerClick?: DecouplerClickCallback;
   private onTrainDblClick?: TrainDblClickCallback;
+  private onGeneratorDblClick?: GeneratorDblClickCallback;
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -157,6 +161,13 @@ export class TrackScene {
   }
 
   /**
+   * Set callback for generator double-clicks
+   */
+  setGeneratorDblClickCallback(callback: GeneratorDblClickCallback): void {
+    this.onGeneratorDblClick = callback;
+  }
+
+  /**
    * Handle click events
    */
   private onClick(event: MouseEvent): void {
@@ -199,7 +210,7 @@ export class TrackScene {
    * Handle double-click events for train inspection
    */
   private onDblClick(event: MouseEvent): void {
-    if (!this.onTrainDblClick) return;
+    if (!this.onTrainDblClick && !this.onGeneratorDblClick) return;
 
     const rect = this.renderer.domElement.getBoundingClientRect();
     this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -207,18 +218,29 @@ export class TrackScene {
 
     this.raycaster.setFromCamera(this.mouse, this.camera);
 
-    // Raycast against train group children (recursive)
-    const intersects = this.raycaster.intersectObjects(this.trainGroup.children, true);
+    // Raycast against train group first (trains take priority)
+    if (this.onTrainDblClick) {
+      const trainIntersects = this.raycaster.intersectObjects(this.trainGroup.children, true);
+      if (trainIntersects.length > 0) {
+        let obj: THREE.Object3D | null = trainIntersects[0].object;
+        while (obj) {
+          if (obj.name && obj.name.startsWith('train_')) {
+            this.onTrainDblClick(obj.name);
+            return;
+          }
+          obj = obj.parent;
+        }
+      }
+    }
 
-    if (intersects.length > 0) {
-      // Walk up object hierarchy to find the train group (name starts with "train_")
-      let obj: THREE.Object3D | null = intersects[0].object;
-      while (obj) {
-        if (obj.name && obj.name.startsWith('train_')) {
-          this.onTrainDblClick(obj.name);
+    // Raycast against track group for generators
+    if (this.onGeneratorDblClick) {
+      const trackIntersects = this.raycaster.intersectObjects(this.trackGroup.children, true);
+      for (const intersect of trackIntersects) {
+        if (intersect.object.userData?.isGenerator) {
+          this.onGeneratorDblClick(intersect.object.userData.pieceId);
           return;
         }
-        obj = obj.parent;
       }
     }
   }

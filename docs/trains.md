@@ -179,9 +179,12 @@ When a faster train approaches a slower train ahead:
 ### Spawn Blocking
 
 When a generator attempts to spawn a new train:
-1. The simulation tries to acquire initial locks for the train
-2. If the exit track is blocked (locks held by another train), spawning is deferred
-3. The generator will try again on the next spawn interval
+1. If the max trains limit has been reached, spawning is deferred until a train is destroyed
+2. If any car from any train is still on the generator's track section (generator occupied), spawning is deferred
+3. Otherwise the train is spawned inside the generator section. If leading locks cannot be acquired (exit track blocked), the train waits at speed 0 until the exit clears
+4. The generator retries on the next simulation tick when deferred
+
+**Generator Inspector:** All generator parameters (cabs, cars, speed, frequency, color mode, enabled) can be adjusted at runtime by double-clicking a generator piece to open its inspector widget. Changes take effect on the next spawned train.
 
 ### Train Removal
 

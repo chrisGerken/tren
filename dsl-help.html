@@ -209,6 +209,7 @@ gen cabs 2 cars 3 speed 6 every 15 colorful    # Full specification</code></pre>
 gen speed 6-24                # Random speed (real number)
 gen every 10-30               # Random spawn interval</code></pre>
     <p>Integer parameters (<code>cabs</code>, <code>cars</code>, <code>every</code>) get random integers. <code>speed</code> gets a random real number. Each spawned train gets its own random values.</p>
+    <p><strong>Runtime Control:</strong> Double-click a generator piece during simulation to open the generator inspector widget with sliders for all numeric parameters and buttons for color mode and enable/disable.</p>
 
     <h3>Semaphore Syntax</h3>
     <p>Semaphores are manual signal points where you can control train traffic:</p>
@@ -565,6 +566,23 @@ str x 4
     </table>
     <p><strong>Widget behavior:</strong> Widgets start locked (persist across double-clicks). Unlock a widget to have it replaced when you double-click a different train. Multiple locked widgets can stack.</p>
     <p><strong>Auto-removal:</strong> A widget is automatically removed when its train is destroyed (e.g., enters a bin).</p>
+  </div>
+
+  <div class="section">
+    <h2>Generator Inspector</h2>
+    <p>Double-click a generator piece to open an inspector widget at the bottom of the window. The widget shows generator parameters and provides controls:</p>
+    <table>
+      <tr><th>Control</th><th>Function</th></tr>
+      <tr><td><strong>Enabled / Disabled</strong></td><td>Toggle the generator on or off</td></tr>
+      <tr><td><strong>Color Mode</strong></td><td>Cycle through gray &rarr; colorful &rarr; black</td></tr>
+      <tr><td><strong>Cabs slider</strong></td><td>Set number of cabs per train (1&ndash;10)</td></tr>
+      <tr><td><strong>Cars slider</strong></td><td>Set number of cars per train (0&ndash;20)</td></tr>
+      <tr><td><strong>Speed slider</strong></td><td>Set train speed in inches/sec (1&ndash;48)</td></tr>
+      <tr><td><strong>Every slider</strong></td><td>Set spawn interval in seconds (1&ndash;300)</td></tr>
+      <tr><td><strong>Lock / Unlock</strong></td><td>Lock the widget so it persists when you double-click another object</td></tr>
+      <tr><td><strong>&times;</strong></td><td>Close the widget</td></tr>
+    </table>
+    <p><strong>Spawn behavior:</strong> Trains are spawned inside the generator section. If the exit track is blocked, the train waits at speed 0 until the exit clears. If the generator section is still occupied by a previous train, spawning is deferred. Changes to parameters take effect on the next spawned train.</p>
   </div>
 
 </body>

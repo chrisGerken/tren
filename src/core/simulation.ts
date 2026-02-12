@@ -184,6 +184,13 @@ export class Simulation {
   }
 
   /**
+   * Clear the cached resolved frequency for a generator so config changes take effect immediately
+   */
+  clearResolvedFrequency(pieceId: string): void {
+    this.resolvedFrequencies.delete(pieceId);
+  }
+
+  /**
    * Main animation loop
    */
   private animationLoop = (timestamp: number): void => {
@@ -228,11 +235,19 @@ export class Simulation {
         }
       } else {
         // Repeating: spawn every frequency seconds
-        // Get cached frequency or resolve a new one (for range support)
-        let frequency = this.resolvedFrequencies.get(piece.id);
-        if (frequency === undefined) {
-          frequency = resolveIntegerValue(config.frequency, 10);
-          this.resolvedFrequencies.set(piece.id, frequency);
+        // Use config.frequency directly (plain number) or resolve from cache (range)
+        let frequency: number;
+        if (typeof config.frequency === 'number') {
+          // Plain number — always use directly so inspector slider changes take effect immediately
+          frequency = config.frequency;
+        } else {
+          // RangeValue — resolve once per interval and cache
+          let cached = this.resolvedFrequencies.get(piece.id);
+          if (cached === undefined) {
+            cached = resolveIntegerValue(config.frequency, 10);
+            this.resolvedFrequencies.set(piece.id, cached);
+          }
+          frequency = cached;
         }
         if (timeSinceLastSpawn >= frequency) {
           // Timer fires: only reset timer if spawn succeeds.
@@ -272,6 +287,15 @@ export class Simulation {
     if (!this.canSpawnTrain()) {
       logger.debug(`Cannot spawn train - at max trains limit (${this.layout.maxTrains})`);
       return false;
+    }
+
+    // Check if any train still has cars inside this generator
+    const genId = generatorPiece.id;
+    for (const train of this.trains) {
+      if (train.cars.some(c => c.currentPieceId === genId)) {
+        logger.debug(`Cannot spawn train - generator ${genId} still occupied`);
+        return false;
+      }
     }
 
     const config = generatorPiece.genConfig;
@@ -353,7 +377,7 @@ export class Simulation {
       updateCarWorldPosition(car, this.layout);
     }
 
-    // Try to acquire initial locks before spawning
+    // Try to acquire initial locks — if blocked, spawn anyway but train will wait
     const lockResult = this.lockManager.acquireLeadingLocks(
       train,
       this.layout,
@@ -362,9 +386,7 @@ export class Simulation {
     );
 
     if (!lockResult.success) {
-      // Track ahead is blocked - don't spawn yet
-      logger.debug(`Cannot spawn train - blocked at ${lockResult.blocked} by ${lockResult.blockingTrainId}`);
-      return false;
+      logger.debug(`Train ${train.id} spawned but blocked at ${lockResult.blocked} by ${lockResult.blockingTrainId} - will wait`);
     }
 
     this.trains.push(train);

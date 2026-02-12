@@ -23,6 +23,7 @@ import { Layout } from './core/types';
 import { setLogLevel, LogLevel, logger } from './core/logger';
 import { InspectorManager } from './inspector/inspector-manager';
 import { TrainInspectorWidget } from './inspector/train-inspector';
+import { GeneratorInspectorWidget } from './inspector/generator-inspector';
 import './style.css';
 
 // Initialize scene
@@ -132,6 +133,16 @@ scene.setTrainDblClickCallback((trainId) => {
       renderLayout(scene, currentLayout);
     }
   };
+  inspectorManager.addWidget(widget);
+});
+
+// Set up generator double-click callback for inspector
+scene.setGeneratorDblClickCallback((pieceId) => {
+  if (!currentLayout || !simulation) return;
+  if (inspectorManager.hasWidgetForTarget(pieceId)) return;
+  const piece = currentLayout.pieces.find(p => p.id === pieceId);
+  if (!piece?.genConfig) return;
+  const widget = new GeneratorInspectorWidget(piece, simulation);
   inspectorManager.addWidget(widget);
 });
 
