@@ -1,0 +1,35 @@
+title         Layout: Two simple loops
+description   A generator, several nested loops, some switches and a bin
+
+random
+
+start: ph
+
+crvl x 4
+
+ph1: crvl
+crvl * 11
+
+new
+gen cabs 1-2 cars 2-8 speed 8-12 every 20-40
+crvl
+str
+> in.$ph1
+
+new from out.$ph1
+str
+crv * 4
+str * 2
+crv * 4
+str * 2
+crv * 4
+str * 2
+crv * 3
+exit: crv
+str
+
+$exit.out
+crvr
+crvl
+str
+bin

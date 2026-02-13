@@ -1,0 +1,206 @@
+title Layout: Larger System
+description Several small layouts connected by one large loop
+
+max trains 8
+lockahead distance 10 count 4
+
+def crvr15  right  radius 15  arc 22.5
+def crvr20  right  radius 20  arc 22.5
+def crvr26  right  radius 26  arc 22.5
+#
+# Main loop
+#
+start: str * 19
+out1: str
+
+crvl * 4
+
+in1: str
+str
+east3: str
+out2: str
+
+crvl * 4
+
+in2: str
+str * 15
+out3: str
+str * 3
+
+crvl * 3
+in3:  crvl
+str * 4
+
+
+out4: crvl
+crvl * 3
+
+
+#
+# Center yard
+#
+
+new
+$start.out
+crvl
+str
+s1: str
+crvr
+str * 7
+sem
+h1: str
+crvl
+str * 5
+crvr
+str * 2
+
+new 
+$s1.out
+s2: str
+crvr
+str * 7
+sem
+str
+crvl
+
+
+new 
+$s2.out
+s3: str
+crvr
+str * 7
+sem
+str
+crvl
+
+new 
+$s3.out
+s4: str
+crvr
+str * 7
+sem
+str
+crvl
+
+#
+# Generator
+#
+
+new
+gen cabs 1-2 black cars 2-20 every 20-40 speed 12-16
+str
+str
+> $in3.in
+
+#
+# right set
+#
+
+new
+$h1.out
+str
+h2: str
+crvl
+str * 5
+crvr
+str3
+tunnel
+str
+str
+str3
+tunnel
+str * 4
+crvr18 * 10
+str * 4
+on1: str
+
+
+flex connect $on1.out $east3.in
+
+#
+#  Small layout 1
+#
+
+new
+$out1.out
+str * 2
+x1_1: str
+crvr18 * 7
+tunnel
+crvr18
+str 
+tunnel
+crvl18 * 13
+clover2: crvl18
+
+new
+clover1: str 
+str
+x1_2: str
+str * 2
+> $in1.in
+
+cross connect $x1_1  $x1_2
+flex connect $clover2.out $clover1.in
+
+
+#
+# Small layout 2
+#
+
+new
+$out2.out
+crvr * 4
+
+crvl * 7
+b2a: crvl
+crvl * 4
+
+new
+crvr * 4
+> $in2.in
+
+new 
+$b2a.out
+b2b: str
+crvl * 4
+crvr * 4
+
+new 
+$b2b.out
+b2c: str
+crvl * 4
+crvr * 4
+
+new 
+$b2c.out
+b2d: str
+crvl * 4
+crvr * 4
+
+new 
+$b2d.out
+b2e: str
+crvl * 4
+crvr * 4
+
+#
+# Small layout 3
+#
+
+new
+$out3.out 
+crvr26 * 8
+crvr24 * 8
+crvr22 * 8
+crvr20 * 8
+crvr18 * 8
+crvr15 * 8
+str3
+tunnel
+str * 3
+tunnel
+str * 2
+crvl * 5
+ramp3: crvl
+flex connect $ramp3.out $out4.in

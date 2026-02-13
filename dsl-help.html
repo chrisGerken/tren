@@ -175,6 +175,7 @@ crvl         # Place a left curve (22" radius default)</code></pre>
       <tr><td><code>bin</code></td><td>Train sink (removes trains)</td></tr>
       <tr><td><code>tun</code>, <code>tunnel</code></td><td>Visibility toggle</td></tr>
       <tr><td><code>sem</code>, <code>semaphore</code></td><td>Manual signal (see Semaphore Syntax below)</td></tr>
+      <tr><td><code>dec</code>, <code>decoupler</code></td><td>Train splitter (see Decoupler Syntax below)</td></tr>
     </table>
 
     <h3>Repetition</h3>
@@ -208,6 +209,7 @@ gen cabs 2 cars 3 speed 6 every 15 colorful    # Full specification</code></pre>
 gen speed 6-24                # Random speed (real number)
 gen every 10-30               # Random spawn interval</code></pre>
     <p>Integer parameters (<code>cabs</code>, <code>cars</code>, <code>every</code>) get random integers. <code>speed</code> gets a random real number. Each spawned train gets its own random values.</p>
+    <p><strong>Runtime Control:</strong> Double-click a generator piece during simulation to open the generator inspector widget with sliders for all numeric parameters and buttons for color mode and enable/disable.</p>
 
     <h3>Semaphore Syntax</h3>
     <p>Semaphores are manual signal points where you can control train traffic:</p>
@@ -222,6 +224,15 @@ signal: sem                   # Labeled semaphore</code></pre>
     </ul>
     <p><strong>Interaction:</strong> Click the dot to toggle between locked and unlocked. Semaphores start unlocked (green).</p>
     <p><strong>Use cases:</strong> Manual traffic control, creating holding points, simulating station stops.</p>
+
+    <h3>Decoupler Syntax</h3>
+    <p>Decouplers split a stopped train into two trains at the decoupler's position:</p>
+    <pre><code>dec                           # Place a decoupler
+decoupler                     # Same as dec (alias)
+split: dec                    # Labeled decoupler</code></pre>
+    <p><strong>Visual appearance:</strong> Two small triangles on each side of the track (orange = inactive, red = activated).</p>
+    <p><strong>Interaction:</strong> Click either triangle to activate. If a stopped train straddles the decoupler, the train is split into two stopped trains. The decoupler flashes red for 1 second.</p>
+    <p><strong>Use cases:</strong> Splitting trains for shunting, dropping off cars at sidings.</p>
   </div>
 
   <div class="section">
@@ -249,6 +260,71 @@ $junction.out           # Return to junction's output
 crvl x 3                # Branch curves left
 bump</code></pre>
     <p>This creates a <strong>virtual switch</strong> where both routes connect to <code>junction.out</code>.</p>
+  </div>
+
+  <div class="section">
+    <h2>Array (Parallel Tracks)</h2>
+    <p>The <code>array</code> statement creates multiple evenly-spaced labeled placeholders for building parallel tracks:</p>
+    <pre><code>array count 3 angle 90 distance 12 prefix track_</code></pre>
+    <p><strong>Parameters</strong> (any order, all required):</p>
+    <ul>
+      <li><code>count N</code> &mdash; number of placeholders to create</li>
+      <li><code>angle A</code> &mdash; degrees relative to current track direction for the array line</li>
+      <li><code>distance D</code> &mdash; spacing in inches between placeholders</li>
+      <li><code>prefix P</code> &mdash; label prefix (placeholders labeled P1, P2, &hellip;, PN)</li>
+    </ul>
+
+    <h3>Behavior</h3>
+    <ul>
+      <li>First placeholder connects to the current track chain</li>
+      <li>Additional placeholders are placed along the array line direction</li>
+      <li>All placeholders share the same rotation as the first</li>
+      <li>Builder continues from the first placeholder</li>
+      <li>Use <code>$prefix_2.out</code>, <code>$prefix_3.out</code>, etc. to build from additional placeholders</li>
+    </ul>
+
+    <h3>Example: Three Parallel Sidings</h3>
+    <pre><code>gen ; str x 3
+array count 3 angle 90 distance 12 prefix siding_
+
+# Main line from first placeholder
+str x 10 ; bump
+
+# Build from each additional siding
+$siding_2.out ; str x 5 ; bump
+$siding_3.out ; str x 5 ; bump</code></pre>
+  </div>
+
+  <div class="section">
+    <h2>Prefab and Use (Reusable Templates)</h2>
+    <p>The <code>prefab</code> statement defines a reusable block of DSL statements with placeholder parameters. The <code>use</code> statement expands it.</p>
+
+    <h3>Defining a Prefab</h3>
+    <pre><code>prefab siding {
+  $[label]: ph
+  str x 3
+  bump
+}</code></pre>
+    <p>The body is stored as raw text. The opening <code>{</code> must be on the same line as <code>prefab</code>. The closing <code>}</code> can be on any subsequent line. <code>prefabrication</code> is accepted as an alias.</p>
+
+    <h3>Using a Prefab</h3>
+    <pre><code>use siding label "junction1"</code></pre>
+    <p>Each <code>[key]</code> placeholder in the body is replaced with the corresponding value. The expanded text is then parsed as normal DSL.</p>
+    <p>The above expands to: <code>$junction1: ph ; str x 3 ; bump</code></p>
+
+    <h3>Key Points</h3>
+    <ul>
+      <li><code>[key]</code> placeholders can appear anywhere &mdash; in label names, piece codes, or parameter values</li>
+      <li>Values containing spaces must be quoted: <code>"my value"</code></li>
+      <li>Prefab bodies cannot contain other <code>prefab</code> definitions (but can contain <code>use</code>)</li>
+      <li>Duplicate prefab names are not allowed</li>
+    </ul>
+
+    <h3>Example</h3>
+    <pre><code>prefab spur { str x [count] ; bump }
+
+gen ; str x 3
+use spur count 5           # Expands to: str x 5 ; bump</code></pre>
   </div>
 
   <div class="section">
@@ -302,6 +378,7 @@ crvl x 16               # Full circle of curves
       <li><strong>Straight + Curve</strong> or <strong>Curve + Straight</strong> - for most gaps</li>
       <li><strong>Straight-only</strong> - when endpoints are collinear (same direction, aligned path)</li>
       <li><strong>Curve-only</strong> - when the straight portion would be very short (&lt;0.5")</li>
+      <li><strong>Double-Curve (S-curve)</strong> - when endpoints are on parallel tracks with a lateral offset (e.g., crossovers between parallel tracks)</li>
     </ul>
 
     <h3>Auto-Generated Labels</h3>
@@ -309,9 +386,11 @@ crvl x 16               # Full circle of curves
     <ul>
       <li><code>{label1}_{label2}_str</code> - The straight piece (if created)</li>
       <li><code>{label1}_{label2}_crv</code> - The curve piece (if created)</li>
+      <li><code>{label1}_{label2}_crv1</code> - First curve (S-curve only)</li>
+      <li><code>{label1}_{label2}_crv2</code> - Second curve (S-curve only)</li>
     </ul>
     <p>For example, <code>flex connect $f1.out $f2.in</code> creates <code>$f1_f2_str</code> and <code>$f1_f2_crv</code>.</p>
-    <p><strong>Note:</strong> In edge cases, only one piece may be created (straight-only or curve-only).</p>
+    <p><strong>Note:</strong> In edge cases, the number of pieces varies: straight-only, curve-only, or double-curve (S-curve for parallel tracks).</p>
 
     <h3>Example</h3>
     <pre><code># Almost-complete loop
@@ -394,6 +473,8 @@ cross connect $one $two</code></pre>
       <tr><td>Red circle</td><td>Bin (train sink)</td></tr>
       <tr><td>Green dot in circle</td><td>Semaphore - unlocked (click to lock)</td></tr>
       <tr><td>Red dot in circle</td><td>Semaphore - locked (click to unlock)</td></tr>
+      <tr><td>Orange triangles</td><td>Decoupler - inactive (click to split stopped train)</td></tr>
+      <tr><td>Red triangles</td><td>Decoupler - activated (briefly flashes)</td></tr>
       <tr><td>Green dot (small)</td><td>Selected route at virtual switch</td></tr>
       <tr><td>Red dot (small)</td><td>Unselected route at virtual switch (click to select)</td></tr>
       <tr><td>White sphere (small)</td><td>Connection point - unlocked (only visible when Labels is on)</td></tr>
@@ -405,6 +486,15 @@ cross connect $one $two</code></pre>
     <h3>Switch Interaction</h3>
     <p>At virtual switches (where multiple tracks connect to one point), click any route indicator to select that route. Trains will follow the selected route (green indicator).</p>
     <p><strong>Note:</strong> When a train is crossing a switch, the entire train will follow the route taken by the first car, even if you change the switch while the train is crossing.</p>
+
+    <h3>Same-Polarity Connections</h3>
+    <p>The loop close operator (<code>&gt;</code>) can create same-polarity connections (out↔out or in↔in) when the target point has the same type as the current output. Trains crossing these junctions automatically reverse their spline traversal direction while maintaining their physical heading. This is analogous to polarity reversal in real model train layouts.</p>
+    <pre><code>gen2: crvl              # Part of main loop
+
+new
+generator colorful
+str * 3
+&gt; $gen2.out             # out↔out connection</code></pre>
   </div>
 
   <div class="section">
@@ -418,6 +508,7 @@ cross connect $one $two</code></pre>
       <tr><td><code>gen</code></td><td><code>in</code>, <code>out</code></td><td><code>in</code></td><td><code>out</code></td></tr>
       <tr><td><code>bin</code></td><td><code>in</code>, <code>out</code></td><td><code>in</code></td><td><code>out</code></td></tr>
       <tr><td><code>sem</code></td><td><code>in</code>, <code>out</code></td><td><code>in</code></td><td><code>out</code></td></tr>
+      <tr><td><code>dec</code></td><td><code>in</code>, <code>out</code></td><td><code>in</code></td><td><code>out</code></td></tr>
     </table>
   </div>
 
@@ -455,8 +546,43 @@ str x 4
       <tr><td><strong>Import Layout</strong></td><td>Open a layout file (.txt or .layout)</td></tr>
       <tr><td><strong>Random</strong></td><td>Toggle random switch mode (trains choose routes randomly)</td></tr>
       <tr><td><strong>Labels</strong></td><td>Toggle track labels AND connection point indicators (white=unlocked, red=locked)</td></tr>
+      <tr><td><strong>Capture</strong></td><td>Save the current viewport as a PNG screenshot</td></tr>
     </table>
     <p>Active buttons are highlighted. You can also paste layout text directly into the window.</p>
+  </div>
+
+  <div class="section">
+    <h2>Train Inspector</h2>
+    <p>Double-click a train to open an inspector widget at the bottom of the window. The widget shows live train properties and provides controls:</p>
+    <table>
+      <tr><th>Control</th><th>Function</th></tr>
+      <tr><td><strong>Target Speed slider</strong></td><td>Set the train's desired speed (0&ndash;48 inches/sec). Use the &minus;/+ buttons for fine adjustment.</td></tr>
+      <tr><td><strong>&hArr;</strong></td><td>Reverse the train's direction (only when stopped)</td></tr>
+      <tr><td><strong>Stop / Resume</strong></td><td>Stop the train (saves speed); Resume restores saved speed</td></tr>
+      <tr><td><strong>Couple</strong></td><td>Enter coupling mode (only when stopped) &mdash; train moves slowly to merge with another stopped train</td></tr>
+      <tr><td><strong>Next Switch</strong></td><td>Shows the upcoming virtual switch with Left/Right/Center buttons. Click to pre-select a route; click again to deselect. Selecting a route also updates the 3D switch indicators (green/red dots) to match. Shows &ldquo;None&rdquo; when no switch is ahead.</td></tr>
+      <tr><td><strong>Lock / Unlock</strong></td><td>Lock the widget so it persists when you double-click another train</td></tr>
+      <tr><td><strong>&times;</strong></td><td>Close the widget</td></tr>
+    </table>
+    <p><strong>Widget behavior:</strong> Widgets start locked (persist across double-clicks). Unlock a widget to have it replaced when you double-click a different train. Multiple locked widgets can stack.</p>
+    <p><strong>Auto-removal:</strong> A widget is automatically removed when its train is destroyed (e.g., enters a bin).</p>
+  </div>
+
+  <div class="section">
+    <h2>Generator Inspector</h2>
+    <p>Double-click a generator piece to open an inspector widget at the bottom of the window. The widget shows generator parameters and provides controls:</p>
+    <table>
+      <tr><th>Control</th><th>Function</th></tr>
+      <tr><td><strong>Enabled / Disabled</strong></td><td>Toggle the generator on or off</td></tr>
+      <tr><td><strong>Color Mode</strong></td><td>Cycle through gray &rarr; colorful &rarr; black</td></tr>
+      <tr><td><strong>Cabs slider</strong></td><td>Set number of cabs per train (1&ndash;10)</td></tr>
+      <tr><td><strong>Cars slider</strong></td><td>Set number of cars per train (0&ndash;20)</td></tr>
+      <tr><td><strong>Speed slider</strong></td><td>Set train speed in inches/sec (1&ndash;48)</td></tr>
+      <tr><td><strong>Every slider</strong></td><td>Set spawn interval in seconds (1&ndash;300)</td></tr>
+      <tr><td><strong>Lock / Unlock</strong></td><td>Lock the widget so it persists when you double-click another object</td></tr>
+      <tr><td><strong>&times;</strong></td><td>Close the widget</td></tr>
+    </table>
+    <p><strong>Spawn behavior:</strong> Trains are spawned inside the generator section. If the exit track is blocked, the train waits at speed 0 until the exit clears. If the generator section is still occupied by a previous train, spawning is deferred. Changes to parameters take effect on the next spawned train.</p>
   </div>
 
 </body>

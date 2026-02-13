@@ -1,0 +1,20 @@
+title Example: Flex Connect
+description Using FLEX CONNECT to fill a non-standard gap between two tracks
+
+after: str
+str
+crvl * 4
+
+str * 2
+
+crvl * 4
+
+str * 2
+
+crvl * 5
+
+str * 2
+before: str
+
+# Use flex connect to bridge the gap with custom curve+straight pieces
+flex connect $before.out $after.in

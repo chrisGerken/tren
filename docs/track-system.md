@@ -135,8 +135,10 @@ The starter collection is based on standard HO model railroad track pieces, excl
 | `gen` | Generator | 1 (invisible) | `out` | 0 |
 | `bin` | Bin | 0 | `in` | 0 |
 | `tun` | Tunnel | 0 | `in`, `out` | 0 |
+| `sem` | Semaphore | 0 | `in`, `out` | 0 |
+| `dec` | Decoupler | 0 | `in`, `out` | 0 |
 
-**Default aliases**: `str`→`str9`, `crv`→`crvl22`, `crvl`→`crvl22`, `crvr`→`crvr22`, `placeholder`→`ph`, `tunnel`→`tun`
+**Default aliases**: `str`→`str9`, `crv`→`crvl22`, `crvl`→`crvl22`, `crvr`→`crvr22`, `placeholder`→`ph`, `tunnel`→`tun`, `semaphore`→`sem`, `decoupler`→`dec`
 
 See [Track Dimensions](track-dimensions.md) for complete spline point data.
 
@@ -338,6 +340,52 @@ tun               # Exit hidden section
 ```
 
 The curved passing track is hidden while the main straight track remains visible.
+
+#### Semaphore (`sem`)
+
+- **Code**: `sem` (alias: `semaphore`)
+- **Sections**: 0 (zero-length)
+- **Connection Points**: `in`, `out` (same position, opposite directions)
+- **Collision Points**: None
+- **Visual**: Colored dot (green/red) inside a circle outline
+
+A semaphore is a zero-length piece that provides manual lock control. Click to toggle between locked (red, trains stop) and unlocked (green, trains pass).
+
+See [Trains - Semaphore Blocking](trains.md#semaphore-blocking) for behavior details.
+
+#### Decoupler (`dec`)
+
+- **Code**: `dec` (alias: `decoupler`)
+- **Sections**: 0 (zero-length)
+- **Connection Points**: `in`, `out` (same position, opposite directions)
+- **Collision Points**: None
+- **Visual**: Two small triangles, one on each side of the track, pointing toward the decoupler position. Orange when inactive, red when activated.
+
+A decoupler is a zero-length piece that splits a stopped train into two trains at the decoupler's position. The split occurs at the coupler between consecutive cars that is closest to the decoupler.
+
+**Behavior:**
+- Only works on stopped trains
+- Click one of the triangles to activate
+- The coupler between consecutive cars nearest to the decoupler (within 2" tolerance) is split
+- Both resulting trains are stopped
+- The decoupler flashes red for 1 second, then returns to orange
+- When the front portion is set in motion, it pulls away; the rear portion stays stopped until coupled with another train
+
+**Use Cases:**
+- Splitting trains for shunting operations
+- Dropping off cars at sidings
+- Creating separate train sections from a single consist
+
+Example:
+```
+gen cabs 1 cars 5
+str x 5
+dec                 # Decoupler in the middle
+str x 5
+bump
+```
+
+See [Trains - Decoupling](trains.md#decoupling) for detailed behavior.
 
 ## Spline Implementation
 

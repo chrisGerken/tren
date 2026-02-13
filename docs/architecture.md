@@ -17,7 +17,7 @@ Layout
 The root container for the entire simulation.
 
 **Properties**:
-- `title`: Display name for the layout (default: "Simulador de Tren")
+- `title`: Display name for the layout (default: "No Title")
 - `description`: Optional longer description of the layout
 - `minGap`: Minimum following distance between trains in inches (default: 1 inch)
 - `pieces`: Array of all track pieces in the layout
@@ -137,6 +137,12 @@ When a train approaches a branch point, the system must determine which route to
 - Automatic routing based on destination
 - Signal-based routing
 
+All connections at a switch point are treated as a single group regardless of their entry point direction (in/out). The route key includes a direction component (`fwd` for 'out' exits, `bwd` for 'in' exits) using a canonical junction ID shared by all inbound tracks at the junction.
+
+### Same-Polarity Junctions
+
+Connections with the same polarity (out↔out or in↔in) arise from explicit loop close (`>`) syntax. Each car maintains a `sectionDirection` field (`1` or `-1`) that toggles when crossing these junctions. This reverses the spline traversal direction while preserving the car's physical heading (rotation is flipped by π when `sectionDirection = -1`).
+
 ## Auto-Connect
 
 After a layout is fully specified, auto-connect scans all connection points on all track pieces and automatically joins any two that meet the connection criteria.
@@ -232,3 +238,17 @@ The `Simulation` class (`src/core/simulation.ts`) uses the LockManager:
 4. **On switch click:**
    - Check `isJunctionLocked()` before allowing change
    - Reject with status message if locked
+
+5. **Next switch detection (`findNextSwitch()`):**
+   - Walks ahead from a train's lead car through the track piece graph
+   - Returns info about the first virtual switch encountered (route key, spatially-labeled options, current override)
+   - Used by the train inspector widget to show a switch selector UI
+   - `setTrainSwitchOverride()` / `clearTrainSwitchOverride()` pre-set routes in `train.routesTaken`
+   - Inspector fires `onSwitchRouteChanged` callback on select to sync 3D switch indicator colors
+
+6. **Generator inspector (`GeneratorInspectorWidget`):**
+   - Double-click a generator mesh to open a widget controlling spawn parameters
+   - Sliders for cabs, cars, speed, frequency; buttons for color mode and enable/disable
+   - Writes directly to the `TrackPiece.genConfig` object (shared reference with the simulation)
+   - Frequency changes take effect immediately: `checkSpawning()` reads plain number values directly each tick
+   - `clearResolvedFrequency()` invalidates cached values for RangeValue frequency support

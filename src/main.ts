@@ -3,11 +3,9 @@
  */
 
 import { open, save } from '@tauri-apps/api/dialog';
-import { readTextFile, writeTextFile } from '@tauri-apps/api/fs';
+import { readTextFile, writeTextFile, writeBinaryFile } from '@tauri-apps/api/fs';
 
 // Import bundled layouts dynamically using Vite's import.meta.glob
-import manifestJson from './layouts/manifest.json';
-
 const layoutModules = import.meta.glob('./layouts/*.txt', { eager: true, query: '?raw', import: 'default' });
 
 // Map of layout filenames to their imported content
@@ -17,12 +15,15 @@ for (const [path, content] of Object.entries(layoutModules)) {
   bundledLayouts[filename] = content as string;
 }
 import { TrackScene } from './renderer/scene';
-import { renderLayout, setSelectedRouteByKey, getSelectedRoutes, updateConnectionPointColors, updateSemaphoreColor } from './renderer/track-renderer';
+import { renderLayout, setSelectedRouteByKey, getSelectedRoutes, updateConnectionPointColors, updateSemaphoreColor, updateDecouplerColor } from './renderer/track-renderer';
 import { renderTrains } from './renderer/train-renderer';
 import { buildLayout } from './parser/builder';
 import { Simulation } from './core/simulation';
 import { Layout } from './core/types';
 import { setLogLevel, LogLevel, logger } from './core/logger';
+import { InspectorManager } from './inspector/inspector-manager';
+import { TrainInspectorWidget } from './inspector/train-inspector';
+import { GeneratorInspectorWidget } from './inspector/generator-inspector';
 import './style.css';
 
 // Initialize scene
@@ -32,6 +33,7 @@ if (!container) {
 }
 
 const scene = new TrackScene(container);
+const inspectorManager = new InspectorManager();
 const statusEl = document.getElementById('status');
 
 // Track current layout for re-rendering after switch clicks
@@ -85,6 +87,65 @@ scene.setSemaphoreClickCallback((pieceId) => {
   scene.render();
 });
 
+// Set up decoupler click callback
+scene.setDecouplerClickCallback((pieceId) => {
+  logger.debug(`Decoupler click callback: ${pieceId}`);
+
+  if (!currentLayout || !simulation) return;
+
+  // Find the decoupler piece
+  const piece = currentLayout.pieces.find(p => p.id === pieceId);
+  if (!piece || !piece.decouplerConfig) {
+    logger.debug(`Decoupler piece ${pieceId} not found or has no config`);
+    return;
+  }
+
+  // Activate the decoupler
+  const newTrainId = simulation.activateDecoupler(pieceId);
+
+  if (newTrainId) {
+    // Flash the decoupler red for 1 second
+    piece.decouplerConfig.activated = true;
+    updateDecouplerColor(pieceId, true);
+    setStatus(`Decoupler ${pieceId}: ACTIVATED - train split`);
+
+    setTimeout(() => {
+      piece.decouplerConfig!.activated = false;
+      updateDecouplerColor(pieceId, false);
+      scene.render();
+    }, 1000);
+  } else {
+    setStatus(`Decoupler ${pieceId}: no train to split`);
+  }
+
+  scene.render();
+});
+
+// Set up train double-click callback for inspector
+scene.setTrainDblClickCallback((trainId) => {
+  if (!simulation) return;
+  if (inspectorManager.hasWidgetForTarget(trainId)) return;
+
+  const widget = new TrainInspectorWidget(trainId, simulation);
+  widget.onSwitchRouteChanged = (routeKey, connectionIndex) => {
+    setSelectedRouteByKey(routeKey, connectionIndex);
+    if (currentLayout) {
+      renderLayout(scene, currentLayout);
+    }
+  };
+  inspectorManager.addWidget(widget);
+});
+
+// Set up generator double-click callback for inspector
+scene.setGeneratorDblClickCallback((pieceId) => {
+  if (!currentLayout || !simulation) return;
+  if (inspectorManager.hasWidgetForTarget(pieceId)) return;
+  const piece = currentLayout.pieces.find(p => p.id === pieceId);
+  if (!piece?.genConfig) return;
+  const widget = new GeneratorInspectorWidget(piece, simulation);
+  inspectorManager.addWidget(widget);
+});
+
 function setStatus(message: string): void {
   if (statusEl) {
     statusEl.textContent = message;
@@ -113,6 +174,9 @@ function startSimulation(layout: Layout): void {
     simulation.stop();
   }
 
+  // Clear inspector widgets from previous layout
+  inspectorManager.clear();
+
   // Create new simulation
   simulation = new Simulation(layout, getSelectedRoutes(), () => {
     // Update callback - render trains and update connection point colors
@@ -121,6 +185,8 @@ function startSimulation(layout: Layout): void {
       scene.updateTrains(trainGroup);
       // Update connection point colors based on lock state (only visible when Labels are on)
       updateConnectionPointColors(simulation.getLockedPoints(), scene.getLabelsVisible());
+      // Update inspector widgets with live values
+      inspectorManager.update();
       scene.render();
     }
   });
@@ -261,6 +327,44 @@ if (labelsBtn) {
   // Labels are hidden by default
 }
 
+// Set up capture screenshot button
+const captureBtn = document.getElementById('capture-btn');
+if (captureBtn) {
+  captureBtn.addEventListener('click', async () => {
+    try {
+      // Render current frame to ensure canvas has content
+      scene.renderer.render(scene.scene, scene.camera);
+
+      // Get canvas data as PNG
+      const dataUrl = scene.renderer.domElement.toDataURL('image/png');
+      const base64 = dataUrl.split(',')[1];
+      const binaryStr = atob(base64);
+      const bytes = new Uint8Array(binaryStr.length);
+      for (let i = 0; i < binaryStr.length; i++) {
+        bytes[i] = binaryStr.charCodeAt(i);
+      }
+
+      // Open save dialog
+      const savePath = await save({
+        filters: [{ name: 'PNG Image', extensions: ['png'] }],
+        defaultPath: 'tren-capture.png',
+      });
+
+      if (!savePath) {
+        setStatus('Capture cancelled');
+        return;
+      }
+
+      // Write the file
+      await writeBinaryFile(savePath, bytes);
+      setStatus(`Screenshot saved: ${savePath}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setStatus(`Capture error: ${message}`);
+    }
+  });
+}
+
 // Initial render
 scene.render();
 setStatus('Ready - click "Import Layout" to load a layout file');
@@ -319,10 +423,47 @@ let selectedLayoutFile: string | null = null;
 let loadedManifest: LayoutManifest | null = null;
 
 /**
- * Get the layouts manifest (bundled at build time)
+ * Extract title and description from raw layout DSL text without invoking the full parser.
+ */
+function extractLayoutMetadata(content: string, filename: string): { title: string; description: string } {
+  let title = 'No Title';
+  let description = filename;
+
+  for (const rawLine of content.split('\n')) {
+    // Strip comments
+    const line = rawLine.replace(/#.*$/, '').trim();
+    if (!line) continue;
+
+    const lower = line.toLowerCase();
+    if (lower.startsWith('title ')) {
+      title = line.substring(6).trim();
+    } else if (lower.startsWith('description ')) {
+      description = line.substring(12).trim();
+    }
+  }
+
+  return { title, description };
+}
+
+/**
+ * Build the layouts manifest dynamically from bundled layout files.
  */
 function getLayoutsManifest(): LayoutManifest {
-  return manifestJson as LayoutManifest;
+  const entries: LayoutManifestEntry[] = [];
+
+  for (const [filename, content] of Object.entries(bundledLayouts)) {
+    const meta = extractLayoutMetadata(content, filename);
+    entries.push({
+      file: filename,
+      title: meta.title,
+      description: meta.description,
+    });
+  }
+
+  // Sort alphabetically by title for consistent ordering
+  entries.sort((a, b) => a.title.localeCompare(b.title));
+
+  return { layouts: entries };
 }
 
 /**

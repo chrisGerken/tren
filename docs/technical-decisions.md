@@ -128,6 +128,25 @@ The UI presents both bundled and user layouts in a unified list, possibly with v
 
 Layout files use the [Layout DSL](layout-dsl.md) text format with a `.layout` extension. The parser validates the file on import, rejecting malformed layouts with an error message.
 
+## Dynamic Layout Manifest (Manifest Elimination)
+
+The bundled layout list was originally maintained in a `src/layouts/manifest.json` file that duplicated title, description, and filename information already present in the layout files themselves. This was error-prone (entries could fall out of sync with actual file contents) and required manual updates when adding new layouts.
+
+**Solution:** Eliminate `manifest.json` entirely. The layout list is now derived dynamically at runtime:
+
+1. **File discovery**: Vite's `import.meta.glob('./layouts/*.txt', ...)` already discovers all `.txt` files at build time and populates the `bundledLayouts` map — no separate file list needed.
+
+2. **Metadata extraction**: An `extractLayoutMetadata(content, filename)` function scans raw layout text line-by-line, matching `title` and `description` DSL statements (case-insensitive, comment-aware). This is a lightweight scanner, not the full parser — it doesn't need to understand track pieces or connections.
+
+3. **Defaults**: If no `title` statement is found, the default is `"No Title"`. If no `description` statement is found, the default is the layout filename (e.g., `"layout03.txt"`).
+
+4. **Sorting**: The manifest entries are sorted alphabetically by title for consistent display order in the dialog.
+
+**Design decisions:**
+- The `LayoutManifest` and `LayoutManifestEntry` interfaces remain unchanged — downstream consumers (dialog rendering, Run/Save buttons) required no changes
+- The metadata scanner is intentionally separate from the full parser to avoid circular dependencies and to keep dialog loading fast
+- New layout files added to `src/layouts/` are automatically discovered without any configuration changes
+
 ## User Interaction
 
 ### Input Methods
@@ -184,7 +203,7 @@ description A simple oval with passing siding.
 ```
 
 **Design decisions:**
-- Title defaults to "Simulador de Tren" if not specified
+- Title defaults to "No Title" if not specified; description defaults to the layout filename
 - Only one title statement allowed per layout (error if duplicate)
 - Multiple description statements are concatenated with spaces
 - Metadata is stored in the `Layout` interface and available for UI display
@@ -279,17 +298,16 @@ Virtual switches (connection points with multiple connections) are visually indi
 - `allPairsSeparated()` checks if all indicator pairs meet separation threshold
 - `getPositionAtDistance()` computes world position along track spline
 - `selectedRoutes` Map tracks which route is selected at each switch point
-- Key format: `${pieceId}.${pointName}`, value: selected connection index
+- Key format: `junction.${canonicalJunctionId}.${direction}`, value: selected connection index
+- Canonical junction ID: lexicographically first `pieceId.pointName` among all connections at the junction, ensuring all inbound tracks share the same switch state
+- Direction: `fwd` for 'out' points, `bwd` for 'in' points — determines which route key trains use based on exit point
 
 **Click interaction:**
 - Click any switch indicator (red or green) to select that route
 - `TrackScene` uses raycasting to detect clicks on indicator meshes
-- Each indicator mesh stores `userData` with `pieceId`, `pointName`, `connectionIndex`
+- Each indicator mesh stores `userData` with `routeKey` and `connectionIndex`
 - Click callback updates `selectedRoutes` and triggers re-render
 - Status bar shows which switch was toggled
-
-**Future work:**
-- Integration with train routing logic
 
 ## Centralized Logger
 
@@ -596,9 +614,9 @@ let outlineMaterial: THREE.LineBasicMaterial | null = null;
 The `flex connect` statement creates custom track pieces to bridge gaps between two labeled connection points.
 
 **Design decisions:**
-- Creates one curve and one straight piece (or just one for edge cases)
-- Uses geometric solver to find optimal curve+straight or straight+curve combination
-- Auto-generates labels: `{label1}_{label2}_str` and `{label1}_{label2}_crv`
+- Creates one curve and one straight piece, two curves (S-curve), or just one piece for edge cases
+- Uses geometric solver to find optimal combination
+- Auto-generates labels: `{label1}_{label2}_str` and `{label1}_{label2}_crv` (or `_crv1`/`_crv2` for S-curves)
 - Processed after all regular pieces are placed, before auto-connect
 
 **Geometric solver algorithm:**
@@ -610,8 +628,20 @@ The `flex connect` statement creates custom track pieces to bridge gaps between 
 3. For normal cases, solve linear system using Cramer's rule:
    - Straight+Curve: `L * D1 + R * (perp1 - perp2) = delta`
    - Curve+Straight: `L * D2 + R * (perp1 - perp2) = delta`
-4. Select solution with largest radius (smoothest curve)
-5. Reject solutions with arc angle > 270° or radius < 5 inches
+4. For parallel tracks with lateral offset (D1 ≈ D2 but not collinear), use S-curve solver (curve+curve)
+5. Select solution with largest radius (smoothest curve)
+6. Reject solutions with arc angle > 270° or radius < 5 inches
+
+**Double-curve (S-curve) solver:**
+- Triggers when D1 ≈ D2 (parallel tracks) with a lateral offset — exactly the case where straight+curve and curve+straight fail because perpRight(D1) ≈ perpRight(D2) makes the determinant near zero
+- Creates two symmetric curves of equal radius forming an S-curve crossover
+- Geometry: project delta onto D1 (forward distance `f`) and perpRight(D1) (lateral distance `h`):
+  - Arc angle: `θ = 2 * atan(|h| / f)`
+  - Radius: `R = f / (2 * sin(θ))`
+- First curve goes toward the other track (right if h > 0, left if h < 0)
+- Second curve goes opposite direction to re-align with original heading
+- Labels: `{label1}_{label2}_crv1` and `{label1}_{label2}_crv2`
+- Typical use case: crossovers between parallel tracks (passing sidings, double-track mainlines)
 
 **Arc angle calculation fix:**
 - Original bug: When solver chose "right" curve but geometric angle was positive, arc was forced to go 360° - θ instead of θ
@@ -992,6 +1022,397 @@ All DSL keywords, archetype names, connection point names, and custom archetype 
 1. **Lexer (`src/parser/lexer.ts`):** All keyword comparisons use `lowerValue = value.toLowerCase()` while preserving original casing in the token value for labels and identifiers
 2. **Parser (`src/parser/parser.ts`):** Archetype codes and connection point names are lowercased when extracted from tokens
 3. **Archetypes (`src/core/archetypes.ts`):** `getArchetype()`, `registerRuntimeArchetype()`, and `isValidArchetype()` normalize input keys to lowercase
+
+## Deceleration to Stop
+
+When a train's `desiredSpeed` is lowered (or set to 0), it decelerates smoothly at 12 inches/sec² (normal braking) rather than using emergency braking.
+
+**Design decisions:**
+- Three-tier speed adjustment in `updateTrains()`:
+  1. Lock failure → emergency braking (24 in/s²) — unchanged
+  2. `currentSpeed > desiredSpeed` → normal braking (12 in/s²) — **new**
+  3. `currentSpeed < desiredSpeed` → acceleration (6 in/s²) — unchanged
+- Normal braking rate (12) is between acceleration (6) and emergency braking (24)
+- Trains decelerate smoothly using `Math.max(desiredSpeed, currentSpeed - NORMAL_BRAKING * dt)`
+
+## Flexible Train Composition
+
+Trains support any combination of cabs and cars in any order, with direction-aware lead/tail car access.
+
+**Design decisions:**
+- `Train.travelDirection: 'forward' | 'backward'` determines which end is the lead
+- `Car.facingForward: boolean` records original orientation (for future rendering)
+- Helper functions in `src/core/train-helpers.ts` abstract direction-aware access:
+  - `getLeadCar(train)` / `getTailCar(train)` — return car references
+  - `getLeadCarIndex(train)` / `getTailCarIndex(train)` — return indices
+- `lock-manager.ts` uses `getLeadCar(train)` instead of `train.cars[0]`
+- `simulation.ts` uses `getTailCarIndex(train)` for route memory clearing
+
+**Why helper functions instead of methods:**
+- Train is a plain interface, not a class
+- Functions are easily testable and importable
+- Consistent with the existing functional style of `train-movement.ts`
+
+## Reverse Movement
+
+Trains can reverse direction when stopped, enabling back-and-forth operations.
+
+**Design decisions:**
+- Reversal only allowed at `currentSpeed === 0` (safety constraint)
+- `reverseTrain(trainId)` flips `travelDirection`, releases all locks, re-acquires for new direction
+- Movement distance is signed: `distance = travelDirection === 'forward' ? raw : -raw`
+- Negative distance triggers underflow handling in `moveCar()`, which already handles backward section transitions
+- Lock manager uses `train.travelDirection` instead of inferring from `leadCar.entryPoint`
+
+**Why not negative speed:**
+- Speed is always non-negative (magnitude)
+- Direction is a separate property on the train
+- Cleaner separation of concerns; `currentSpeed` always means "how fast" not "which way"
+
+## Coupling
+
+Trains can merge with stopped trains to form longer consists.
+
+**Design decisions:**
+- Coupling mode is a boolean flag on the train, not a separate state machine
+- `couplingSpeed` is configurable per train (default 3 in/s)
+- In coupling mode, trains ignore lock failures but still acquire/release locks normally
+- Contact detection checks if lead car is on same piece as any car of a stopped train, within `CAR_GAP` tolerance
+- Car arrays are merged: prepend or append depending on travel direction and contact point
+- Combined train stops immediately and exits coupling mode
+- Locks are released from the absorbed train and re-acquired for the combined train
+
+**Why ignore lock failures during coupling:**
+- The whole point of coupling is to approach another train, which will have locks on the track ahead
+- Without ignoring locks, the coupling train would stop short of the target
+- Lock acquisition still happens for connection points the coupling train passes over
+
+**Stop cancels coupling mode:**
+- Pressing Stop in the inspector while a train is coupling sets `coupling = false` and `currentSpeed = 0`
+- This is necessary because coupling mode bypasses normal speed control (ignores `desiredSpeed`, uses `couplingSpeed` directly)
+- Simply setting `desiredSpeed = 0` would not stop a coupling train
+
+**Merged car movement fix:**
+- After merging, all cars in the combined train must have `previousPieceId` cleared to `undefined`
+- The `getNextSection()` function uses `previousPieceId` to filter out the piece a car just left (preventing backward routing)
+- Without clearing, absorbed cars retain stale `previousPieceId` values from their original forward travel direction
+- When the merged train moves (especially backward), the stale filter blocks correct section transitions, causing cars to appear stuck or move erratically
+- `routesTaken` is also cleared since the absorbed train's route memory is irrelevant to the combined train
+- This follows the same pattern used in `reverseTrain()`, which also clears `previousPieceId` and `routesTaken`
+
+## Decoupler Archetype
+
+A zero-length track piece that splits stopped trains, following the same pattern as semaphore.
+
+**Design decisions:**
+- Zero-length piece like `sem`, `ph`, `tun` — consistent archetype design
+- Two triangle indicators (one per side) for easy click target
+- Orange = inactive, red = activated (brief 1-second flash)
+- Activation finds a stopped train whose coupler gap is within 2" of the decoupler's world position
+- Split creates two stopped trains: front portion keeps original train ID, rear becomes new train
+- Both trains get `desiredSpeed: 0` after split
+- Locks are released and re-acquired for both trains independently
+
+**Why world-position distance check instead of piece-based:**
+- Decoupler is zero-length, so the coupler may be on an adjacent piece
+- World position comparison is more robust for zero-length pieces
+- 2" tolerance accounts for car gaps and position rounding
+
+**Rendering:**
+- Uses `THREE.ShapeGeometry` for triangles (flat, laid on ground plane)
+- Each triangle stores `userData: { isDecoupler: true, pieceId }` for click detection
+- `decouplerMeshes` map enables dynamic color updates
+- `updateDecouplerColor()` exported for activation flash
+
+## Inspector Widget System
+
+An HTML/CSS overlay system at the bottom of the simulation window for inspecting and controlling simulation objects. Double-clicking an object opens a one-line-tall widget with live-updating properties.
+
+**Architecture: HTML/CSS Overlay (not Three.js)**
+- Widgets need native form controls (sliders, buttons, toggles) that are impractical in Three.js
+- Inspector container is `position: fixed` at bottom, z-index 50 (below toolbar at 100, below dialogs at 200)
+- Container uses `pointer-events: none` so empty areas pass clicks to the canvas
+- Individual widgets use `pointer-events: auto` to capture interaction
+
+**Widget stacking rules:**
+1. Double-click object → new unlocked widget appears at bottom
+2. Double-click another object with unlocked widget → unlocked widget replaced
+3. Lock a widget → persists; next double-click adds new widget above it
+4. Multiple locked widgets can coexist (stack upward)
+5. X button removes any widget (locked or unlocked)
+
+**Implementation:**
+
+1. **Abstract base (`src/inspector/inspector-widget.ts`):**
+   - `InspectorWidget` abstract class with `element`, `locked`, `contentEl`
+   - Lock button toggles padlock icon, close button (red X) removes widget
+   - `onRemove` callback for notifying the manager
+   - Abstract methods: `targetId`, `typeLabel`, `buildContent()`, `update()`, `dispose()`
+
+2. **Train inspector (`src/inspector/train-inspector.ts`):**
+   - `TrainInspectorWidget extends InspectorWidget`
+   - Fields: train ID, cab/car counts, current speed, desired speed slider (0-48), direction toggle, stop/resume
+   - Slider `input` event sets `train.desiredSpeed` directly
+   - Direction toggle calls `simulation.reverseTrain()` (only when stopped)
+   - Stop saves `desiredSpeed`, sets to 0; Resume restores saved speed
+   - `update()` refreshes all values each frame; skips slider while user is dragging
+   - Auto-removes when train no longer exists (entered bin)
+
+3. **Manager (`src/inspector/inspector-manager.ts`):**
+   - Holds `#inspector-container` DOM element and `widgets` array
+   - `addWidget()` removes all unlocked widgets, then appends new widget
+   - `update()` calls `widget.update()` on snapshot (safe for auto-removal during iteration)
+   - `clear()` removes all widgets (called on layout change)
+   - `hasWidgetForTarget()` prevents duplicate widgets for same object
+
+4. **Scene integration (`src/renderer/scene.ts`):**
+   - `TrainDblClickCallback` type and `setTrainDblClickCallback()` setter
+   - `onDblClick()` raycasts against `trainGroup.children` (recursive)
+   - Walks up object hierarchy to find Group with name starting `train_`
+
+5. **Main wiring (`src/main.ts`):**
+   - `InspectorManager` created after scene
+   - Train double-click callback creates `TrainInspectorWidget` and adds to manager
+   - `inspectorManager.update()` called in simulation update callback
+   - `inspectorManager.clear()` called at top of `startSimulation()`
+
+**Design decisions:**
+- HTML overlay chosen over Three.js geometry for native form control support
+- Slider range 0-48 covers practical speed range (default 12, max reasonable ~48 in/s)
+- Auto-removal on train destruction prevents stale widgets
+- Slider drag detection uses `mousedown`/`mouseup` events to avoid fighting with live updates
+- Widget height fixed at 36px for consistent single-line appearance
+- Widgets default to locked state (padlock icon shows locked on creation)
+
+**DOM mutation and click event suppression:**
+- The `update()` method runs every animation frame (~60fps) to refresh live values
+- Setting `element.textContent` every frame replaces the DOM text node, even if the value is unchanged
+- When textContent replacement occurs between `mousedown` and `mouseup`, the browser suppresses the `click` event because the original text node (the mousedown target) no longer exists
+- **Fix:** Only mutate `textContent` and `disabled` properties when the value has actually changed:
+  ```typescript
+  const newText = train.coupling ? 'Coupling...' : 'Couple';
+  if (this.coupleBtn.textContent !== newText) {
+    this.coupleBtn.textContent = newText;
+  }
+  ```
+- This pattern must be applied to ALL button properties updated in `update()` that the user might click
+- The slider already avoided this issue because it skips updates during active drag (via `sliderActive` flag)
+
+**Change Direction preserving stop/resume state:**
+- Clicking Change Direction does NOT reset the stop/resume state
+- If the train was stopped (Resume button showing), it stays stopped after direction change
+- The saved speed is preserved so Resume restores the correct speed
+- Previously, Change Direction unconditionally reset `isStopped`, `savedSpeed`, and the stop button label, which caused the Resume button to incorrectly revert to "Stop"
+
+**Next Switch Selector (in train inspector):**
+- Shows the next virtual switch the train will encounter as a radio-button-like group
+- Buttons are labeled spatially: Left/Right for 2-way, Left/Center/Right for 3-way
+- Spatial ordering uses 2D cross product of forward direction vs entry direction at the switch
+- Clicking a button pre-sets the route in `train.routesTaken` via `setTrainSwitchOverride()`
+- Since `getNextSection()` checks `routesTaken` first, the override is automatically used when the lead car reaches the switch; all subsequent cars follow the same route
+- Clicking the already-selected button clears the override, restoring normal switch logic (random or selectedRoutes)
+- The tail car naturally clears the entry from `routesTaken` after passing, so the override is consumed once
+- Walk-ahead algorithm mirrors `acquireLeadingLocks()`: starts from lead car, follows track graph, handles crossings (x90/x45) by staying on same track number, limited to 50 pieces
+- DOM is only rebuilt when the switch changes (different routeKey), not every frame, to avoid the textContent click-suppression issue
+- When a route button is selected (not deselected), an `onSwitchRouteChanged` callback notifies main.ts to update the 3D switch indicators via `setSelectedRouteByKey()` + `renderLayout()`, syncing the green/red dots with the inspector's selection. Deselect does not fire the callback since it only clears the train's override without changing the global switch position.
+
+**Extensibility:**
+- New inspector types (switch, generator, etc.) extend `InspectorWidget`
+- Manager is type-agnostic — works with any widget subclass
+- `targetId` property enables duplicate prevention across widget types
+
+### Generator Inspector Widget
+
+Double-clicking a generator piece opens a `GeneratorInspectorWidget` at the bottom of the window, providing real-time control over generator parameters. Changes affect future train spawns immediately.
+
+**Detection:** Generator meshes in `track-renderer.ts` carry `userData = { isGenerator: true, pieceId }`. The `onDblClick` handler in `scene.ts` raycasts against the trackGroup after checking trains (trains take priority), looking for `userData.isGenerator`.
+
+**Layout (left to right):**
+1. Type label: "Generator" (green)
+2. Coordinates: `(x, z)` from the piece's world position
+3. Enable/Disable button: green "Enabled" / red "Disabled" toggle — writes `genConfig.enabled`
+4. Color button: cycles gray → colorful → black — writes `genConfig.colorMode`
+5. Cabs slider: 1–10 with +/- buttons — writes `genConfig.cabCount`
+6. Cars slider: 0–20 with +/- buttons — writes `genConfig.carCount`
+7. Speed slider: 1–48 with +/- buttons — writes `genConfig.speed`
+8. Every slider: 1–300 with +/- buttons — writes `genConfig.frequency`
+
+**Frequency cache invalidation:** The simulation caches resolved frequencies for range support. When `config.frequency` is a plain number (as set by the inspector), `checkSpawning()` reads it directly each tick, bypassing the cache entirely. This ensures slider changes take effect immediately.
+
+**Spawn-while-blocked:** `spawnTrain()` no longer aborts when lock acquisition fails. Trains are spawned inside the generator section and wait at speed 0 until the exit clears. A generator-occupied check prevents overlapping spawns: if any car from any train is still on the generator's piece, the spawn is deferred until the generator section is clear.
+
+**Design decisions:**
+- Widget holds a direct reference to the `TrackPiece` object (shared with the simulation), so mutations are immediately visible
+- Widget also holds a `Simulation` reference for `clearResolvedFrequency()` (kept for RangeValue cache clearing)
+- `update()` only syncs the enable button state (in case config is changed externally); no per-frame data like trains
+- `baseValue()` helper extracts the midpoint from a `RangeValue` for initial slider positioning
+- Follows the same constructor workaround as `TrainInspectorWidget`: `super()` calls `buildContent()` before fields are set, so a guard returns early and `buildContent()` is called again after field initialization
+
+## Same-Polarity Junction Handling
+
+When two track pieces connect with the same polarity (out↔out or in↔in), such as via `> $label.out` loop close, trains need to traverse the connected piece in reverse spline direction while maintaining their physical heading.
+
+**Problem:**
+- Auto-connect requires opposite directions, so same-polarity connections only arise from explicit loop close (`>`) statements
+- When a train exits piece A via `out` and the connection leads to piece B's `out`, the train enters B at the spline endpoint
+- Without correction, the car would either visually flip direction or fail to traverse the piece
+
+**Solution — `sectionDirection` field on Car:**
+- Each car has a `sectionDirection` field: `1` (normal, in→out) or `-1` (reversed, out→in)
+- In `moveCar()`, distance is multiplied by `sectionDirection`: `distanceAlongSection += distance * sectionDirection`
+- When `sectionDirection = -1`, positive velocity causes distance to decrease (traverse out→in)
+- The visual rotation adds π when reversed, so the car faces its actual travel direction
+
+**Polarity detection:**
+- `isSamePolarity(pointA, pointB)` checks if both points are 'out' type or both 'in' type
+- At each piece transition, if the exit point and entry point have the same polarity, `sectionDirection` is toggled (multiplied by -1)
+- Two consecutive same-polarity junctions cancel out, restoring normal direction
+
+**Switch route key alignment:**
+- The `travelDirection` parameter for switch selection is always based on the exit point ('out' = 'forward', 'in' = 'backward'), NOT on the train's physical direction or `sectionDirection`
+- This ensures the switch route key matches the renderer's indicator labels, which are also based on the connection point type
+- Without this alignment, reversed trains would look up a different route key than the one set by the UI, causing them to ignore switch settings
+
+**Design alternatives considered:**
+- **Pass-through approach**: Skip the same-polarity piece entirely via recursive `getNextSection()`. Rejected because it teleports the car past physical track, causing visual jumps.
+- **Zero-length reverser piece**: Insert a virtual direction-reversing piece at same-polarity junctions. Rejected as over-engineered; `sectionDirection` on Car is simpler.
+- **Entry point flipping**: Return `getOppositePoint()` as the entry when same polarity detected. Rejected because it places the car at the wrong spatial position.
+
+**Depth limit:**
+- No recursion needed; the `sectionDirection` toggle is applied at each transition naturally
+
+## Virtual Switch Connection Grouping Fix
+
+Previously, connections at a switch point were split into forward (entering via 'in') and backward (entering via 'out') groups. Each group was treated as a separate switch. This caused a bug where a junction with 1 forward + 1 backward connection (e.g., offramp.in with one main track and one sidetrack) detected no switch in either group.
+
+**Fix:** All valid connections at a point are treated as a single switch group regardless of entry point direction. The direction (fwd/bwd) only affects the route key, not the connection filtering. This correctly detects virtual switches at junction points where connections have mixed polarities.
+
+## Generator Spawn Timer Fix
+
+Previously, the generator's `lastSpawnTime` was always reset when the spawn interval elapsed, even if the spawn failed (due to `max trains` limit). This caused synchronized generators to starve — the first generator always won the race, and later generators never spawned.
+
+**Fix:** Only reset `lastSpawnTime` when `spawnTrain()` returns `true` (successful spawn). Failed spawns keep trying on subsequent frames until they succeed.
+
+## Screenshot Capture
+
+The toolbar includes a "Capture" button that saves the current viewport as a PNG image.
+
+**Implementation:**
+1. Click handler calls `renderer.render(scene, camera)` to ensure current frame is on the canvas
+2. `renderer.domElement.toDataURL('image/png')` extracts the canvas as a data URL
+3. Data URL is decoded to a `Uint8Array` via `atob()` and byte conversion
+4. Tauri's `save()` dialog lets the user choose the save location (`.png` filter)
+5. Tauri's `writeBinaryFile()` writes the binary PNG data to disk
+
+**Design decisions:**
+- `preserveDrawingBuffer: true` is set on the WebGL renderer to ensure `toDataURL()` always returns the rendered image, not a blank canvas. Without this, Three.js clears the drawing buffer after presenting, so `toDataURL()` may return an empty image depending on timing.
+- The explicit `renderer.render()` call before capture is a belt-and-suspenders approach — combined with `preserveDrawingBuffer`, the capture is reliable regardless of when the last animation frame rendered.
+- The capture only includes the WebGL canvas (track and trains), not HTML overlays (toolbar, inspector widgets, CSS2D labels). This is a limitation of `canvas.toDataURL()`.
+
+**Tauri allowlist:** The `fs.writeFile` permission in `tauri.conf.json` covers `writeBinaryFile()`. The `dialog.save` permission enables the save dialog. File scope covers `$HOME/**`, `$DOCUMENT/**`, `$DESKTOP/**`.
+
+## Inspector Widget UI Refinements
+
+Several usability improvements to the train inspector widget:
+
+**Removed "ID:" label prefix:**
+- The train ID field previously showed "ID: #3" — the "ID:" prefix was redundant since the train number is self-explanatory
+- Changed to empty-string label so only "#3" appears
+
+**Direction button icon:**
+- Replaced text "Change Direction" with Unicode ⇄ (`\u21C4`) character
+- Added `title="Change Direction"` attribute for tooltip on hover
+- Increased `.inspector-dir-btn` font-size from 12px to 16px for icon readability
+
+**Speed slider +/- buttons:**
+- Added `−` (Unicode minus `\u2212`) and `+` buttons flanking the slider
+- Each click adjusts `train.desiredSpeed` by 1, clamped to the 0–48 range
+- Reuses the same update pattern as the slider `input` event (updates train, slider, and displayed value)
+- Exits stop state if speed is increased above 0 (same behavior as dragging the slider)
+- Styled with `.inspector-speed-adj-btn` class: compact padding, 18px min-width
+
+**Decoupler click area enlargement:**
+- Triangle size increased from 0.8 to 1.13 (factor of √2), doubling the clickable area
+- The triangle mesh IS the raycasting click target, so enlarging the geometry directly improves click usability
+- No change to the offset distance or visual style beyond the size increase
+
+## Array Statement
+
+The `array` statement automates creation of multiple evenly-spaced starting points for parallel tracks (passing sidings, yards, double-track mainlines).
+
+**DSL syntax:**
+```
+array count 3 angle 90 distance 12 prefix siding_
+```
+
+**Design decisions:**
+- Places N labeled placeholders (`ph`) at regular intervals along a line
+- The first placeholder connects to the current track chain (via `placePiece`)
+- Additional placeholders are positioned geometrically but not connected to the chain
+- All placeholders share the same rotation as the first, so tracks built from them run in the same direction
+- The array line direction is `currentRotation + angle` (in degrees), allowing perpendicular or angled arrays
+- Builder state continues from the first placeholder, preserving normal chaining behavior
+- Users reference `$prefix_2.out`, `$prefix_3.out`, etc. to start tracks from additional placeholders
+- All four parameters (count, angle, distance, prefix) are required to avoid ambiguity
+
+**Implementation:**
+1. **Lexer:** Three new token types: `ARRAY`, `ANGLE`, `PREFIX` (reuses existing `COUNT` and `DISTANCE`)
+2. **Parser:** `ArrayStatement` interface with count, angle, distance, prefix fields. `parseArrayStatement()` consumes parameters in any order and validates all are present.
+3. **Builder:** `processArray()` places first placeholder via `placePiece()` (for chain integration), then creates additional `TrackPiece` objects at calculated positions. Each is labeled `{prefix}{N}` and registered in `labeledPieces`.
+
+**Why placeholders (not arbitrary pieces):**
+- Placeholders are zero-length junction points — they don't add physical track
+- Users build from each placeholder independently, choosing piece types and directions
+- This matches the existing virtual switch pattern where `ph` serves as a pure junction point
+
+## Prefab and Use (Reusable Templates)
+
+The `prefab` and `use` statements provide a text-level macro system for reusable layout fragments.
+
+**DSL syntax:**
+```
+prefab siding {
+  $[label]: ph
+  str x 3
+  bump
+}
+
+use siding label "junction1"
+# Expands to: $junction1: ph ; str x 3 ; bump
+```
+
+**Design decisions:**
+- **Text-level macro expansion** (not token-level or AST-level): Simpler, more flexible. `[key]` placeholders can appear anywhere — in label names (`$[label]`), piece codes, or parameter values. The body is stored as raw text until expansion time.
+- **`{` required on same line**: The opening brace must appear on the same line as the `prefab` keyword. This simplifies parsing — the lexer can detect prefab blocks during line processing and collect the body before normal tokenization. The closing `}` can be on any subsequent line.
+- **Comment-aware `}` matching**: When scanning for the closing brace, comments are stripped first (using the same `#` comment rule). A `}` inside a comment is ignored. The first `}` in non-comment text closes the block.
+- **No nesting**: PREFAB bodies cannot contain other PREFAB definitions. However, USE inside a PREFAB body is fine — it expands at USE time when the body is parsed.
+- **Duplicate name rejection**: Defining a prefab with a name that already exists throws an error at build time. This prevents silent overwriting.
+- **Expansion via `parse()`**: The USE handler performs string substitution (`[key]` → value using `String.split().join()`), then calls the existing `parse()` function to tokenize and parse the expanded text. The resulting statements are processed inline via `processStatement()`, reusing all existing builder logic.
+
+**Implementation:**
+
+1. **Lexer (`src/parser/lexer.ts`):**
+   - New token types: `PREFAB`, `USE`
+   - `tokenize()` detects `prefab`/`prefabrication` lines before normal processing
+   - Extracts name (IDENTIFIER) and body (STRING) across multiple lines
+   - Quoted string handling (`"..."` and `'...'`) added to `tokenizeStatement()` for USE parameter values
+   - `use` keyword recognized in `tokenizeStatement()`
+
+2. **Parser (`src/parser/parser.ts`):**
+   - `PrefabStatement` interface: `{ type: 'prefab', name, body, line }`
+   - `UseStatement` interface: `{ type: 'use', name, params: Record<string, string>, line }`
+   - `parsePrefabStatement()`: Consumes PREFAB, IDENTIFIER, STRING tokens
+   - `parseUseStatement()`: Consumes USE, IDENTIFIER, then key-value pairs (IDENTIFIER/STRING for keys, IDENTIFIER/NUMBER/STRING for values)
+
+3. **Builder (`src/parser/builder.ts`):**
+   - `BuilderState.prefabs`: `Map<string, string>` storing name → raw body text
+   - `processPrefab()`: Validates uniqueness, stores body text
+   - `processUse()`: Looks up body, substitutes `[key]` → value, calls `parse()`, processes resulting statements inline
+
+**Why text-level substitution:**
+- Token-level substitution would require the body to be valid tokens, preventing flexible placeholder usage like `$[label]`
+- AST-level substitution would require new AST node types for parameterized fragments
+- Text substitution is the simplest approach and naturally supports any placement of `[key]` within DSL syntax
 
 ## Open Questions
 

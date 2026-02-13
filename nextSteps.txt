@@ -2,41 +2,12 @@
 
 --------------------
 
-2) Support the ability to stop a train within a given amount of distance. The train will slow at an even rate 
-of deceleration until the train has moved the given distance and come to a stop. The desired speed will be 0 
-and the direction of the train will be unchanged.   
+2) flex connect
 
-3) Support the ability for a train to be composed of any combination of cabs and cars in any order. 
-Cabs may be facing forwards or backwards, but the train will still move forward, 
-unless there are no cabs and only cars. 
-All lockahead responsibilities or switching behaviors currently of the first cab will be redefined as being 
-performed by the first cab or car in the direction of travel (which previously was only forward) 
-All lockahead responsibilities or switching behaviors currently of the last car or cab 
-will be redefined as being performed by the last car or cab in the direction of travel 
-(which previously was only forward).
 
-4) Support the ability for a train to move backwards (whether it would have negative desired speed or a 
-positive desired speed and a direction indicator is an implementation decision).  A train can only change
-directions when it is standing still. So the sequence to reverse will be (1) stop the train, (2) switch train 
-direction, (3) set desired (negative) speed.  The opposite sequence is used to reverse a backwards moving
-train. When a train reverses then any lockahead responsibilities or switching behaviors currently of the 
-first car or cab will be performed by the last car or cab. 
-Also all lockahead responsibilities of the last car or cab will be performed by the first car or cab in the 
-train. There do not have to be any UI changes now to support backing a train go backwards, 
-only for the correct behavior required for a train to actually reverse direction of travel.
 
-5) Support the ability for a train to couple with a stopped set of cars (and possible cabs). 
-When a train is coupling, it moves in the currently set direction at a (configurable) low speed. 
-During this time, the train continues to lock
-connection points directly under and releasing them when the train has passed, but the train ignores locked 
-connection points and continues to move forward until it makes contact with the first set of cars and cabs that
-it encounters. At the time of contact, the train becomes a longer train with the other cars and cabs becoming
-the first or last cars in the train, depending on the direction of travel for the coupling train. After coupling
-the newly combined train stops, but maintains its direction.
 
-6) Support a new track archetype: Decoupler (or dec for short), a zero-length track which decouples two cars 
-or cabs, in a stopped train, whose connecting coupler is directly over (give or take) the decoupler track piece. 
-The visual indicator of the decoupler are two small triangles, one on each side of the track, pointing to the
-location of the decoupler on the track. In the UI, the decoupler is triggered by clicking on one of the triangles. When the 
-train is set in motion again, the forward cars, in the direction of travel, from the decoupled coupler to the front
-of the train will pull away. the remaining cars stay stopped until coupled with another train.     
+
+-) PREFAB name {   tracks  }
+--) reuse of labels
+--) variable labels

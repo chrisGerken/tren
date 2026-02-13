@@ -33,7 +33,7 @@ Track pieces are instances of archetypes (templates). Archetypes define:
 
 **Coordinate System:** X = primary direction (positive = forward), Z = lateral (positive = left), Y = vertical (0 for 2D). Units are inches.
 
-**Key archetype codes:** `str` (straight), `crv`/`crvl`/`crvr` (curves), `x90`/`x45` (crossings), `bump` (buffer), `gen` (generator - train source, click to toggle), `bin` (train sink), `flex`, `ph` (placeholder - zero-length junction point), `tun` (tunnel - visibility toggle), `sem` (semaphore - manual signal, click to lock/unlock).
+**Key archetype codes:** `str` (straight), `crv`/`crvl`/`crvr` (curves), `x90`/`x45` (crossings), `bump` (buffer), `gen` (generator - train source, click to toggle), `bin` (train sink), `flex`, `ph` (placeholder - zero-length junction point), `tun` (tunnel - visibility toggle), `sem` (semaphore - manual signal, click to lock/unlock), `dec` (decoupler - splits stopped trains, click to activate).
 
 **Connection point naming:** `in`/`out` for default input/output, `in1`/`out1`/`in2`/`out2` for crossings.
 
@@ -66,7 +66,7 @@ The `cross connect $label1 $label2` statement creates a shared lockable point wh
 
 ## Train Movement
 
-Trains are ordered car lists (consists). The primary cab (first cab in train) controls speed and direction. Each car maintains its own position along the track section, querying the spline for position and tangent each frame. Cars transition between sections independently when crossing boundaries.
+Trains are ordered car lists (consists). The primary cab (first cab in train) controls speed and direction. Each car maintains its own position along the track section, querying the spline for position and tangent each frame. Cars transition between sections independently when crossing boundaries. Each car has a `sectionDirection` field (1 or -1) that toggles at same-polarity junctions (out↔out or in↔in from loop close), reversing spline traversal while maintaining physical heading.
 
 **Log level:** `log debug|info|warn|error` — controls browser console output verbosity (default: `warn`). `logging` is accepted as alias for `log`, `warning` as alias for `warn`.
 

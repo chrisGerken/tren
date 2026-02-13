@@ -1,34 +1,32 @@
 # Resume Tasks
 
-All tasks from nextSteps.txt are COMPLETE.
+## Completed
 
-## Completed Tasks
+### Enlarge Decoupler Click Area
+- Changed triangleSize from 0.8 to 1.13 (2x area) in track-renderer.ts
+- File: src/renderer/track-renderer.ts
 
-### Task 1: resumeTasks.txt
-- Replaced with empty file and updated throughout (this file)
+### Add +/- Buttons to Speed Slider
+- Added minus and plus buttons flanking the slider in train-inspector.ts
+- Added .inspector-speed-adj-btn CSS class in style.css
+- Buttons increment/decrement by 1, clamped to 0-48 range
+- Files: src/inspector/train-inspector.ts, src/style.css
 
-### Task 2: Add `log` DSL statement
-- Created centralized logger utility: `src/core/logger.ts`
-- Added LOG token to lexer: `src/parser/lexer.ts`
-- Added LogStatement to parser: `src/parser/parser.ts`
-- Added log processing to builder: `src/parser/builder.ts`
-- Added logLevel field to Layout type: `src/core/types.ts`
-- Applied log level at runtime in: `src/main.ts`
-- Syntax: `log debug|info|warning|error` (alias: `logging`)
-- Default level: WARNING
+### Remove "ID:" Static String
+- Changed addField('ID:', ...) to addField('', ...) in train-inspector.ts
+- File: src/inspector/train-inspector.ts
 
-### Task 3: Replace all console.* calls with logger
-- `src/parser/builder.ts` — 44 calls replaced (41 debug, 3 warn)
-- `src/core/simulation.ts` — 15 calls replaced (info for user events, debug for internals)
-- `src/core/lock-manager.ts` — 20 calls replaced (all debug; fixed DEBUG_LOGGING=true bug)
-- `src/renderer/track-renderer.ts` — 11 calls replaced (all debug)
-- `src/renderer/train-renderer.ts` — 2 calls replaced (both error)
-- `src/main.ts` — 9 calls replaced (debug/info/error as appropriate)
-- All per-file DEBUG_LOGGING constants removed
-- TypeScript compiles cleanly with zero errors
+### Replace "Change Direction" with Icon
+- Changed button text to Unicode ⇄ (\u21C4), added title tooltip
+- Increased .inspector-dir-btn font-size from 12px to 16px
+- Files: src/inspector/train-inspector.ts, src/style.css
 
-### Documentation updated
-- `docs/layout-dsl.md` — Added Log Level section
-- `docs/technical-decisions.md` — Replaced Debug Logging section with Centralized Logger
-- `dsl-help.html` — Added log statement to Layout Settings
-- `CLAUDE.md` — Added log level mention
+### Add "Capture" Screenshot Button
+- Added <button id="capture-btn"> to index.html toolbar
+- Added click handler in main.ts: renders frame, converts canvas to PNG, uses Tauri save dialog + writeBinaryFile
+- Set preserveDrawingBuffer: true on WebGL renderer in scene.ts
+- Files: index.html, src/main.ts, src/renderer/scene.ts
+
+## Pending
+
+(none)

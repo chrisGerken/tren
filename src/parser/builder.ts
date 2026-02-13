@@ -2,7 +2,7 @@
  * Layout Builder - transforms AST into placed track pieces
  */
 
-import { parse, Statement, PieceStatement, NewStatement, ReferenceStatement, LoopCloseStatement, TitleStatement, DescriptionStatement, LockAheadStatement, SpliceStatement, RandomStatement, MaxTrainsStatement, FlexConnectStatement, CrossConnectStatement, DefineStatement, LogStatement } from './parser';
+import { parse, Statement, PieceStatement, NewStatement, ReferenceStatement, LoopCloseStatement, TitleStatement, DescriptionStatement, LockAheadStatement, SpliceStatement, RandomStatement, MaxTrainsStatement, FlexConnectStatement, CrossConnectStatement, DefineStatement, LogStatement, ArrayStatement, PrefabStatement, UseStatement } from './parser';
 import { Layout, TrackPiece, Vec3, vec2, ConnectionPointDef, RangeValue as TypeRangeValue } from '../core/types';
 import { getArchetype, registerRuntimeArchetype } from '../core/archetypes';
 import type { TrackArchetype } from '../core/archetypes';
@@ -26,10 +26,12 @@ interface FlexConnectInfo {
 }
 
 interface FlexSolution {
-  type: 'straight-only' | 'curve-only' | 'straight-curve' | 'curve-straight';
-  straightLength: number;  // 0 for curve-only
+  type: 'straight-only' | 'curve-only' | 'straight-curve' | 'curve-straight' | 'curve-curve';
+  straightLength: number;  // 0 for curve-only and curve-curve
   radius: number;          // Infinity for straight-only
   curveDirection: 'left' | 'right' | 'none';
+  curveDirection2?: 'left' | 'right';  // second curve direction for curve-curve
+  arcAngle?: number;       // arc angle in radians for each curve in curve-curve
   P1: Vec3;
   D1: Vec3;
   P2: Vec3;
@@ -68,6 +70,7 @@ interface BuilderState {
   pendingSplices: SpliceInfo[];
   pendingFlexConnects: FlexConnectInfo[];
   pendingCrossConnects: CrossConnectInfo[];
+  prefabs: Map<string, string>;  // name → raw body text
 }
 
 /**
@@ -108,6 +111,7 @@ class LayoutBuilder {
       pendingSplices: [],
       pendingFlexConnects: [],
       pendingCrossConnects: [],
+      prefabs: new Map(),
     };
   }
 
@@ -194,6 +198,15 @@ class LayoutBuilder {
       case 'log':
         this.processLog(stmt);
         break;
+      case 'array':
+        this.processArray(stmt);
+        break;
+      case 'prefab':
+        this.processPrefab(stmt);
+        break;
+      case 'use':
+        this.processUse(stmt);
+        break;
     }
   }
 
@@ -206,6 +219,77 @@ class LayoutBuilder {
       'error': LogLevel.ERROR,
     };
     setLogLevel(levelMap[stmt.level]);
+  }
+
+  private processPrefab(stmt: PrefabStatement): void {
+    if (this.state.prefabs.has(stmt.name)) {
+      throw new Error(`Duplicate prefab name '${stmt.name}' at line ${stmt.line}`);
+    }
+    this.state.prefabs.set(stmt.name, stmt.body);
+  }
+
+  private processUse(stmt: UseStatement): void {
+    const body = this.state.prefabs.get(stmt.name);
+    if (body === undefined) {
+      throw new Error(`Unknown prefab '${stmt.name}' at line ${stmt.line}`);
+    }
+
+    // Perform text substitution: replace [key] with value
+    let expandedText = body;
+    for (const [key, value] of Object.entries(stmt.params)) {
+      expandedText = expandedText.split(`[${key}]`).join(value);
+    }
+
+    // Parse the expanded text into statements and process them
+    const innerStatements = parse(expandedText);
+    for (const innerStmt of innerStatements) {
+      this.processStatement(innerStmt);
+    }
+  }
+
+  private processArray(stmt: ArrayStatement): void {
+    const phArchetype = getArchetype('ph');
+
+    // Place first placeholder via placePiece (connects to current chain)
+    const firstPiece = this.placePiece(phArchetype, undefined, stmt.line, stmt.prefix + '1');
+    firstPiece.label = stmt.prefix + '1';
+    this.state.labeledPieces.set(stmt.prefix + '1', firstPiece);
+    this.state.pieces.push(firstPiece);
+    this.state.currentSegment.pieces.push(firstPiece);
+
+    const firstPosition = { ...firstPiece.position };
+    const firstRotation = firstPiece.rotation;
+
+    // Calculate array line direction: firstRotation + angle (converted to radians)
+    const arrayAngle = firstRotation + (stmt.angle * Math.PI / 180);
+
+    // Place additional placeholders along the array line
+    for (let i = 2; i <= stmt.count; i++) {
+      const position: Vec3 = {
+        x: firstPosition.x + (i - 1) * stmt.distance * Math.cos(arrayAngle),
+        y: 0,
+        z: firstPosition.z + (i - 1) * stmt.distance * Math.sin(arrayAngle),
+      };
+
+      const label = stmt.prefix + i;
+      const piece: TrackPiece = {
+        id: `piece_${this.state.nextPieceId++}`,
+        archetypeCode: 'ph',
+        position,
+        rotation: firstRotation,
+        connections: new Map(),
+        label,
+      };
+
+      this.state.labeledPieces.set(label, piece);
+      this.state.pieces.push(piece);
+      this.state.currentSegment.pieces.push(piece);
+
+      logger.debug(`Line ${stmt.line}: Array placed ph "${label}" at (${position.x.toFixed(2)}, ${position.z.toFixed(2)})`);
+    }
+
+    // Builder state continues from first placeholder (already set by placePiece)
+    this.state.currentPiece = firstPiece;
   }
 
   private processTitle(stmt: TitleStatement): void {
@@ -464,6 +548,13 @@ class LayoutBuilder {
       if (archetype.code === 'sem' && i === 0) {
         piece.semaphoreConfig = {
           locked: false,  // Start unlocked (green)
+        };
+      }
+
+      // Apply decoupler config for 'dec' pieces
+      if (archetype.code === 'dec' && i === 0) {
+        piece.decouplerConfig = {
+          activated: false,
         };
       }
 
@@ -1125,7 +1216,11 @@ class LayoutBuilder {
       return;
     }
 
-    logger.debug(`  Solution: ${solution.type}, straight=${solution.straightLength.toFixed(2)}", radius=${solution.radius.toFixed(2)}", direction=${solution.curveDirection}`);
+    if (solution.type === 'curve-curve') {
+      logger.debug(`  Solution: ${solution.type}, radius=${solution.radius.toFixed(2)}", arcAngle=${(solution.arcAngle! * 180 / Math.PI).toFixed(1)}°, dir1=${solution.curveDirection}, dir2=${solution.curveDirection2}`);
+    } else {
+      logger.debug(`  Solution: ${solution.type}, straight=${solution.straightLength.toFixed(2)}", radius=${solution.radius.toFixed(2)}", direction=${solution.curveDirection}`);
+    }
 
     // Create the flex track pieces (labels are derived from endpoint labels)
     this.createFlexPieces(solution, piece1, info.point1Name, piece2, info.point2Name, info.point1Label, info.point2Label, info.line);
@@ -1275,6 +1370,23 @@ class LayoutBuilder {
       }
     }
 
+    // Try curve+curve (S-curve) for parallel tracks with lateral offset
+    if (isDirectionAligned && !isCollinear && deltaLength > 0.1) {
+      const result = this.solveCurveCurve(D1, delta);
+      if (result) {
+        logger.debug(`  [curve+curve] R=${result.radius.toFixed(2)}, θ=${(result.arcAngle * 180 / Math.PI).toFixed(1)}°, dir1=${result.dir1}, dir2=${result.dir2}`);
+        solutions.push({
+          type: 'curve-curve',
+          straightLength: 0,
+          radius: result.radius,
+          curveDirection: result.dir1,
+          curveDirection2: result.dir2,
+          arcAngle: result.arcAngle,
+          P1, D1, P2, D2,
+        });
+      }
+    }
+
     if (solutions.length === 0) {
       logger.debug(`No valid flex connect solution found at line ${line}`);
       logger.debug(`  P1: (${P1.x.toFixed(2)}, ${P1.z.toFixed(2)}), D1: (${D1.x.toFixed(3)}, ${D1.z.toFixed(3)})`);
@@ -1345,6 +1457,75 @@ class LayoutBuilder {
     const R = (ax * delta.z - az * delta.x) / det;
 
     return { L, R };
+  }
+
+  /**
+   * Solve for [Curve, Curve] combination (S-curve).
+   * Used when D1 ≈ D2 (parallel tracks) with a lateral offset.
+   * Creates two symmetric curves of equal radius — first curving toward
+   * the other track, then curving back to re-align.
+   *
+   * Geometry: Given forward distance f (along D1) and lateral distance h (perpendicular to D1):
+   *   tan(θ/2) = |h| / f  →  θ = 2 * atan(|h| / f)
+   *   R = f / (2 * sin(θ))
+   * First curve goes toward the other track, second curve goes back.
+   */
+  private solveCurveCurve(
+    D1: Vec3,
+    delta: Vec3
+  ): { radius: number; arcAngle: number; dir1: 'left' | 'right'; dir2: 'left' | 'right' } | null {
+    const MIN_RADIUS = 5;
+    const MAX_ARC_DEGREES = 270;
+    const maxArcRadians = MAX_ARC_DEGREES * Math.PI / 180;
+
+    // Project delta onto D1 (forward) and perpRight(D1) (lateral)
+    const f = delta.x * D1.x + delta.z * D1.z;          // forward distance along D1
+    const pr = this.perpRight(D1);
+    const h = delta.x * pr.x + delta.z * pr.z;           // lateral distance (positive = right)
+
+    logger.debug(`  [curve-curve] f=${f.toFixed(2)}, h=${h.toFixed(2)}`);
+
+    // P2 must be ahead of P1 along D1
+    if (f <= 0.1) {
+      logger.debug(`  [curve-curve] rejected: f=${f.toFixed(2)} <= 0.1 (P2 not ahead of P1)`);
+      return null;
+    }
+
+    // Must have lateral offset
+    if (Math.abs(h) < 0.1) {
+      logger.debug(`  [curve-curve] rejected: |h|=${Math.abs(h).toFixed(2)} < 0.1 (no lateral offset)`);
+      return null;
+    }
+
+    // θ = 2 * atan(|h| / f)
+    const theta = 2 * Math.atan(Math.abs(h) / f);
+
+    // R = f / (2 * sin(θ))
+    const sinTheta = Math.sin(theta);
+    if (Math.abs(sinTheta) < 0.0001) {
+      logger.debug(`  [curve-curve] rejected: sin(θ) ≈ 0`);
+      return null;
+    }
+    const R = f / (2 * sinTheta);
+
+    logger.debug(`  [curve-curve] θ=${(theta * 180 / Math.PI).toFixed(1)}°, R=${R.toFixed(2)}"`);
+
+    // Validity checks
+    if (R < MIN_RADIUS) {
+      logger.debug(`  [curve-curve] rejected: R=${R.toFixed(2)} < ${MIN_RADIUS}`);
+      return null;
+    }
+    if (theta > maxArcRadians) {
+      logger.debug(`  [curve-curve] rejected: θ=${(theta * 180 / Math.PI).toFixed(1)}° > ${MAX_ARC_DEGREES}°`);
+      return null;
+    }
+
+    // First curve direction: if h > 0, curve right (toward +perpRight); if h < 0, curve left
+    const dir1: 'left' | 'right' = h > 0 ? 'right' : 'left';
+    // Second curve: opposite direction to return to original heading
+    const dir2: 'left' | 'right' = dir1 === 'right' ? 'left' : 'right';
+
+    return { radius: R, arcAngle: theta, dir1, dir2 };
   }
 
   /**
@@ -1485,7 +1666,7 @@ class LayoutBuilder {
       this.state.pieces.push(straightPiece, curvePiece);
 
       logger.debug(`Flex connect at line ${line}: straight(${solution.straightLength.toFixed(2)}") labeled "${straightLabel}" + ${solution.curveDirection} curve(R=${solution.radius.toFixed(2)}") labeled "${curveLabel}"`);
-    } else {
+    } else if (solution.type === 'curve-straight') {
       // Create curve piece first, then straight (curve-straight case)
       // curveDirection is always 'left' or 'right' for curve-straight solutions
       const curveArch = this.createFlexCurveArchetype(
@@ -1542,6 +1723,85 @@ class LayoutBuilder {
       this.state.pieces.push(curvePiece, straightPiece);
 
       logger.debug(`Flex connect at line ${line}: ${solution.curveDirection} curve(R=${solution.radius.toFixed(2)}") labeled "${curveLabel}" + straight(${solution.straightLength.toFixed(2)}") labeled "${straightLabel}"`);
+    } else {
+      // curve-curve (S-curve): two symmetric curves of equal radius
+      const curve1Label = `${label1}_${label2}_crv1`;
+      const curve2Label = `${label1}_${label2}_crv2`;
+
+      const theta = solution.arcAngle!;
+      const dir1 = solution.curveDirection as 'left' | 'right';
+      const dir2 = solution.curveDirection2!;
+
+      // Calculate midpoint direction: D1 rotated by theta in the direction of curve1
+      const rotSign = dir1 === 'left' ? 1 : -1;  // left = counter-clockwise = positive
+      const cosTheta = Math.cos(rotSign * theta);
+      const sinTheta = Math.sin(rotSign * theta);
+      const Dm: Vec3 = {
+        x: solution.D1.x * cosTheta - solution.D1.z * sinTheta,
+        y: 0,
+        z: solution.D1.x * sinTheta + solution.D1.z * cosTheta,
+      };
+
+      // Midpoint position: P1 + R*sin(θ) along D1 + R*(1-cos(θ)) along lateral direction
+      const lateralSign = dir1 === 'right' ? 1 : -1;  // +1 for perpRight, -1 for perpLeft
+      const pr = this.perpRight(solution.D1);
+      const Pm: Vec3 = {
+        x: solution.P1.x + solution.D1.x * solution.radius * Math.sin(theta) + pr.x * solution.radius * (1 - Math.cos(theta)) * lateralSign,
+        y: 0,
+        z: solution.P1.z + solution.D1.z * solution.radius * Math.sin(theta) + pr.z * solution.radius * (1 - Math.cos(theta)) * lateralSign,
+      };
+
+      // Create curve1: from D1 to Dm
+      const curve1Arch = this.createFlexCurveArchetype(
+        flexId + '_crv1',
+        solution.radius,
+        dir1,
+        solution.D1,
+        Dm
+      );
+
+      // Create curve2: from Dm to D2
+      const curve2Arch = this.createFlexCurveArchetype(
+        flexId + '_crv2',
+        solution.radius,
+        dir2,
+        Dm,
+        solution.D2
+      );
+
+      registerRuntimeArchetype(curve1Arch);
+      registerRuntimeArchetype(curve2Arch);
+
+      const curve1Piece: TrackPiece = {
+        id: `piece_${this.state.nextPieceId++}`,
+        archetypeCode: curve1Arch.code,
+        position: { ...solution.P1 },
+        rotation: Math.atan2(solution.D1.z, solution.D1.x),
+        connections: new Map(),
+        label: curve1Label,
+      };
+
+      const curve2Piece: TrackPiece = {
+        id: `piece_${this.state.nextPieceId++}`,
+        archetypeCode: curve2Arch.code,
+        position: { ...Pm },
+        rotation: Math.atan2(Dm.z, Dm.x),
+        connections: new Map(),
+        label: curve2Label,
+      };
+
+      // Register labels
+      this.state.labeledPieces.set(curve1Label, curve1Piece);
+      this.state.labeledPieces.set(curve2Label, curve2Piece);
+
+      // Connect: piece1.point1 -> curve1.in -> curve1.out -> curve2.in -> curve2.out -> piece2.point2
+      this.addConnection(piece1, point1Name, curve1Piece, 'in');
+      this.addConnection(curve1Piece, 'out', curve2Piece, 'in');
+      this.addConnection(curve2Piece, 'out', piece2, point2Name);
+
+      this.state.pieces.push(curve1Piece, curve2Piece);
+
+      logger.debug(`Flex connect at line ${line}: S-curve ${dir1} curve(R=${solution.radius.toFixed(2)}", θ=${(theta * 180 / Math.PI).toFixed(1)}°) labeled "${curve1Label}" + ${dir2} curve labeled "${curve2Label}"`);
     }
   }
 

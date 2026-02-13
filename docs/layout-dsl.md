@@ -18,7 +18,7 @@ The `title` statement provides a short name for the layout, used in the UI for l
 title My Railroad Layout
 ```
 
-Only one title statement is allowed per layout. If no title is specified, the default is "Simulador de Tren".
+Only one title statement is allowed per layout. If no title is specified, the default is "No Title".
 
 ### Description
 
@@ -289,6 +289,7 @@ Use archetype codes to specify track pieces. See [Track Dimensions](track-dimens
 | `bin` | Train sink (trains removed) |
 | `tun`, `tunnel` | Visibility toggle (hide track/trains) |
 | `sem`, `semaphore` | Manual signal (see Semaphore Syntax below) |
+| `dec`, `decoupler` | Train splitter (see Decoupler Syntax below) |
 
 ### Generator Syntax
 
@@ -343,6 +344,8 @@ When a range is specified:
 
 Each train spawned by the generator gets its own random values, so trains from the same generator may have different speeds, car counts, etc.
 
+**Runtime Control:** All generator parameters can be adjusted while the simulation is running by double-clicking a generator piece to open the generator inspector widget. Sliders control cabs, cars, speed, and frequency; buttons toggle color mode and enable/disable state. Changes take effect on the next spawned train.
+
 ### Semaphore Syntax
 
 Semaphores are manual signal points where you can control train traffic by clicking to lock/unlock the signal:
@@ -370,6 +373,35 @@ signal: sem                   # Labeled semaphore
 - Manual traffic control at junctions
 - Creating "holding points" where you can accumulate trains
 - Simulating station stops or signal blocks
+
+### Decoupler Syntax
+
+Decouplers split a stopped train into two separate trains at the decoupler's position:
+
+```
+dec                           # Place a decoupler
+decoupler                     # Same as dec (alias)
+split: dec                    # Labeled decoupler
+```
+
+**Behavior:**
+- **Orange triangles** (inactive): Decoupler is ready, no action
+- **Red triangles** (activated): Decoupler has been triggered (flashes for 1 second)
+
+**Interaction:**
+- Click either triangle to activate the decoupler
+- If a stopped train straddles the decoupler, the train is split into two stopped trains
+- The coupler between consecutive cars nearest to the decoupler (within ~2 inches) is where the split occurs
+- If no stopped train is found, the status bar shows "no train to split"
+
+**Visual appearance:**
+- Two small triangles, one on each side of the track, pointing toward the decoupler position
+- Orange when inactive, briefly red when activated
+
+**Use cases:**
+- Splitting trains for shunting/switching operations
+- Dropping off cars at sidings
+- Creating separate train consists from a single train
 
 ### Repetition
 
@@ -614,12 +646,15 @@ The flex connect statement automatically creates labeled pieces that can be refe
 
 - `{label1}_{label2}_str` - The straight piece (if created)
 - `{label1}_{label2}_crv` - The curve piece (if created)
+- `{label1}_{label2}_crv1` - The first curve piece (S-curve only)
+- `{label1}_{label2}_crv2` - The second curve piece (S-curve only)
 
 For example, `flex connect $f1.out $f2.in` creates pieces labeled `f1_f2_str` and `f1_f2_crv` that you can reference as `$f1_f2_str` or `$f1_f2_crv`.
 
-**Note:** In edge cases where only one piece is needed:
+**Note:** In edge cases where the standard two-piece solution doesn't apply:
 - **Straight-only**: When endpoints are collinear (same direction, aligned path), only the `_str` label is created
 - **Curve-only**: When endpoints are very close and require only a curve, only the `_crv` label is created
+- **Double-curve (S-curve)**: When endpoints are on parallel tracks with a lateral offset (same direction but not collinear), two curve pieces (`_crv1` and `_crv2`) are created forming an S-curve crossover
 
 ### How It Works
 
@@ -628,8 +663,8 @@ The flex connect solver:
 2. Checks for edge cases:
    - **Straight-only**: If endpoints are collinear (same direction, aligned path), creates a single straight piece
    - **Curve-only**: If the calculated straight length is very small (<0.5"), creates just a curve
-3. Otherwise, finds a valid combination of one curve and one straight piece
-4. Tries four configurations: [straight, left curve], [straight, right curve], [left curve, straight], [right curve, straight]
+3. For angled endpoints, finds a valid combination of one curve and one straight piece
+4. For parallel tracks with lateral offset (same direction but not aligned), creates a double-curve S-shape
 5. Selects the solution with the smoothest curve (largest radius)
 6. Creates custom runtime track pieces with the calculated geometry
 7. Labels the pieces for later reference
@@ -897,6 +932,145 @@ Use auto-connect when:
 - You want concise layout definitions
 - Small accumulated errors are within tolerance
 
+### Same-Polarity Connections (Loop Close)
+
+The `>` loop close operator can create same-polarity connections (out↔out or in↔in) when the nearest connection point has the same type as the current output:
+
+```
+# Sidetrack connecting to main loop via out↔out
+crvl * 6
+gen2: crvl              # Main loop piece
+
+new
+generator colorful cabs 2 cars 10 speed 20 every 5
+str * 3
+> $gen2.out             # Creates out↔out connection
+```
+
+Trains crossing a same-polarity junction automatically reverse their spline traversal direction while maintaining their physical heading. Each car tracks a `sectionDirection` field (`1` or `-1`) that toggles at same-polarity junctions. This is analogous to polarity reversal in real model train layouts where tracks meet from opposite electrical directions.
+
+## Prefab and Use (Reusable Templates)
+
+The `prefab` statement defines a named, reusable block of DSL statements with placeholder parameters. The `use` statement expands a previously defined prefab, substituting placeholders with provided values.
+
+### Defining a Prefab
+
+```
+prefab <name> {
+  <DSL statements using [key] placeholders>
+}
+```
+
+The body text between `{` and `}` is stored as raw text. The opening `{` must be on the same line as the `prefab` keyword. The closing `}` can be on any subsequent line. `prefabrication` is accepted as an alias for `prefab`.
+
+### Using a Prefab
+
+```
+use <name> key1 value1 key2 value2 ...
+```
+
+Each `[key]` placeholder in the body is replaced with the corresponding value. Values containing spaces must be quoted (`"my value"`). The expanded text is then parsed and processed as normal DSL statements.
+
+### Example: Reusable Siding
+
+```
+prefab siding {
+  $[label]: ph
+  str x 3
+  bump
+}
+
+gen ; str x 3
+use siding label "junction1"
+
+$junction1.out
+crvl x 3
+bump
+```
+
+The `use` statement expands to:
+```
+$junction1: ph
+str x 3
+bump
+```
+
+### Example: Single-Line Prefab
+
+```
+prefab straight_spur { str x [count] ; bump }
+
+use straight_spur count 5
+```
+
+### Key Points
+
+- **Placeholders** use `[key]` syntax and can appear anywhere in the body — in label names, piece codes, or parameter values
+- **No nesting**: PREFAB bodies cannot contain other PREFAB definitions. USE inside a PREFAB body is fine — it expands at USE time.
+- **Duplicate names** are not allowed — defining a prefab with the same name as an existing one is an error
+- **Comments** inside the body are preserved in the raw text and stripped normally during expansion
+- **Case insensitivity**: The `prefab` and `use` keywords are case-insensitive; the prefab name is case-sensitive
+
+## Array
+
+The `array` statement creates multiple evenly-spaced labeled placeholders, useful for building parallel tracks (passing sidings, yards, double-track mainlines).
+
+### Syntax
+
+```
+array count N angle A distance D prefix P
+```
+
+Parameters (case-insensitive, any order, all required):
+- `count N` — total number of placeholders to create (N >= 1)
+- `angle A` — degrees relative to current track direction for the array line
+- `distance D` — spacing in inches between consecutive placeholders
+- `prefix P` — label prefix; placeholders are labeled P1, P2, ..., PN
+
+### Behavior
+
+1. The first placeholder is placed at the current position (like `ph`), connected to the current track chain
+2. Additional placeholders are placed along the array line (currentRotation + angle)
+3. All placeholders share the same rotation (direction) as the first
+4. Each is labeled `{prefix}1`, `{prefix}2`, ..., `{prefix}{count}`
+5. Builder state continues from the first placeholder (unchanged, as if only `ph` was placed)
+6. Use `$prefix_2.out`, `$prefix_3.out`, etc. to build tracks from additional placeholders
+
+### Example: Three Parallel Sidings
+
+```
+# Main line feeds into array
+gen ; str x 3
+array count 3 angle 90 distance 12 prefix track_
+
+# Continue main line from first placeholder
+str x 10
+bump
+
+# Build from second placeholder
+$track_2.out
+str x 5 ; bump
+
+# Build from third placeholder
+$track_3.out
+str x 5 ; bump
+```
+
+This creates three parallel tracks spaced 12" apart, perpendicular to the main line direction.
+
+### Example: Angled Fan
+
+```
+gen ; str x 3
+array count 4 angle 45 distance 8 prefix yard_
+
+str x 5 ; bump
+
+$yard_2.out ; str x 5 ; bump
+$yard_3.out ; str x 5 ; bump
+$yard_4.out ; str x 5 ; bump
+```
+
 ## Building Patterns
 
 ### Simple Loop
@@ -1012,3 +1186,4 @@ See [Connection Points](connection-points.md) for complete connection point defi
 | `gen` | `in`, `out` | `in` | `out` |
 | `bin` | `in`, `out` | `in` | `out` |
 | `sem` | `in`, `out` | `in` | `out` |
+| `dec` | `in`, `out` | `in` | `out` |

@@ -13,6 +13,15 @@ export type SwitchClickCallback = (routeKey: string, connectionIndex: number) =>
 // Callback type for semaphore clicks
 export type SemaphoreClickCallback = (pieceId: string) => void;
 
+// Callback type for decoupler clicks
+export type DecouplerClickCallback = (pieceId: string) => void;
+
+// Callback type for train double-clicks
+export type TrainDblClickCallback = (trainId: string) => void;
+
+// Callback type for generator double-clicks
+export type GeneratorDblClickCallback = (pieceId: string) => void;
+
 export class TrackScene {
   scene: THREE.Scene;
   camera: THREE.OrthographicCamera;
@@ -27,6 +36,9 @@ export class TrackScene {
   private mouse: THREE.Vector2;
   private onSwitchClick?: SwitchClickCallback;
   private onSemaphoreClick?: SemaphoreClickCallback;
+  private onDecouplerClick?: DecouplerClickCallback;
+  private onTrainDblClick?: TrainDblClickCallback;
+  private onGeneratorDblClick?: GeneratorDblClickCallback;
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -50,7 +62,7 @@ export class TrackScene {
     this.camera.lookAt(0, 0, 0);
 
     // Create WebGL renderer
-    this.renderer = new THREE.WebGLRenderer({ antialias: true });
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
     this.renderer.setSize(container.clientWidth, container.clientHeight);
     this.renderer.setPixelRatio(window.devicePixelRatio);
     container.appendChild(this.renderer.domElement);
@@ -113,6 +125,9 @@ export class TrackScene {
     // Handle click events for switch indicators
     this.renderer.domElement.addEventListener('click', (event) => this.onClick(event));
 
+    // Handle double-click events for train inspection
+    this.renderer.domElement.addEventListener('dblclick', (event) => this.onDblClick(event));
+
     // Handle window resize
     window.addEventListener('resize', () => this.onResize());
   }
@@ -129,6 +144,27 @@ export class TrackScene {
    */
   setSemaphoreClickCallback(callback: SemaphoreClickCallback): void {
     this.onSemaphoreClick = callback;
+  }
+
+  /**
+   * Set callback for decoupler clicks
+   */
+  setDecouplerClickCallback(callback: DecouplerClickCallback): void {
+    this.onDecouplerClick = callback;
+  }
+
+  /**
+   * Set callback for train double-clicks
+   */
+  setTrainDblClickCallback(callback: TrainDblClickCallback): void {
+    this.onTrainDblClick = callback;
+  }
+
+  /**
+   * Set callback for generator double-clicks
+   */
+  setGeneratorDblClickCallback(callback: GeneratorDblClickCallback): void {
+    this.onGeneratorDblClick = callback;
   }
 
   /**
@@ -160,6 +196,51 @@ export class TrackScene {
           this.onSemaphoreClick(userData.pieceId);
         }
         break;
+      }
+      if (userData && userData.isDecoupler) {
+        if (this.onDecouplerClick) {
+          this.onDecouplerClick(userData.pieceId);
+        }
+        break;
+      }
+    }
+  }
+
+  /**
+   * Handle double-click events for train inspection
+   */
+  private onDblClick(event: MouseEvent): void {
+    if (!this.onTrainDblClick && !this.onGeneratorDblClick) return;
+
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+    this.raycaster.setFromCamera(this.mouse, this.camera);
+
+    // Raycast against train group first (trains take priority)
+    if (this.onTrainDblClick) {
+      const trainIntersects = this.raycaster.intersectObjects(this.trainGroup.children, true);
+      if (trainIntersects.length > 0) {
+        let obj: THREE.Object3D | null = trainIntersects[0].object;
+        while (obj) {
+          if (obj.name && obj.name.startsWith('train_')) {
+            this.onTrainDblClick(obj.name);
+            return;
+          }
+          obj = obj.parent;
+        }
+      }
+    }
+
+    // Raycast against track group for generators
+    if (this.onGeneratorDblClick) {
+      const trackIntersects = this.raycaster.intersectObjects(this.trackGroup.children, true);
+      for (const intersect of trackIntersects) {
+        if (intersect.object.userData?.isGenerator) {
+          this.onGeneratorDblClick(intersect.object.userData.pieceId);
+          return;
+        }
       }
     }
   }

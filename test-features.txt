@@ -1,0 +1,9 @@
+log debug                                                                                                                                
+  max trains 3                                                                                                                             
+  gen cabs 1 cars 3 speed 12                                                                                                               
+  str x 5                                                                                                                                  
+  dec                                                                                                                                      
+  str x 5
+  sem
+  str x 3
+  bump

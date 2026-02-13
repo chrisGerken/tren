@@ -1,0 +1,21 @@
+title Example: Array
+description Using ARRAY statement for parallel tracks; cameo by the FLEX CONNECT statement
+
+# Create 3 parallel track starting points, 12" apart, perpendicular to track                                                                │
+gen ; str x 3                                                                                                                               │
+array count 3 angle 90 distance 4 prefix siding_                                                                                           │
+                                                                                                                               
+# Continue main line from first placeholder                                                                                                 │
+main: str
+str x 10                                                                                                                                    │
+bump                                                                                                                                        │
+                                                                                                                                             │
+# Build from each siding placeholder                                                                                                        │
+$siding_2.out                                                                                                                               │
+str ; str ; str ; side: str ; str ; str ; str ; bump                                                                                                                              │
+                                                                                                                                             │
+$siding_3.out                                                                                                                               │
+str ; str ; str ; str ; str ; str ; str ; bump                                                                                                                              │
+                                                                                                                                             │
+flex connect $main  $side
+                                                                                                                                             
