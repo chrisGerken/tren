@@ -6,13 +6,14 @@ import * as THREE from 'three';
 import { TrackPiece, Layout, Connection } from '../core/types';
 import { getArchetype, TrackArchetype } from '../core/archetypes';
 import { TrackScene } from './scene';
+import { renderScenery } from './scenery-renderer';
 import { logger } from '../core/logger';
 
 // Track colors (hex values with RGB equivalents)
-const RAIL_COLOR = 0x5c4033;  // Silver (R:192, G:192, B:192)    0xc0c0c0
-const TIE_COLOR = 0x5c4033;  // Dark wood brown (R:92, G:64, B:51)
-const BALLAST_COLOR = 0xd8d8c8;  // Light gray (R:216, G:216, B:200)
-const ROADBED_COLOR = 0xc8b8a0;  // Light tan (R:200, G:184, B:160)
+const RAIL_COLOR = 0xc0c0c8;  // Polished steel silver (R:192, G:192, B:200)
+const TIE_COLOR = 0x2e2018;  // Dark wood brown (R:46, G:32, B:24)
+const BALLAST_COLOR = 0x5a5a52;  // Dark gray gravel (R:90, G:90, B:82)
+const ROADBED_COLOR = 0x5a3830;  // Dark reddish-brown dirt (R:90, G:56, B:48)
 const CONNECTION_POINT_UNLOCKED_COLOR = 0xffffff;  // White for unlocked
 const CONNECTION_POINT_LOCKED_COLOR = 0xff0000;  // Red for locked
 const GENERATOR_COLOR = 0x22aa22;  // Green
@@ -35,7 +36,7 @@ const TIE_HEIGHT = 0.15;  // Tie height (visible in top-down)
 const TIE_DEPTH = 0.25;  // Tie thickness along track direction
 const TIE_SPACING = 1.0;  // Distance between ties
 const BALLAST_WIDTH = 2.0;  // Width of gravel bed
-const ROADBED_WIDTH = 2.4;  // Width of raised dirt surface
+const ROADBED_WIDTH = 2.64;  // Width of raised dirt surface
 const ROADBED_HEIGHT = 0.1;  // Height of roadbed above ground
 
 // Set to true to show simplified debug view
@@ -177,6 +178,8 @@ export function renderLayout(scene: TrackScene, layout: Layout): void {
       scene.addLabel(piece.label, center.x + offsetX, center.z + offsetZ);
     }
   }
+
+  renderScenery(scene, layout);
 
   scene.fitToLayout();
   scene.render();
@@ -368,8 +371,9 @@ function renderTrackSectionWorld(worldPoints: THREE.Vector3[]): THREE.Group {
   // Materials
   const railMaterial = new THREE.MeshStandardMaterial({
     color: RAIL_COLOR,
-    roughness: 0.5,
-    metalness: 0.2,
+    roughness: 0.2,
+    metalness: 0.85,
+    envMapIntensity: 1.0,
   });
 
   const tieMaterial = new THREE.MeshStandardMaterial({

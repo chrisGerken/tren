@@ -1414,6 +1414,58 @@ use siding label "junction1"
 - AST-level substitution would require new AST node types for parameterized fragments
 - Text substitution is the simplest approach and naturally supports any placement of `[key]` within DSL syntax
 
+## Scenery: Grid-Based Tree Placement
+
+Trees add visual interest to layouts by filling open areas away from tracks with dark green canopy clusters.
+
+**DSL syntax:**
+```
+trees                            # Enable with defaults
+trees none                       # Disable
+trees clearance N density M      # Custom parameters (any order)
+```
+
+**Design decisions:**
+- Opt-in via `trees` DSL statement (no trees by default)
+- Grid-based distance scoring: divide layout area into ~4-inch cells, BFS flood-fill from track cells to assign distance scores
+- Trees placed where `score >= clearance`, count per cell = `min(density, score - clearance + 1)` — gradual ramp from sparse fringe to full density
+- Defaults: clearance=2, density=3
+- Camera fits to tracks only (scenery group excluded from `fitToLayout()` bounding box)
+- Scenery is static geometry, rendered once at layout load
+
+**Performance optimization — InstancedMesh:**
+- Initial implementation created individual `THREE.Mesh` per tree circle (3-5 circles per tree cluster), causing thousands of draw calls and noticeable frame rate drops during train animation
+- Replaced with `THREE.InstancedMesh`: one instance per material color (3 colors = 3 draw calls total)
+- Each circle's position, rotation (flat on ground), and scale (radius 1-3") are encoded in a per-instance transform matrix
+- Tree data is collected in a first pass, bucketed by material, then built into InstancedMesh objects
+- Result: constant GPU cost regardless of tree count
+
+**Tree visuals:**
+- Each tree = cluster of 3-5 overlapping `CircleGeometry` discs
+- Three dark green color variants (0x2d5a1e, 0x336622, 0x3a6b2a) for natural variation
+- Positioned at y=0.005 (above ground plane at -0.01, below track at 0+)
+- Deterministic pseudo-random placement (seeded PRNG) for consistent appearance across reloads
+
+**Grid algorithm:**
+1. Compute bounding box from all track piece connection points and spline points (in screen coordinates with Z negated)
+2. Expand bounds by 30% on each side
+3. Create grid sized to cover expanded area at CELL_SIZE (4") resolution
+4. For each track piece: transform spline points to world/screen coords, create CatmullRomCurve3, sample at ~1" intervals, mark containing grid cells as score 0
+5. BFS flood-fill from all score-0 cells using 4-directional adjacency
+
+**Architecture:**
+- `src/renderer/scenery-renderer.ts` — New file containing grid computation and tree rendering
+- `TrackScene.sceneryGroup` — Separate THREE.Group for scenery (not included in track bounding box)
+- `TrackScene.clearScenery()` / `addSceneryGroup()` — Lifecycle methods
+- `clearLayout()` calls `clearScenery()` automatically
+- `renderScenery()` called from `track-renderer.ts` after track rendering, before `fitToLayout()`
+
+**Why grid-based scoring (not analytical distance):**
+- Computing exact distance from each point to the nearest track spline is expensive (requires sampling all splines)
+- Grid discretization makes BFS trivial and fast — O(cells) time, single pass
+- Grid resolution (4" cells) is fine enough that individual trees (radius 1-3") look naturally placed
+- Infrastructure is reusable for future scenery types (ponds, buildings, vegetation patches) by scoring cells differently
+
 ## Open Questions
 
 These will be addressed in user scenario discussions:

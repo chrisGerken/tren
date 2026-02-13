@@ -1071,6 +1071,47 @@ $yard_3.out ; str x 5 ; bump
 $yard_4.out ; str x 5 ; bump
 ```
 
+## Trees
+
+The `trees` statement enables tree scenery placement in open areas away from tracks.
+
+### Syntax
+
+```
+trees                            # Enable trees with defaults
+trees none                       # Explicitly disable trees
+trees clearance N                # Min distance score for placement (default: 2)
+trees density N                  # Max trees per cell at full density (default: 3)
+trees clearance N density M      # Parameters in any order
+```
+
+### Behavior
+
+Trees are placed using a grid-based distance scoring algorithm:
+1. The layout area is divided into a grid of ~4-inch cells
+2. Cells containing track are scored 0
+3. BFS flood-fill assigns increasing scores to cells farther from track
+4. Trees are placed in cells where `score >= clearance`
+
+Tree count per cell ramps up gradually: `min(density, score - clearance + 1)`.
+
+| Score | Trees (clearance=2, density=3) | Reason |
+|-------|-------------------------------|--------|
+| 0 | 0 | Track cell |
+| 1 | 0 | Within clearance buffer |
+| 2 | 1 | Sparse fringe |
+| 3 | 2 | Moderate |
+| 4+ | 3 | Capped at density |
+
+Each tree is rendered as a cluster of 3-5 overlapping dark green circles viewed from above. Trees do not affect camera framing (camera fits to tracks only).
+
+### Example
+
+```
+trees
+gen cabs 1 cars 3 every 15 ; str x 2 ; crvl x 16 ; str x 2 ; bin
+```
+
 ## Building Patterns
 
 ### Simple Loop

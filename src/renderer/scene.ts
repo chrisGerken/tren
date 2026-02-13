@@ -32,6 +32,7 @@ export class TrackScene {
   private trackGroup: THREE.Group;
   private trainGroup: THREE.Group;
   private labelGroup: THREE.Group;
+  private sceneryGroup: THREE.Group;
   private raycaster: THREE.Raycaster;
   private mouse: THREE.Vector2;
   private onSwitchClick?: SwitchClickCallback;
@@ -39,6 +40,7 @@ export class TrackScene {
   private onDecouplerClick?: DecouplerClickCallback;
   private onTrainDblClick?: TrainDblClickCallback;
   private onGeneratorDblClick?: GeneratorDblClickCallback;
+  private layoutBounds: THREE.Box3 | null = null;
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -84,6 +86,17 @@ export class TrackScene {
     directionalLight.position.set(50, 100, 50);
     this.scene.add(directionalLight);
 
+    // Generate environment map for metallic reflections (rails)
+    // The env scene needs a visible background — metallic surfaces reflect
+    // what they "see", so an empty scene with only lights reflects black.
+    const pmremGenerator = new THREE.PMREMGenerator(this.renderer);
+    const envScene = new THREE.Scene();
+    envScene.background = new THREE.Color(0xe0e8f0);  // Bright sky white-blue
+    envScene.add(new THREE.HemisphereLight(0xffffff, 0xaaaaaa, 3.0));
+    this.scene.environment = pmremGenerator.fromScene(envScene).texture;
+    pmremGenerator.dispose();
+    envScene.clear();
+
     // Create group for track pieces
     this.trackGroup = new THREE.Group();
     this.scene.add(this.trackGroup);
@@ -96,6 +109,10 @@ export class TrackScene {
     this.labelGroup = new THREE.Group();
     this.labelGroup.visible = false;
     this.scene.add(this.labelGroup);
+
+    // Create group for scenery (trees, etc.)
+    this.sceneryGroup = new THREE.Group();
+    this.scene.add(this.sceneryGroup);
 
     // Add grass ground plane
     const groundGeometry = new THREE.PlaneGeometry(1000, 1000);
@@ -246,17 +263,43 @@ export class TrackScene {
   }
 
   private onResize(): void {
-    const aspect = this.container.clientWidth / this.container.clientHeight;
-    const viewSize = 100;
+    const width = this.container.clientWidth;
+    const height = this.container.clientHeight;
+    const aspect = width / height;
 
-    this.camera.left = -viewSize * aspect / 2;
-    this.camera.right = viewSize * aspect / 2;
-    this.camera.top = viewSize / 2;
-    this.camera.bottom = -viewSize / 2;
+    this.renderer.setSize(width, height);
+    this.labelRenderer.setSize(width, height);
+
+    if (this.layoutBounds) {
+      // Recalculate frustum from stored layout bounds, same math as fitToLayout
+      const size = this.layoutBounds.getSize(new THREE.Vector3());
+      const layoutAspect = size.x / size.z;
+
+      let viewWidth: number;
+      let viewHeight: number;
+
+      if (layoutAspect > aspect) {
+        viewWidth = size.x / 0.9;
+        viewHeight = viewWidth / aspect;
+      } else {
+        viewHeight = size.z / 0.9;
+        viewWidth = viewHeight * aspect;
+      }
+
+      this.camera.left = -viewWidth / 2;
+      this.camera.right = viewWidth / 2;
+      this.camera.top = viewHeight / 2;
+      this.camera.bottom = -viewHeight / 2;
+    } else {
+      // No layout loaded yet — fall back to default 100-inch view
+      const viewSize = 100;
+      this.camera.left = -viewSize * aspect / 2;
+      this.camera.right = viewSize * aspect / 2;
+      this.camera.top = viewSize / 2;
+      this.camera.bottom = -viewSize / 2;
+    }
+
     this.camera.updateProjectionMatrix();
-
-    this.renderer.setSize(this.container.clientWidth, this.container.clientHeight);
-    this.labelRenderer.setSize(this.container.clientWidth, this.container.clientHeight);
     this.render();
   }
 
@@ -294,6 +337,35 @@ export class TrackScene {
     while (this.labelGroup.children.length > 0) {
       this.labelGroup.remove(this.labelGroup.children[0]);
     }
+
+    // Remove all scenery with proper disposal
+    this.clearScenery();
+  }
+
+  clearScenery(): void {
+    const disposeObject = (obj: THREE.Object3D) => {
+      if (obj instanceof THREE.Mesh) {
+        obj.geometry.dispose();
+        if (obj.material instanceof THREE.Material) {
+          obj.material.dispose();
+        } else if (Array.isArray(obj.material)) {
+          obj.material.forEach(m => m.dispose());
+        }
+      }
+      for (const child of obj.children) {
+        disposeObject(child);
+      }
+    };
+
+    while (this.sceneryGroup.children.length > 0) {
+      const child = this.sceneryGroup.children[0];
+      this.sceneryGroup.remove(child);
+      disposeObject(child);
+    }
+  }
+
+  addSceneryGroup(group: THREE.Group): void {
+    this.sceneryGroup.add(group);
   }
 
   addTrackGroup(group: THREE.Group): void {
@@ -367,6 +439,7 @@ export class TrackScene {
     if (this.trackGroup.children.length === 0) return;
 
     const box = new THREE.Box3().setFromObject(this.trackGroup);
+    this.layoutBounds = box;
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
 

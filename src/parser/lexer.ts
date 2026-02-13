@@ -49,6 +49,10 @@ export enum TokenType {
   LOG = 'LOG',                 // log/logging keyword (for log level configuration)
   PREFAB = 'PREFAB',           // prefab/prefabrication keyword (for prefab definition)
   USE = 'USE',                 // use keyword (for prefab expansion)
+  TREES = 'TREES',             // trees keyword (for scenery configuration)
+  CLEARANCE = 'CLEARANCE',     // clearance keyword (for trees)
+  DENSITY = 'DENSITY',         // density keyword (for trees)
+  NONE = 'NONE',               // none keyword (for disabling features)
   EOF = 'EOF',
 }
 
@@ -678,6 +682,46 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
       if (lowerValue === 'use') {
         tokens.push({
           type: TokenType.USE,
+          value: value,
+          line: lineNum,
+          column: startPos + 1,
+        });
+        continue;
+      }
+
+      if (lowerValue === 'trees') {
+        tokens.push({
+          type: TokenType.TREES,
+          value: value,
+          line: lineNum,
+          column: startPos + 1,
+        });
+        continue;
+      }
+
+      if (lowerValue === 'clearance') {
+        tokens.push({
+          type: TokenType.CLEARANCE,
+          value: value,
+          line: lineNum,
+          column: startPos + 1,
+        });
+        continue;
+      }
+
+      if (lowerValue === 'density') {
+        tokens.push({
+          type: TokenType.DENSITY,
+          value: value,
+          line: lineNum,
+          column: startPos + 1,
+        });
+        continue;
+      }
+
+      if (lowerValue === 'none') {
+        tokens.push({
+          type: TokenType.NONE,
           value: value,
           line: lineNum,
           column: startPos + 1,

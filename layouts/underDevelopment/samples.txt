@@ -434,6 +434,19 @@
 
 
 # =============================================================================
+# SAMPLE 19: Layout with trees
+# =============================================================================
+# Trees fill open areas away from tracks. Clearance controls the buffer zone
+# around tracks, density controls how many trees per cell at maximum.
+#
+# trees
+# gen cabs 1 cars 3 every 15 ; str x 2 ; crvl x 16 ; str x 2 ; bin
+#
+# trees clearance 1 density 5    # Denser trees, closer to tracks
+# gen cabs 1 cars 3 every 15 ; str x 2 ; crvl x 16 ; str x 2 ; bin
+
+
+# =============================================================================
 # ACTIVE SAMPLE (uncomment to render)
 # =============================================================================
 # Train simulation test - trains spawn every 15 seconds and circle around

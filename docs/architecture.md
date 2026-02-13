@@ -20,6 +20,9 @@ The root container for the entire simulation.
 - `title`: Display name for the layout (default: "No Title")
 - `description`: Optional longer description of the layout
 - `minGap`: Minimum following distance between trains in inches (default: 1 inch)
+- `treesEnabled`: Whether tree scenery is enabled (default: false)
+- `treesClearance`: Min grid distance from track for tree placement (default: 2)
+- `treesDensity`: Max trees per grid cell (default: 3)
 - `pieces`: Array of all track pieces in the layout
 
 **Responsibilities**:

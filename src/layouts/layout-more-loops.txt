@@ -4,6 +4,8 @@ description Slightly more complex example with more loops, switches, tunnels and
 max trains 6
 lockahead distance 10 count 4
 
+trees clearance 4 density 3
+
 gen cabs 1-2 cars 2-10 every 10 speed 7-16
 
 str ; crvr * 2 ; crvl * 2

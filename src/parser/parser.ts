@@ -22,7 +22,8 @@ export type Statement =
   | LogStatement
   | ArrayStatement
   | PrefabStatement
-  | UseStatement;
+  | UseStatement
+  | TreesStatement;
 
 export interface NewStatement {
   type: 'new';
@@ -164,6 +165,14 @@ export interface UseStatement {
   line: number;
 }
 
+export interface TreesStatement {
+  type: 'trees';
+  none?: boolean;
+  clearance?: number;
+  density?: number;
+  line: number;
+}
+
 /**
  * Parse DSL text into an array of statements
  */
@@ -239,6 +248,9 @@ class Parser {
 
       case TokenType.USE:
         return this.parseUseStatement();
+
+      case TokenType.TREES:
+        return this.parseTreesStatement();
 
       case TokenType.LABEL_DEF:
         return this.parseLabeledPiece();
@@ -709,6 +721,34 @@ class Parser {
     }
 
     return { type: 'use', name, params, line: token.line };
+  }
+
+  private parseTreesStatement(): TreesStatement {
+    const token = this.advance(); // consume 'trees'
+
+    let none: boolean | undefined;
+    let clearance: number | undefined;
+    let density: number | undefined;
+
+    // Parse modifiers in any order: none, clearance N, density N
+    while (this.check(TokenType.NONE) || this.check(TokenType.CLEARANCE) || this.check(TokenType.DENSITY)) {
+      if (this.check(TokenType.NONE)) {
+        this.advance(); // consume 'none'
+        none = true;
+      } else if (this.check(TokenType.CLEARANCE)) {
+        this.advance(); // consume 'clearance'
+        if (this.check(TokenType.NUMBER)) {
+          clearance = parseInt(this.advance().value, 10);
+        }
+      } else if (this.check(TokenType.DENSITY)) {
+        this.advance(); // consume 'density'
+        if (this.check(TokenType.NUMBER)) {
+          density = parseInt(this.advance().value, 10);
+        }
+      }
+    }
+
+    return { type: 'trees', none, clearance, density, line: token.line };
   }
 
   private parseLabeledPiece(): PieceStatement {

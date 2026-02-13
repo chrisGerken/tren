@@ -69,6 +69,9 @@ export interface Layout {
   randomSwitches?: boolean;  // If true, switches randomly change when trains pass
   maxTrains?: number;    // Maximum number of trains allowed on the layout at once
   logLevel?: string;     // Log level from DSL: 'debug', 'info', 'warn', 'error'
+  treesEnabled?: boolean;       // Whether trees are enabled (default: false)
+  treesClearance?: number;      // Min grid score for tree placement (default: 2)
+  treesDensity?: number;        // Max trees per cell (default: 3)
   pieces: TrackPiece[];
 }
 

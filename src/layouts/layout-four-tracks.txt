@@ -16,6 +16,9 @@ def crvr27  right radius 27  arc 22.5
 def str24   straight length 24
 def str42   straight length 42
 
+
+trees clearance 4 density 4
+
 # Create 4 parallel track starting points, 4" apart
 
 array count 5 angle 90 distance 4 prefix main_
