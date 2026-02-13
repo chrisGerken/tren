@@ -445,6 +445,24 @@
 # trees clearance 1 density 5    # Denser trees, closer to tracks
 # gen cabs 1 cars 3 every 15 ; str x 2 ; crvl x 16 ; str x 2 ; bin
 
+# =============================================================================
+# SAMPLE 20: Layout with pond
+# =============================================================================
+# Pond places a body of water in open space. Size controls cell count,
+# clearance controls minimum distance from track. Combine with trees for
+# a natural scene — trees automatically avoid the pond and its shore.
+#
+# pond
+# gen cabs 1 cars 3 every 15 ; str x 2 ; crvl x 16 ; str x 2 ; bin
+#
+# trees clearance 3 density 2
+# pond size 25 clearance 4
+# gen cabs 1 cars 3 every 15 ; str x 2 ; crvl x 16 ; str x 2 ; bin
+#
+# trees clearance 3 density 2
+# pond size 25 clearance 4 score 0    # score 0 = max tree-free buffer around pond
+# gen cabs 1 cars 3 every 15 ; str x 2 ; crvl x 16 ; str x 2 ; bin
+
 
 # =============================================================================
 # ACTIVE SAMPLE (uncomment to render)

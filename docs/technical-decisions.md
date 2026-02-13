@@ -1466,6 +1466,69 @@ trees clearance N density M      # Custom parameters (any order)
 - Grid resolution (4" cells) is fine enough that individual trees (radius 1-3") look naturally placed
 - Infrastructure is reusable for future scenery types (ponds, buildings, vegetation patches) by scoring cells differently
 
+## Scenery: Pond Placement
+
+Ponds add a body of water to open areas, using the same grid infrastructure as trees.
+
+**DSL syntax:**
+```
+pond                                    # Enable with defaults
+pond size N clearance M score S         # Custom parameters (any order)
+```
+
+**Design decisions:**
+- Opt-in via `pond` DSL statement (no pond by default)
+- Defaults: size=20 cells, clearance=3, score=min original score of pond cells minus 1
+- Pond is placed BEFORE trees — it modifies the grid so trees naturally avoid the pond and its shore
+- Candidates restricted to camera-view bounds (tracks + 10%) so the pond is visible at initial zoom
+- True `Math.random()` (not seeded PRNG) so pond position varies each reload — deliberate contrast with trees which use deterministic placement
+- Randomized BFS growth from a random seed cell for organic blob shapes
+- Aspect ratio constraint (0.5–2.0 width:height) prevents elongated/river-like shapes; pond may be smaller than requested if constrained
+
+**Grid modification after pond placement:**
+- Pond cells are assigned score `S` (the `score` parameter, default: min original score among selected cells minus 1)
+- All other non-track cells are reset to unscored (-1)
+- BFS flood-fill is re-run from both track cells (score 0) and pond cells (score S)
+- This creates a natural buffer zone where trees won't grow, proportional to how low `S` is (score 0 = maximum buffer, same as track clearance)
+
+**BFS multi-source support:**
+- `bfsFloodFill()` was updated to seed from all already-scored cells (not just score-0), sorted by score for correct propagation order
+- This enables multi-source BFS with different starting scores (track=0, pond=S)
+
+**Pond rendering — smooth water body:**
+- Single blue color (0x3a7bbf) — one `InstancedMesh` draw call
+- Three circle layers per cell for smooth appearance:
+  1. **Base circle**: radius 110% of cell size at cell center — covers full cell, overlaps neighbors
+  2. **Midpoint circles**: radius 90% of cell, placed between horizontally/vertically adjacent pond cells — fills seams
+  3. **Border circles**: 3 per exposed edge at varied tangential positions (−0.3, 0, +0.3 of cell size) with slight jitter — creates smooth organic outline
+- Positioned at Y=0.003 (below trees at Y=0.005) so tree foliage can overlap pond edges
+
+## Scenery Preservation on UI Toggles
+
+**Problem:** Toggling Random/Manual or clicking switches re-rendered the entire layout including scenery, causing the pond (which uses `Math.random()`) to jump to a new position.
+
+**Solution:** `renderLayout()` accepts a `preserveScenery` parameter (default `false`):
+- When `true`: calls `scene.clearTrack()` (new method — clears only track meshes and labels) and skips `renderScenery()`
+- When `false`: calls `scene.clearLayout()` (clears everything) and runs `renderScenery()` for fresh scenery
+
+**Callers using `preserveScenery = true`:**
+- Random/Manual toggle — only switch indicators change
+- Switch click callbacks — only route indicators change
+- Inspector widget switch changes
+
+**Callers using default `false` (fresh scenery):**
+- Initial layout load from import
+- Layout selection from dialog
+
+## UI: Context-Sensitive Button Labels
+
+Toolbar buttons show labels that describe their current state rather than the action they perform:
+
+- **Labels button**: "Clean" (labels hidden, default) / "Design" (labels visible — shows connection points, labels, switch indicators)
+- **Random button**: "Manual" (switch controls shown, default) / "Random" (switches randomize when trains pass)
+
+Both HTML defaults and JavaScript toggle functions update `textContent` to match the current state.
+
 ## Open Questions
 
 These will be addressed in user scenario discussions:

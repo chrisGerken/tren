@@ -1112,6 +1112,46 @@ trees
 gen cabs 1 cars 3 every 15 ; str x 2 ; crvl x 16 ; str x 2 ; bin
 ```
 
+## Pond
+
+The `pond` statement places a body of water in an open area away from tracks. The pond uses the same grid-based distance scoring as trees.
+
+### Syntax
+
+```
+pond                             # Enable pond with defaults
+pond size N                      # Number of grid cells (default: 20)
+pond clearance N                 # Min distance score for placement (default: 3)
+pond score S                     # Score assigned to pond cells (default: min original - 1)
+pond size N clearance M score S  # Parameters in any order
+```
+
+### Behavior
+
+The pond is placed using a randomized BFS growth algorithm:
+1. Candidate cells are those with `score >= clearance` within the initial camera view (tracks + 10%)
+2. A random seed cell is chosen from the candidates (varies each reload)
+3. The pond grows by randomly selecting frontier cells (organic shape)
+4. An aspect ratio constraint (0.5–2.0 width:height) prevents elongated shapes
+5. Growth stops when `size` cells are reached or the frontier is exhausted
+
+After placement, the pond modifies the distance-score grid:
+- Pond cells are set to score `S` (default: the minimum original score among pond cells minus 1)
+- All other non-track cells are reset to unscored
+- BFS flood-fill is re-run from both track cells (score 0) and pond cells (score S)
+
+This creates a natural buffer zone around the pond. Lower `score` values create wider buffers. Setting `score 0` treats the pond like track, giving trees the same clearance from the pond as from tracks.
+
+The pond is rendered as overlapping blue circles at Y=0.003 (below trees at Y=0.005), so tree foliage naturally overlaps pond edges. Each cell has 2–3 circles with radius 60–90% of the grid cell size, creating smooth rounded edges.
+
+### Example
+
+```
+trees clearance 3 density 2
+pond size 25 clearance 4
+gen cabs 1 cars 3 every 15 ; str x 2 ; crvl x 16 ; str x 2 ; bin
+```
+
 ## Building Patterns
 
 ### Simple Loop

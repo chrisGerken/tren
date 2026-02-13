@@ -2,7 +2,7 @@
  * Layout Builder - transforms AST into placed track pieces
  */
 
-import { parse, Statement, PieceStatement, NewStatement, ReferenceStatement, LoopCloseStatement, TitleStatement, DescriptionStatement, LockAheadStatement, SpliceStatement, RandomStatement, MaxTrainsStatement, FlexConnectStatement, CrossConnectStatement, DefineStatement, LogStatement, ArrayStatement, PrefabStatement, UseStatement, TreesStatement } from './parser';
+import { parse, Statement, PieceStatement, NewStatement, ReferenceStatement, LoopCloseStatement, TitleStatement, DescriptionStatement, LockAheadStatement, SpliceStatement, RandomStatement, MaxTrainsStatement, FlexConnectStatement, CrossConnectStatement, DefineStatement, LogStatement, ArrayStatement, PrefabStatement, UseStatement, TreesStatement, PondStatement } from './parser';
 import { Layout, TrackPiece, Vec3, vec2, ConnectionPointDef, RangeValue as TypeRangeValue } from '../core/types';
 import { getArchetype, registerRuntimeArchetype } from '../core/archetypes';
 import type { TrackArchetype } from '../core/archetypes';
@@ -74,6 +74,10 @@ interface BuilderState {
   treesEnabled?: boolean;
   treesClearance?: number;
   treesDensity?: number;
+  pondEnabled?: boolean;
+  pondSize?: number;
+  pondClearance?: number;
+  pondScore?: number;
 }
 
 /**
@@ -156,6 +160,10 @@ class LayoutBuilder {
       treesEnabled: this.state.treesEnabled,
       treesClearance: this.state.treesClearance,
       treesDensity: this.state.treesDensity,
+      pondEnabled: this.state.pondEnabled,
+      pondSize: this.state.pondSize,
+      pondClearance: this.state.pondClearance,
+      pondScore: this.state.pondScore,
       pieces: this.state.pieces,
     };
   }
@@ -216,6 +224,9 @@ class LayoutBuilder {
       case 'trees':
         this.processTrees(stmt);
         break;
+      case 'pond':
+        this.processPond(stmt);
+        break;
     }
   }
 
@@ -238,6 +249,13 @@ class LayoutBuilder {
       if (stmt.clearance !== undefined) this.state.treesClearance = stmt.clearance;
       if (stmt.density !== undefined) this.state.treesDensity = stmt.density;
     }
+  }
+
+  private processPond(stmt: PondStatement): void {
+    this.state.pondEnabled = true;
+    if (stmt.size !== undefined) this.state.pondSize = stmt.size;
+    if (stmt.clearance !== undefined) this.state.pondClearance = stmt.clearance;
+    if (stmt.score !== undefined) this.state.pondScore = stmt.score;
   }
 
   private processPrefab(stmt: PrefabStatement): void {

@@ -55,7 +55,7 @@ scene.setSwitchClickCallback((routeKey, connectionIndex) => {
   setSelectedRouteByKey(routeKey, connectionIndex);
   if (currentLayout) {
     logger.debug(`Calling renderLayout with ${currentLayout.pieces.length} pieces`);
-    renderLayout(scene, currentLayout);
+    renderLayout(scene, currentLayout, true);
     setStatus(`Switch toggled: ${routeKey} → route ${connectionIndex + 1}`);
   } else {
     logger.debug('currentLayout is null!');
@@ -130,7 +130,7 @@ scene.setTrainDblClickCallback((trainId) => {
   widget.onSwitchRouteChanged = (routeKey, connectionIndex) => {
     setSelectedRouteByKey(routeKey, connectionIndex);
     if (currentLayout) {
-      renderLayout(scene, currentLayout);
+      renderLayout(scene, currentLayout, true);
     }
   };
   inspectorManager.addWidget(widget);
@@ -263,8 +263,10 @@ function updateRandomButtonState(): void {
     const isRandom = currentLayout?.randomSwitches ?? false;
     if (isRandom) {
       randomBtn.classList.add('active');
+      randomBtn.textContent = 'Random';
     } else {
       randomBtn.classList.remove('active');
+      randomBtn.textContent = 'Manual';
     }
   }
 }
@@ -281,8 +283,8 @@ function toggleRandom(): void {
   currentLayout.randomSwitches = !currentLayout.randomSwitches;
   updateRandomButtonState();
 
-  // Re-render the layout to show/hide switch indicators
-  renderLayout(scene, currentLayout);
+  // Re-render track only (preserve scenery)
+  renderLayout(scene, currentLayout, true);
 
   const state = currentLayout.randomSwitches ? 'ON' : 'OFF';
   setStatus(`Random switches: ${state}`);
@@ -303,8 +305,10 @@ function updateLabelsButtonState(): void {
     const isVisible = scene.getLabelsVisible();
     if (isVisible) {
       labelsBtn.classList.add('active');
+      labelsBtn.textContent = 'Design';
     } else {
       labelsBtn.classList.remove('active');
+      labelsBtn.textContent = 'Clean';
     }
   }
 }

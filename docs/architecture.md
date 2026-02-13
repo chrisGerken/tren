@@ -23,6 +23,10 @@ The root container for the entire simulation.
 - `treesEnabled`: Whether tree scenery is enabled (default: false)
 - `treesClearance`: Min grid distance from track for tree placement (default: 2)
 - `treesDensity`: Max trees per grid cell (default: 3)
+- `pondEnabled`: Whether pond scenery is enabled (default: false)
+- `pondSize`: Number of grid cells for the pond (default: 20)
+- `pondClearance`: Min grid distance from track for pond placement (default: 3)
+- `pondScore`: Score assigned to pond cells for tree buffer calculation (default: min original score − 1)
 - `pieces`: Array of all track pieces in the layout
 
 **Responsibilities**:

@@ -53,6 +53,9 @@ export enum TokenType {
   CLEARANCE = 'CLEARANCE',     // clearance keyword (for trees)
   DENSITY = 'DENSITY',         // density keyword (for trees)
   NONE = 'NONE',               // none keyword (for disabling features)
+  POND = 'POND',               // pond keyword (for scenery configuration)
+  SIZE = 'SIZE',               // size keyword (for pond)
+  SCORE = 'SCORE',             // score keyword (for pond)
   EOF = 'EOF',
 }
 
@@ -722,6 +725,36 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
       if (lowerValue === 'none') {
         tokens.push({
           type: TokenType.NONE,
+          value: value,
+          line: lineNum,
+          column: startPos + 1,
+        });
+        continue;
+      }
+
+      if (lowerValue === 'pond') {
+        tokens.push({
+          type: TokenType.POND,
+          value: value,
+          line: lineNum,
+          column: startPos + 1,
+        });
+        continue;
+      }
+
+      if (lowerValue === 'size') {
+        tokens.push({
+          type: TokenType.SIZE,
+          value: value,
+          line: lineNum,
+          column: startPos + 1,
+        });
+        continue;
+      }
+
+      if (lowerValue === 'score') {
+        tokens.push({
+          type: TokenType.SCORE,
           value: value,
           line: lineNum,
           column: startPos + 1,

@@ -115,6 +115,8 @@ Example (semicolon-separated statements):
 gen ; str ; crvl x 16 ; str ; bin   # Circle with generator and bin sidetracks
 ```
 
+**Scenery:** `trees` and `pond` DSL statements place scenery in open areas using the shared grid-based distance scoring system. Trees use deterministic PRNG; pond uses `Math.random()` for varied placement each reload. Pond is placed first and modifies the grid (via `score` parameter and BFS re-run) so trees avoid the pond and its shore. Scenery is preserved across UI toggles (Random/Manual, Clean/Design) — only regenerated on new layout load.
+
 ## Documentation
 
 Detailed specifications in `docs/`:

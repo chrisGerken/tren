@@ -139,9 +139,14 @@ export function updateDecouplerColor(pieceId: string, activated: boolean): void 
 
 /**
  * Render a complete layout
+ * @param preserveScenery - if true, keep existing trees/pond (for UI toggles that don't change layout)
  */
-export function renderLayout(scene: TrackScene, layout: Layout): void {
-  scene.clearLayout();
+export function renderLayout(scene: TrackScene, layout: Layout, preserveScenery = false): void {
+  if (preserveScenery) {
+    scene.clearTrack();
+  } else {
+    scene.clearLayout();
+  }
 
   // Clear connection point mesh references
   connectionPointMeshes.clear();
@@ -179,7 +184,9 @@ export function renderLayout(scene: TrackScene, layout: Layout): void {
     }
   }
 
-  renderScenery(scene, layout);
+  if (!preserveScenery) {
+    renderScenery(scene, layout);
+  }
 
   scene.fitToLayout();
   scene.render();

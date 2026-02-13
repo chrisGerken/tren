@@ -23,7 +23,8 @@ export type Statement =
   | ArrayStatement
   | PrefabStatement
   | UseStatement
-  | TreesStatement;
+  | TreesStatement
+  | PondStatement;
 
 export interface NewStatement {
   type: 'new';
@@ -173,6 +174,14 @@ export interface TreesStatement {
   line: number;
 }
 
+export interface PondStatement {
+  type: 'pond';
+  size?: number;
+  clearance?: number;
+  score?: number;
+  line: number;
+}
+
 /**
  * Parse DSL text into an array of statements
  */
@@ -251,6 +260,9 @@ class Parser {
 
       case TokenType.TREES:
         return this.parseTreesStatement();
+
+      case TokenType.POND:
+        return this.parsePondStatement();
 
       case TokenType.LABEL_DEF:
         return this.parseLabeledPiece();
@@ -749,6 +761,36 @@ class Parser {
     }
 
     return { type: 'trees', none, clearance, density, line: token.line };
+  }
+
+  private parsePondStatement(): PondStatement {
+    const token = this.advance(); // consume 'pond'
+
+    let size: number | undefined;
+    let clearance: number | undefined;
+    let score: number | undefined;
+
+    // Parse modifiers in any order: size N, clearance N, score N
+    while (this.check(TokenType.SIZE) || this.check(TokenType.CLEARANCE) || this.check(TokenType.SCORE)) {
+      if (this.check(TokenType.SIZE)) {
+        this.advance(); // consume 'size'
+        if (this.check(TokenType.NUMBER)) {
+          size = parseInt(this.advance().value, 10);
+        }
+      } else if (this.check(TokenType.CLEARANCE)) {
+        this.advance(); // consume 'clearance'
+        if (this.check(TokenType.NUMBER)) {
+          clearance = parseInt(this.advance().value, 10);
+        }
+      } else if (this.check(TokenType.SCORE)) {
+        this.advance(); // consume 'score'
+        if (this.check(TokenType.NUMBER)) {
+          score = parseInt(this.advance().value, 10);
+        }
+      }
+    }
+
+    return { type: 'pond', size, clearance, score, line: token.line };
   }
 
   private parseLabeledPiece(): PieceStatement {

@@ -72,6 +72,10 @@ export interface Layout {
   treesEnabled?: boolean;       // Whether trees are enabled (default: false)
   treesClearance?: number;      // Min grid score for tree placement (default: 2)
   treesDensity?: number;        // Max trees per cell (default: 3)
+  pondEnabled?: boolean;        // Whether pond is enabled (default: false)
+  pondSize?: number;            // Number of grid cells for pond (default: 20)
+  pondClearance?: number;       // Min distance score for pond placement (default: 3)
+  pondScore?: number;           // Score to assign pond cells before BFS re-calc (default: min original - 1)
   pieces: TrackPiece[];
 }
 

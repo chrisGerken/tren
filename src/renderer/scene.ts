@@ -310,6 +310,14 @@ export class TrackScene {
   }
 
   clearLayout(): void {
+    this.clearTrack();
+    this.clearScenery();
+  }
+
+  /**
+   * Clear only track pieces and labels, preserving scenery (trees, pond)
+   */
+  clearTrack(): void {
     // Recursively dispose all meshes in a group
     const disposeObject = (obj: THREE.Object3D) => {
       if (obj instanceof THREE.Mesh) {
@@ -337,9 +345,6 @@ export class TrackScene {
     while (this.labelGroup.children.length > 0) {
       this.labelGroup.remove(this.labelGroup.children[0]);
     }
-
-    // Remove all scenery with proper disposal
-    this.clearScenery();
   }
 
   clearScenery(): void {
