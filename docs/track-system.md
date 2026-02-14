@@ -129,7 +129,7 @@ The starter collection is based on standard HO model railroad track pieces, excl
 | `crvr18`, `crvr22`, `crvr24` | Curve Right | 1 | `in`, `out` | 0 |
 | `x90` | 90° Crossing | 2 | `in1`, `out1`, `in2`, `out2` | 1 |
 | `x45` | 45° Crossing | 2 | `in1`, `out1`, `in2`, `out2` | 1 |
-| `bump` | Bumper/Buffer | 1 | `in` | 0 |
+| `bump` | Bumper/Buffer | 1 | `in`, `out` | 0 |
 | `flex` | Flex Track | 1 | `in`, `out` | 0 |
 | `ph` | Placeholder | 0 | `in`, `out` | 0 |
 | `gen` | Generator | 1 (invisible) | `out` | 0 |
@@ -192,11 +192,12 @@ Two tracks cross at 45°. Same behavior as 90° crossing.
 #### Bumper / Buffer Stop (`bump`)
 
 - **Code**: `bump`
-- **Sections**: 1
-- **Connection Points**: `in` (open end only)
+- **Sections**: 1 (3-inch straight)
+- **Connection Points**: `in` (open end), `out` (buffer end)
 - **Collision Points**: None
+- **Visual**: Red X spanning the roadbed width
 
-Defines where track ends. Trains cannot proceed past the buffer.
+Defines where track ends. A virtual internal connection point (`stop`) is placed 3 inches beyond `out`. Only `stop` is permanently locked at simulation start (using reserved trainId `'__bump__'`). Trains enter via `in`, traverse the section, and begin braking when the look-ahead discovers the locked `stop` point — since it's 3 inches beyond the physical dead end, trains stop closer to the visible buffer rather than braking too early.
 
 #### Flex Track (`flex`)
 

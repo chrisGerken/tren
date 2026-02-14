@@ -101,6 +101,8 @@ export class Simulation {
       layout.lockAheadDistance ?? 10,
       layout.lockAheadCount ?? 2
     );
+    // Pre-lock bump connection points so trains brake on approach
+    this.lockBumpPoints();
   }
 
   /**
@@ -154,6 +156,8 @@ export class Simulation {
     this.simulationTime = 0;
     this.resolvedFrequencies.clear();
     this.lockManager.clear();
+    // Re-lock bump connection points after clearing all locks
+    this.lockBumpPoints();
     // Reset generator spawn times
     for (const piece of this.layout.pieces) {
       if (piece.genConfig) {
@@ -163,6 +167,44 @@ export class Simulation {
     }
     this.onUpdate();
     logger.info('Simulation reset');
+  }
+
+  /**
+   * Pre-lock a virtual stop point on each bump piece so trains brake near the buffer end.
+   * A virtual internal connection point is placed 3 inches beyond the bump's `out` point.
+   * The look-ahead discovers it naturally, causing trains to target a point beyond the
+   * physical dead end — so they stop closer to the visible buffer.
+   * Uses a reserved train ID that no real train will have.
+   */
+  private lockBumpPoints(): void {
+    for (const piece of this.layout.pieces) {
+      const archetype = getArchetype(piece.archetypeCode);
+      if (archetype?.code === 'bump') {
+        const sectionLength = getSectionLength(piece, 0);
+        const stopId = `${piece.id}.stop`;
+
+        // Add virtual internal connection point beyond the dead end
+        if (!piece.internalConnectionPoints) {
+          piece.internalConnectionPoints = [];
+        }
+        // Remove any existing stop point (for reset)
+        piece.internalConnectionPoints = piece.internalConnectionPoints.filter(
+          icp => icp.id !== stopId
+        );
+        piece.internalConnectionPoints.push({
+          id: stopId,
+          t: 1.0,  // Nominal — point is virtual, beyond section end
+          distance: sectionLength + 3,
+          worldPosition: vec3(0, 0, 0),  // Not used for locking
+        });
+
+        this.lockManager.tryAcquireLocks(
+          '__bump__',
+          [stopId],
+          this.simulationTime
+        );
+      }
+    }
   }
 
   /**

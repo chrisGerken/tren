@@ -304,7 +304,7 @@ gen cabs 2 cars 3             # One train: 2 cabs, 3 cars
 gen every 10                  # New train every 10 seconds: 1 cab, 5 cars
 gen colorful                  # One train with vibrant colored cars
 gen gray                      # One train with grayscale cars (default)
-gen black                     # One train with all-black cars (cabs remain yellow)
+gen black                     # One train with all-black cars (cabs remain dark orange)
 gen cabs 2 cars 3 speed 6 every 10 colorful    # Full specification with colors
 ```
 
@@ -315,14 +315,14 @@ gen cabs 2 cars 3 speed 6 every 10 colorful    # Full specification with colors
 - `every S` - Spawn frequency in seconds. If omitted, only one train is spawned.
 - `colorful` - Use vibrant colors (red, blue, green, purple, yellow) for rolling stock
 - `gray` - Use grayscale shades for rolling stock (default)
-- `black` - All rolling stock is black (cabs remain yellow)
+- `black` - All rolling stock is black (cabs remain dark orange)
 
 Parameters can appear in any order after `gen`.
 
 **Color Modes:**
 - `gray` (default): Rolling stock uses various shades of gray, creating a more realistic, industrial appearance
 - `colorful`: Rolling stock uses vibrant colors (red, blue, green, purple, yellow) for a more playful appearance
-- `black`: All rolling stock is solid black (0x000000), creating a uniform dark appearance. Cabs remain yellow.
+- `black`: All rolling stock is solid black (0x000000), creating a uniform dark appearance. Cabs remain dark orange.
 
 The `gray` and `colorful` modes use weighted random selection where the previous car's color has a higher chance of being repeated, creating natural-looking car groupings. The `black` mode uses a single fixed color for all cars.
 

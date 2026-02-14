@@ -18,7 +18,6 @@ const CONNECTION_POINT_UNLOCKED_COLOR = 0xffffff;  // White for unlocked
 const CONNECTION_POINT_LOCKED_COLOR = 0xff0000;  // Red for locked
 const GENERATOR_COLOR = 0x22aa22;  // Green
 const BIN_COLOR = 0xcc2222;  // Red
-const BUMPER_COLOR = 0x444444;  // Dark gray
 const TUNNEL_COLOR = 0x4a4a4a;  // Dark gray for tunnel portal
 const SWITCH_SELECTED_COLOR = 0x00ff00;  // Bright green for selected route
 const SWITCH_UNSELECTED_COLOR = 0xff0000;  // Red for unselected routes
@@ -843,52 +842,59 @@ function getPieceCenter(piece: TrackPiece, archetype: TrackArchetype): { x: numb
 }
 
 /**
- * Render bumper stop at world position
+ * Render bumper stop as a red X spanning the roadbed
  */
 function renderBumperStopWorld(
-  piece: TrackPiece,
-  archetype: TrackArchetype,
+  _piece: TrackPiece,
+  _archetype: TrackArchetype,
   toWorld: (local: { x: number; y: number; z: number }) => THREE.Vector3
-): THREE.Mesh {
-  const section = archetype.sections[0];
-  let worldPos: THREE.Vector3;
-  let tangentAngle = piece.rotation;
+): THREE.Group {
+  const group = new THREE.Group();
+  const halfWidth = ROADBED_WIDTH / 2;
+  const barThickness = 0.15;
+  const yPos = 0.5; // Sit above the rails
 
-  if (!section || section.splinePoints.length < 2) {
-    worldPos = toWorld({ x: 0, y: 0, z: 0 });
-  } else {
-    // Get position at end of track
-    const endPoint = section.splinePoints[section.splinePoints.length - 1];
-    worldPos = toWorld(endPoint);
+  // Four corners of the X in local coordinates
+  const inLeft = toWorld({ x: 0, y: 0, z: -halfWidth });
+  const inRight = toWorld({ x: 0, y: 0, z: halfWidth });
+  const outLeft = toWorld({ x: 3, y: 0, z: -halfWidth });
+  const outRight = toWorld({ x: 3, y: 0, z: halfWidth });
 
-    // Calculate tangent direction at end of spline (from second-to-last to last point)
-    const p1 = section.splinePoints[section.splinePoints.length - 2];
-    const p2 = section.splinePoints[section.splinePoints.length - 1];
-    const localTangent = { x: p2.x - p1.x, z: p2.z - p1.z };
+  const material = new THREE.MeshStandardMaterial({ color: 0xff0000 });
 
-    // Transform tangent to world coordinates (rotation only, not translation)
-    // Note: Z is negated to match the screen orientation flip
-    const cos = Math.cos(piece.rotation);
-    const sin = Math.sin(piece.rotation);
-    const worldTangent = {
-      x: localTangent.x * cos - localTangent.z * sin,
-      z: -(localTangent.x * sin + localTangent.z * cos),
-    };
+  // Diagonal 1: inLeft to outRight
+  const dx1 = outRight.x - inLeft.x;
+  const dz1 = outRight.z - inLeft.z;
+  const len1 = Math.sqrt(dx1 * dx1 + dz1 * dz1);
+  const angle1 = Math.atan2(dz1, dx1);
 
-    // Bumper should be perpendicular to tangent
-    tangentAngle = Math.atan2(worldTangent.z, worldTangent.x);
-  }
+  const geom1 = new THREE.BoxGeometry(len1, barThickness, barThickness);
+  const bar1 = new THREE.Mesh(geom1, material);
+  bar1.position.set(
+    (inLeft.x + outRight.x) / 2,
+    yPos,
+    (inLeft.z + outRight.z) / 2
+  );
+  bar1.rotation.y = -angle1; // Negate for Three.js Y-up rotation convention
+  group.add(bar1);
 
-  const geometry = new THREE.BoxGeometry(0.5, 1, 2);
-  const material = new THREE.MeshStandardMaterial({ color: BUMPER_COLOR });
+  // Diagonal 2: inRight to outLeft
+  const dx2 = outLeft.x - inRight.x;
+  const dz2 = outLeft.z - inRight.z;
+  const len2 = Math.sqrt(dx2 * dx2 + dz2 * dz2);
+  const angle2 = Math.atan2(dz2, dx2);
 
-  const mesh = new THREE.Mesh(geometry, material);
-  mesh.position.set(worldPos.x, 0.5, worldPos.z);
-  // Rotate bumper perpendicular to track direction
-  // The box's long axis (Z) should be perpendicular to the tangent
-  mesh.rotation.y = tangentAngle;
+  const geom2 = new THREE.BoxGeometry(len2, barThickness, barThickness);
+  const bar2 = new THREE.Mesh(geom2, material);
+  bar2.position.set(
+    (inRight.x + outLeft.x) / 2,
+    yPos,
+    (inRight.z + outLeft.z) / 2
+  );
+  bar2.rotation.y = -angle2;
+  group.add(bar2);
 
-  return mesh;
+  return group;
 }
 
 // Maximum distance to search along track (inches)

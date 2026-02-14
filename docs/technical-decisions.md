@@ -402,7 +402,7 @@ gen cabs 1-2 cars 3-8 speed 6-24 every 15-30  # Randomized values
 - Trains follow `selectedRoutes` map at virtual switches
 
 **Car types:**
-- Cabs (engines): yellow, 4" long, distinctive shape with tapered front
+- Cabs (engines): dark orange, 4" long, distinctive shape with tapered front
 - Cars (rolling stock): randomly colored, 3" long, rounded rectangle
 - Gap between cars: 0.5"
 
@@ -423,13 +423,13 @@ gen cabs 1-2 cars 3-8 speed 6-24 every 15-30  # Randomized values
 - `colorful`: Vibrant colors (red, blue, green, purple, yellow) for playful appearance
 - `black`: All rolling stock is solid black (0x000000) for a uniform dark appearance
 - Color is assigned once at car creation, stored in `car.color` property
-- Cabs (engines) are always yellow regardless of color mode
+- Cabs (engines) are always dark orange regardless of color mode
 
 **DSL syntax for color modes:**
 ```
 gen gray                      # Gray cars (default)
 gen colorful                  # Colorful cars
-gen black                     # All-black cars (cabs remain yellow)
+gen black                     # All-black cars (cabs remain dark orange)
 gen cabs 2 cars 5 colorful    # Combined with other parameters
 ```
 
@@ -493,6 +493,17 @@ Example: `lockahead distance 15 count 3`
 5. Accumulate distance (zero-length pieces contribute 0)
 6. Repeat until distance ≥ minLockDistance AND points ≥ minLockCount
 7. Try to acquire all points in order; if any blocked, stop and wait
+
+**Bump (buffer stop) pre-locking:**
+- Bump pieces have both `in` and `out` connection points (3-inch straight section)
+- A virtual internal connection point (`stop`) is placed 3 inches beyond `out` (at distance = sectionLength + 3)
+- On simulation init and reset, only the virtual `stop` point is permanently locked using reserved trainId `'__bump__'`
+- The look-ahead discovers `stop` via the existing internal connection point mechanism and adds it to the lock list
+- Trains enter the bump via `in`, traverse the section, and begin emergency braking when the look-ahead hits the locked `stop` — which is 3 inches beyond the physical dead end, so trains stop closer to the visible buffer
+- Neither `in` nor `out` is locked, allowing trains to freely enter and traverse the bump
+- The `'__bump__'` locks are never released by any real train since `releaseAllLocks()` only operates on the calling train's ID
+- The virtual `stop` point has distance beyond section length, so `calculateStraddledPoints` never matches it (cars can't reach distance 6 on a 3-inch section)
+- Visual: red X spanning the roadbed width
 
 **Spawn blocking:**
 - Before spawning, simulation tries to acquire initial locks

@@ -192,7 +192,7 @@ gen cars 3                    # One train: 1 cab, 3 cars
 gen speed 24                  # One train at 24 inches/second
 gen colorful                  # One train with vibrant colored cars
 gen gray                      # One train with grayscale cars (default)
-gen black                     # One train with all-black cars (cabs remain yellow)
+gen black                     # One train with all-black cars (cabs remain dark orange)
 gen cabs 2 cars 3 speed 6 every 15 colorful    # Full specification</code></pre>
     <p>Parameters: <code>cabs N</code> (default 1), <code>cars M</code> (default 5), <code>speed S</code> (default 12 inches/sec), <code>every S</code> (spawn interval in seconds), <code>colorful</code>, <code>gray</code>, or <code>black</code> (car color mode).</p>
     <p>Without <code>every</code>, the generator spawns one train and disables. With <code>every N</code>, it spawns a new train every N seconds.</p>
@@ -200,7 +200,7 @@ gen cabs 2 cars 3 speed 6 every 15 colorful    # Full specification</code></pre>
     <ul>
       <li><code>gray</code> (default) - Rolling stock uses shades of gray for a realistic look</li>
       <li><code>colorful</code> - Rolling stock uses vibrant colors (red, blue, green, purple, yellow)</li>
-      <li><code>black</code> - All rolling stock is solid black (cabs remain yellow)</li>
+      <li><code>black</code> - All rolling stock is solid black (cabs remain dark orange)</li>
     </ul>
 
     <h3>Range Values</h3>
@@ -503,7 +503,7 @@ str * 3
       <tr><th>Archetype</th><th>Connection Points</th><th>Default In</th><th>Default Out</th></tr>
       <tr><td><code>str*</code>, <code>crv*</code>, <code>flex</code></td><td><code>in</code>, <code>out</code></td><td><code>in</code></td><td><code>out</code></td></tr>
       <tr><td><code>x90</code>, <code>x45</code></td><td><code>in1</code>, <code>out1</code>, <code>in2</code>, <code>out2</code></td><td><code>in1</code></td><td><code>out1</code></td></tr>
-      <tr><td><code>bump</code></td><td><code>in</code></td><td><code>in</code></td><td>(none)</td></tr>
+      <tr><td><code>bump</code></td><td><code>in</code>, <code>out</code></td><td><code>in</code></td><td><code>out</code></td></tr>
       <tr><td><code>ph</code>, <code>tun</code></td><td><code>in</code>, <code>out</code></td><td><code>in</code></td><td><code>out</code></td></tr>
       <tr><td><code>gen</code></td><td><code>in</code>, <code>out</code></td><td><code>in</code></td><td><code>out</code></td></tr>
       <tr><td><code>bin</code></td><td><code>in</code>, <code>out</code></td><td><code>in</code></td><td><code>out</code></td></tr>

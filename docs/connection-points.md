@@ -26,7 +26,7 @@ When connecting track pieces, `in` and `out` are the default connection points:
 
 | Archetype | Default output |
 |-----------|----------------|
-| `bump` | (no output — terminus) |
+| `bump` | `out` (terminus — virtual stop point locked beyond it) |
 | `x90`, `x45` | `out1` (track 1 is primary) |
 
 ## Multi-Connection Branching
@@ -165,12 +165,13 @@ Each connection point has:
 | Point | Position | Direction | Section | Description |
 |-------|----------|-----------|---------|-------------|
 | `in` | (0, 0, 0) | (-1, 0, 0) | 1 | Open end |
+| `out` | (3, 0, 0) | (1, 0, 0) | 1 | Buffer end |
 
 ```
-    [in]━━━━━▌
+    [in]━━━━━[out]
 ```
 
-Track terminates at x=3 (buffer end). No output connection point.
+Track terminates at x=3 (buffer end). A virtual internal stop point is placed 3 inches beyond `out` and permanently locked at simulation start, so trains brake near the visible buffer.
 
 ---
 
@@ -255,7 +256,7 @@ Both connection points occupy the same position with opposite directions (like p
 | `crvr*` | `in`, `out` |
 | `x90` | `in1`, `out1`, `in2`, `out2` |
 | `x45` | `in1`, `out1`, `in2`, `out2` |
-| `bump` | `in` |
+| `bump` | `in`, `out` |
 | `flex` | `in`, `out` |
 | `ph` | `in`, `out` |
 | `gen` | `out` |
