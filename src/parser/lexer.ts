@@ -53,6 +53,7 @@ export enum TokenType {
   CLEARANCE = 'CLEARANCE',     // clearance keyword (for trees)
   DENSITY = 'DENSITY',         // density keyword (for trees)
   FACTOR = 'FACTOR',           // factor keyword (for trees - score multiplier)
+  GRID = 'GRID',               // grid keyword (for grid size configuration)
   NONE = 'NONE',               // none keyword (for disabling features)
   POND = 'POND',               // pond keyword (for scenery configuration)
   SIZE = 'SIZE',               // size keyword (for pond)
@@ -686,6 +687,16 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
       if (lowerValue === 'use') {
         tokens.push({
           type: TokenType.USE,
+          value: value,
+          line: lineNum,
+          column: startPos + 1,
+        });
+        continue;
+      }
+
+      if (lowerValue === 'grid') {
+        tokens.push({
+          type: TokenType.GRID,
           value: value,
           line: lineNum,
           column: startPos + 1,

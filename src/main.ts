@@ -263,10 +263,10 @@ function updateRandomButtonState(): void {
     const isRandom = currentLayout?.randomSwitches ?? false;
     if (isRandom) {
       randomBtn.classList.add('active');
-      randomBtn.textContent = 'Random';
+      randomBtn.textContent = 'Manual';
     } else {
       randomBtn.classList.remove('active');
-      randomBtn.textContent = 'Manual';
+      randomBtn.textContent = 'Random';
     }
   }
 }
@@ -305,10 +305,10 @@ function updateLabelsButtonState(): void {
     const isVisible = scene.getLabelsVisible();
     if (isVisible) {
       labelsBtn.classList.add('active');
-      labelsBtn.textContent = 'Design';
+      labelsBtn.textContent = 'Clean';
     } else {
       labelsBtn.classList.remove('active');
-      labelsBtn.textContent = 'Clean';
+      labelsBtn.textContent = 'Design';
     }
   }
 }

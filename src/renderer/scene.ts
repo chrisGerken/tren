@@ -33,6 +33,7 @@ export class TrackScene {
   private trainGroup: THREE.Group;
   private labelGroup: THREE.Group;
   private sceneryGroup: THREE.Group;
+  private gridOverlayGroup: THREE.Group;
   private raycaster: THREE.Raycaster;
   private mouse: THREE.Vector2;
   private onSwitchClick?: SwitchClickCallback;
@@ -113,6 +114,11 @@ export class TrackScene {
     // Create group for scenery (trees, etc.)
     this.sceneryGroup = new THREE.Group();
     this.scene.add(this.sceneryGroup);
+
+    // Create group for grid overlay (shown in design mode only, like labels)
+    this.gridOverlayGroup = new THREE.Group();
+    this.gridOverlayGroup.visible = false;
+    this.scene.add(this.gridOverlayGroup);
 
     // Add grass ground plane
     const groundGeometry = new THREE.PlaneGeometry(1000, 1000);
@@ -352,6 +358,10 @@ export class TrackScene {
       if (obj instanceof THREE.Mesh) {
         obj.geometry.dispose();
         if (obj.material instanceof THREE.Material) {
+          // Dispose map textures (e.g., grid overlay canvas texture)
+          if ((obj.material as any).map) {
+            ((obj.material as any).map as THREE.Texture).dispose();
+          }
           obj.material.dispose();
         } else if (Array.isArray(obj.material)) {
           obj.material.forEach(m => m.dispose());
@@ -367,10 +377,21 @@ export class TrackScene {
       this.sceneryGroup.remove(child);
       disposeObject(child);
     }
+
+    // Clear grid overlay
+    while (this.gridOverlayGroup.children.length > 0) {
+      const child = this.gridOverlayGroup.children[0];
+      this.gridOverlayGroup.remove(child);
+      disposeObject(child);
+    }
   }
 
   addSceneryGroup(group: THREE.Group): void {
     this.sceneryGroup.add(group);
+  }
+
+  addGridOverlay(group: THREE.Group): void {
+    this.gridOverlayGroup.add(group);
   }
 
   addTrackGroup(group: THREE.Group): void {
@@ -425,6 +446,7 @@ export class TrackScene {
    */
   setLabelsVisible(visible: boolean): void {
     this.labelGroup.visible = visible;
+    this.gridOverlayGroup.visible = visible;
     // Also toggle the CSS2D renderer's DOM element visibility
     // since CSS2D objects are DOM elements that may not respect Three.js visibility
     this.labelRenderer.domElement.style.display = visible ? 'block' : 'none';

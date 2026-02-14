@@ -445,7 +445,11 @@
 # trees clearance 1 density 5    # Denser trees, closer to tracks
 # gen cabs 1 cars 3 every 15 ; str x 2 ; crvl x 16 ; str x 2 ; bin
 #
-# trees factor 0.5               # Factor mode: random trees proportional to distance
+# trees factor 0.5               # Factor mode: floor(0.5 * score) trees per cell
+# gen cabs 1 cars 3 every 15 ; str x 2 ; crvl x 16 ; str x 2 ; bin
+#
+# grid size 12                   # Larger cells = sparser scenery
+# trees clearance 2 factor 0.3
 # gen cabs 1 cars 3 every 15 ; str x 2 ; crvl x 16 ; str x 2 ; bin
 
 # =============================================================================

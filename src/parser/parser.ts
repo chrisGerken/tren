@@ -24,7 +24,8 @@ export type Statement =
   | PrefabStatement
   | UseStatement
   | TreesStatement
-  | PondStatement;
+  | PondStatement
+  | GridStatement;
 
 export interface NewStatement {
   type: 'new';
@@ -183,6 +184,12 @@ export interface PondStatement {
   line: number;
 }
 
+export interface GridStatement {
+  type: 'grid';
+  size?: number;
+  line: number;
+}
+
 /**
  * Parse DSL text into an array of statements
  */
@@ -264,6 +271,9 @@ class Parser {
 
       case TokenType.POND:
         return this.parsePondStatement();
+
+      case TokenType.GRID:
+        return this.parseGridStatement();
 
       case TokenType.LABEL_DEF:
         return this.parseLabeledPiece();
@@ -798,6 +808,22 @@ class Parser {
     }
 
     return { type: 'pond', size, clearance, score, line: token.line };
+  }
+
+  private parseGridStatement(): GridStatement {
+    const token = this.advance(); // consume 'grid'
+
+    let size: number | undefined;
+
+    // Parse modifier: size N
+    if (this.check(TokenType.SIZE)) {
+      this.advance(); // consume 'size'
+      if (this.check(TokenType.NUMBER)) {
+        size = parseInt(this.advance().value, 10);
+      }
+    }
+
+    return { type: 'grid', size, line: token.line };
   }
 
   private parseLabeledPiece(): PieceStatement {

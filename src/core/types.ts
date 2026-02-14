@@ -77,6 +77,7 @@ export interface Layout {
   pondSize?: number;            // Number of grid cells for pond (default: 20)
   pondClearance?: number;       // Min distance score for pond placement (default: 3)
   pondScore?: number;           // Score to assign pond cells before BFS re-calc (default: min original - 1)
+  gridSize?: number;            // Grid cell size in inches for scenery scoring (default: 8)
   pieces: TrackPiece[];
 }
 

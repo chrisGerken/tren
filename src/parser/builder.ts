@@ -2,7 +2,7 @@
  * Layout Builder - transforms AST into placed track pieces
  */
 
-import { parse, Statement, PieceStatement, NewStatement, ReferenceStatement, LoopCloseStatement, TitleStatement, DescriptionStatement, LockAheadStatement, SpliceStatement, RandomStatement, MaxTrainsStatement, FlexConnectStatement, CrossConnectStatement, DefineStatement, LogStatement, ArrayStatement, PrefabStatement, UseStatement, TreesStatement, PondStatement } from './parser';
+import { parse, Statement, PieceStatement, NewStatement, ReferenceStatement, LoopCloseStatement, TitleStatement, DescriptionStatement, LockAheadStatement, SpliceStatement, RandomStatement, MaxTrainsStatement, FlexConnectStatement, CrossConnectStatement, DefineStatement, LogStatement, ArrayStatement, PrefabStatement, UseStatement, TreesStatement, PondStatement, GridStatement } from './parser';
 import { Layout, TrackPiece, Vec3, vec2, ConnectionPointDef, RangeValue as TypeRangeValue } from '../core/types';
 import { getArchetype, registerRuntimeArchetype } from '../core/archetypes';
 import type { TrackArchetype } from '../core/archetypes';
@@ -79,6 +79,7 @@ interface BuilderState {
   pondSize?: number;
   pondClearance?: number;
   pondScore?: number;
+  gridSize?: number;
 }
 
 /**
@@ -166,6 +167,7 @@ class LayoutBuilder {
       pondSize: this.state.pondSize,
       pondClearance: this.state.pondClearance,
       pondScore: this.state.pondScore,
+      gridSize: this.state.gridSize,
       pieces: this.state.pieces,
     };
   }
@@ -229,6 +231,9 @@ class LayoutBuilder {
       case 'pond':
         this.processPond(stmt);
         break;
+      case 'grid':
+        this.processGrid(stmt);
+        break;
     }
   }
 
@@ -259,6 +264,10 @@ class LayoutBuilder {
     if (stmt.size !== undefined) this.state.pondSize = stmt.size;
     if (stmt.clearance !== undefined) this.state.pondClearance = stmt.clearance;
     if (stmt.score !== undefined) this.state.pondScore = stmt.score;
+  }
+
+  private processGrid(stmt: GridStatement): void {
+    if (stmt.size !== undefined) this.state.gridSize = stmt.size;
   }
 
   private processPrefab(stmt: PrefabStatement): void {

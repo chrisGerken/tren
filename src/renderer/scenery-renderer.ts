@@ -51,8 +51,8 @@ function getCircleGeometry(): THREE.CircleGeometry {
   return sharedCircleGeometry;
 }
 
-/** Grid cell size in inches */
-const CELL_SIZE = 4;
+/** Default grid cell size in inches */
+const DEFAULT_CELL_SIZE = 8;
 
 /** How much to expand bounding box beyond tracks for scenery grid (fraction) */
 const BOUNDS_EXPANSION = 0.30;
@@ -77,6 +77,9 @@ export function renderScenery(scene: TrackScene, layout: Layout): void {
 
   if (!treesEnabled && !pondEnabled) return;
 
+  // Resolve grid cell size from layout or default
+  const cellSize = layout.gridSize ?? DEFAULT_CELL_SIZE;
+
   // Compute track bounding box from pieces
   const bounds = computeTrackBounds(layout.pieces);
   if (!bounds) return;
@@ -92,8 +95,8 @@ export function renderScenery(scene: TrackScene, layout: Layout): void {
   bounds.maxZ += expandZ;
 
   // Create grid
-  const gridWidth = Math.max(1, Math.ceil((bounds.maxX - bounds.minX) / CELL_SIZE));
-  const gridHeight = Math.max(1, Math.ceil((bounds.maxZ - bounds.minZ) / CELL_SIZE));
+  const gridWidth = Math.max(1, Math.ceil((bounds.maxX - bounds.minX) / cellSize));
+  const gridHeight = Math.max(1, Math.ceil((bounds.maxZ - bounds.minZ) / cellSize));
 
   // Initialize grid with -1 (unscored)
   const grid: number[][] = [];
@@ -102,7 +105,7 @@ export function renderScenery(scene: TrackScene, layout: Layout): void {
   }
 
   // Mark track cells as score 0
-  markTrackCells(grid, bounds, layout.pieces, gridWidth, gridHeight);
+  markTrackCells(grid, bounds, layout.pieces, gridWidth, gridHeight, cellSize);
 
   // BFS flood-fill
   bfsFloodFill(grid, gridWidth, gridHeight);
@@ -124,7 +127,7 @@ export function renderScenery(scene: TrackScene, layout: Layout): void {
     };
 
     const { group: pondGroup, pondCells, minOriginalScore } = placePond(
-      grid, bounds, viewBounds, gridWidth, gridHeight, pondSize, pondClearance
+      grid, bounds, viewBounds, gridWidth, gridHeight, pondSize, pondClearance, cellSize
     );
     scene.addSceneryGroup(pondGroup);
 
@@ -135,13 +138,18 @@ export function renderScenery(scene: TrackScene, layout: Layout): void {
     applyPondToGrid(grid, gridWidth, gridHeight, pondCells, pondScore);
   }
 
+  // Create grid overlay showing final scoring (visible in Design mode)
+  const treeClearance = layout.treesClearance ?? DEFAULT_TREE_CLEARANCE;
+  const gridOverlay = createGridOverlay(grid, bounds, gridWidth, gridHeight, treeClearance, cellSize);
+  scene.addGridOverlay(gridOverlay);
+
   // Place trees using (potentially modified) grid
   if (treesEnabled) {
     const clearance = layout.treesClearance ?? DEFAULT_TREE_CLEARANCE;
     const density = layout.treesDensity ?? DEFAULT_DENSITY;
     const factor = layout.treesFactor;
 
-    const treesGroup = placeTrees(grid, bounds, gridWidth, gridHeight, clearance, density, factor);
+    const treesGroup = placeTrees(grid, bounds, gridWidth, gridHeight, clearance, density, factor, cellSize);
     scene.addSceneryGroup(treesGroup);
   }
 }
@@ -207,10 +215,11 @@ function worldToGrid(
   wz: number,
   bounds: Bounds,
   gridWidth: number,
-  gridHeight: number
+  gridHeight: number,
+  cellSize: number
 ): { col: number; row: number } | null {
-  const col = Math.floor((wx - bounds.minX) / CELL_SIZE);
-  const row = Math.floor((wz - bounds.minZ) / CELL_SIZE);
+  const col = Math.floor((wx - bounds.minX) / cellSize);
+  const row = Math.floor((wz - bounds.minZ) / cellSize);
   if (col < 0 || col >= gridWidth || row < 0 || row >= gridHeight) return null;
   return { col, row };
 }
@@ -224,14 +233,18 @@ function markTrackCells(
   bounds: Bounds,
   pieces: TrackPiece[],
   gridWidth: number,
-  gridHeight: number
+  gridHeight: number,
+  cellSize: number
 ): void {
   for (const piece of pieces) {
-    // Skip invisible track (pieces inside tunnels)
+    // Skip invisible track (tunnels, generators, bins)
     if (piece.inTunnel) continue;
 
     const archetype = getArchetype(piece.archetypeCode);
     if (!archetype) continue;
+
+    const code = archetype.code;
+    if (code === 'gen' || code === 'bin') continue;
 
     const cos = Math.cos(piece.rotation);
     const sin = Math.sin(piece.rotation);
@@ -256,7 +269,7 @@ function markTrackCells(
       for (let i = 0; i <= numSamples; i++) {
         const t = i / numSamples;
         const point = curve.getPointAt(t);
-        const cell = worldToGrid(point.x, point.z, bounds, gridWidth, gridHeight);
+        const cell = worldToGrid(point.x, point.z, bounds, gridWidth, gridHeight, cellSize);
         if (cell) {
           grid[cell.row][cell.col] = 0;
         }
@@ -266,7 +279,7 @@ function markTrackCells(
     // Also mark connection point locations
     for (const cp of archetype.connectionPoints) {
       const w = toWorldScreen(cp.position);
-      const cell = worldToGrid(w.x, w.z, bounds, gridWidth, gridHeight);
+      const cell = worldToGrid(w.x, w.z, bounds, gridWidth, gridHeight, cellSize);
       if (cell) {
         grid[cell.row][cell.col] = 0;
       }
@@ -339,7 +352,8 @@ function placeTrees(
   gridHeight: number,
   clearance: number,
   density: number,
-  factor?: number
+  factor: number | undefined,
+  cellSize: number
 ): THREE.Group {
   const group = new THREE.Group();
   const materials = getTreeMaterials();
@@ -362,16 +376,15 @@ function placeTrees(
 
       let treeCount: number;
       if (factor !== undefined) {
-        // Factor mode: max = floor(factor * score), then random int in [0, max]
-        const max = Math.floor(factor * score);
-        treeCount = max <= 0 ? 0 : Math.floor(random() * (max + 1));
+        // Factor mode: deterministic count = floor(factor * score)
+        treeCount = Math.floor(factor * score);
       } else {
         treeCount = Math.min(density, score - clearance + 1);
       }
 
       for (let t = 0; t < treeCount; t++) {
-        const wx = bounds.minX + (col + random()) * CELL_SIZE;
-        const wz = bounds.minZ + (row + random()) * CELL_SIZE;
+        const wx = bounds.minX + (col + random()) * cellSize;
+        const wz = bounds.minZ + (row + random()) * cellSize;
 
         const clusterSize = 3 + Math.floor(random() * 3); // 3-5 circles
 
@@ -442,7 +455,8 @@ function placePond(
   gridWidth: number,
   gridHeight: number,
   targetSize: number,
-  clearance: number
+  clearance: number,
+  cellSize: number
 ): { group: THREE.Group; pondCells: Set<string>; minOriginalScore: number } {
   const group = new THREE.Group();
   const pondCells = new Set<string>();
@@ -456,8 +470,8 @@ function placePond(
     for (let col = 0; col < gridWidth; col++) {
       if (grid[row][col] >= clearance) {
         // Check if cell center falls within the camera-view bounds
-        const wx = bounds.minX + (col + 0.5) * CELL_SIZE;
-        const wz = bounds.minZ + (row + 0.5) * CELL_SIZE;
+        const wx = bounds.minX + (col + 0.5) * cellSize;
+        const wz = bounds.minZ + (row + 0.5) * cellSize;
         if (wx >= viewBounds.minX && wx <= viewBounds.maxX &&
             wz >= viewBounds.minZ && wz <= viewBounds.maxZ) {
           candidates.push([row, col]);
@@ -556,20 +570,20 @@ function placePond(
 
   for (const key of selected) {
     const [row, col] = key.split(',').map(Number);
-    const cx = bounds.minX + (col + 0.5) * CELL_SIZE;
-    const cz = bounds.minZ + (row + 0.5) * CELL_SIZE;
+    const cx = bounds.minX + (col + 0.5) * cellSize;
+    const cz = bounds.minZ + (row + 0.5) * cellSize;
 
     // Base circle: large enough to overlap neighbors
-    instances.push({ x: cx, z: cz, radius: CELL_SIZE * 1.1 });
+    instances.push({ x: cx, z: cz, radius: cellSize * 1.1 });
 
     // Midpoint circles between this cell and adjacent pond cells (right and down only to avoid duplicates)
     for (const [dr, dc] of [[0, 1], [1, 0]] as [number, number][]) {
       const nKey = `${row + dr},${col + dc}`;
       if (selected.has(nKey)) {
         instances.push({
-          x: cx + dc * CELL_SIZE * 0.5,
-          z: cz + dr * CELL_SIZE * 0.5,
-          radius: CELL_SIZE * 0.9,
+          x: cx + dc * cellSize * 0.5,
+          z: cz + dr * cellSize * 0.5,
+          radius: cellSize * 0.9,
         });
       }
     }
@@ -581,14 +595,14 @@ function placePond(
       if (!selected.has(nKey)) {
         // 3 circles along the border edge at different tangential positions
         for (let b = 0; b < 3; b++) {
-          const tangentSpread = (b - 1) * CELL_SIZE * 0.3; // -0.3, 0, +0.3
-          const tangentJitter = (random() - 0.5) * CELL_SIZE * 0.15;
+          const tangentSpread = (b - 1) * cellSize * 0.3; // -0.3, 0, +0.3
+          const tangentJitter = (random() - 0.5) * cellSize * 0.15;
           const tx = dc === 0 ? tangentSpread + tangentJitter : 0;
           const tz = dr === 0 ? tangentSpread + tangentJitter : 0;
           instances.push({
-            x: cx + dc * CELL_SIZE * 0.3 + tx,
-            z: cz + dr * CELL_SIZE * 0.3 + tz,
-            radius: CELL_SIZE * (0.5 + random() * 0.25),
+            x: cx + dc * cellSize * 0.3 + tx,
+            z: cz + dr * cellSize * 0.3 + tz,
+            radius: cellSize * (0.5 + random() * 0.25),
           });
         }
       }
@@ -620,6 +634,117 @@ function placePond(
   group.add(instMesh);
 
   return { group, pondCells, minOriginalScore };
+}
+
+/**
+ * Create a visual grid overlay showing the scoring grid as a canvas texture.
+ * Each cell is color-coded by score with the score number drawn on top.
+ * Color scheme: gray=track (0), yellow=buffer (<clearance), green gradient=tree zone.
+ */
+function createGridOverlay(
+  grid: number[][],
+  bounds: Bounds,
+  gridWidth: number,
+  gridHeight: number,
+  clearance: number,
+  cellSize: number
+): THREE.Group {
+  const group = new THREE.Group();
+
+  // Canvas resolution: pixels per grid cell
+  const BASE_PIXELS_PER_CELL = 32;
+  const MAX_CANVAS_SIZE = 4096;
+
+  const rawWidth = gridWidth * BASE_PIXELS_PER_CELL;
+  const rawHeight = gridHeight * BASE_PIXELS_PER_CELL;
+  const scale = Math.min(1, MAX_CANVAS_SIZE / Math.max(rawWidth, rawHeight));
+  const canvasWidth = Math.ceil(rawWidth * scale);
+  const canvasHeight = Math.ceil(rawHeight * scale);
+  const cellPx = canvasWidth / gridWidth;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = canvasWidth;
+  canvas.height = canvasHeight;
+  const ctx = canvas.getContext('2d')!;
+
+  ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+
+  // Find max score for gradient normalization
+  let maxScore = 0;
+  for (let row = 0; row < gridHeight; row++) {
+    for (let col = 0; col < gridWidth; col++) {
+      if (grid[row][col] > maxScore) maxScore = grid[row][col];
+    }
+  }
+
+  // Draw each cell
+  for (let row = 0; row < gridHeight; row++) {
+    for (let col = 0; col < gridWidth; col++) {
+      const score = grid[row][col];
+      if (score < 0) continue;
+
+      const px = col * cellPx;
+      const py = row * cellPx;
+
+      // Cell fill color based on score
+      if (score === 0) {
+        ctx.fillStyle = 'rgba(120, 120, 120, 0.5)';
+      } else if (score < clearance) {
+        ctx.fillStyle = 'rgba(200, 180, 50, 0.4)';
+      } else {
+        const t = Math.min((score - clearance) / Math.max(maxScore - clearance, 1), 1.0);
+        const r = Math.floor(60 - t * 40);
+        const g = Math.floor(120 + t * 100);
+        const b = Math.floor(60 - t * 30);
+        ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.4)`;
+      }
+
+      ctx.fillRect(px, py, cellPx, cellPx);
+
+      // Cell border
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
+      ctx.lineWidth = Math.max(0.5, cellPx * 0.03);
+      ctx.strokeRect(px + 0.5, py + 0.5, cellPx - 1, cellPx - 1);
+
+      // Score text (only if cells are large enough to be readable)
+      if (cellPx >= 12) {
+        const fontSize = Math.max(8, Math.floor(cellPx * 0.55));
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.font = `bold ${fontSize}px monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(String(score), px + cellPx / 2, py + cellPx / 2);
+      }
+    }
+  }
+
+  // Create Three.js texture and mesh
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.generateMipmaps = false;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+
+  const worldWidth = gridWidth * cellSize;
+  const worldHeight = gridHeight * cellSize;
+
+  const geometry = new THREE.PlaneGeometry(worldWidth, worldHeight);
+  const material = new THREE.MeshBasicMaterial({
+    map: texture,
+    transparent: true,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.position.set(
+    bounds.minX + worldWidth / 2,
+    0.008,
+    bounds.minZ + worldHeight / 2
+  );
+
+  group.add(mesh);
+  return group;
 }
 
 /**

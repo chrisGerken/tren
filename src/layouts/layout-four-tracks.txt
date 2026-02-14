@@ -17,8 +17,8 @@ def str24   straight length 24
 def str42   straight length 42
 
 
-trees clearance 4 density 1
-pond size 20 clearance 2 score 0
+trees clearance 4 density 1 factor 1.1
+pond size 20 clearance 2
 
 # Create 4 parallel track starting points, 4" apart
 

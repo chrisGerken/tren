@@ -115,7 +115,7 @@ Example (semicolon-separated statements):
 gen ; str ; crvl x 16 ; str ; bin   # Circle with generator and bin sidetracks
 ```
 
-**Scenery:** `trees` and `pond` DSL statements place scenery in open areas using the shared grid-based distance scoring system. Only visible track is scored (track inside tunnels is excluded). Trees use deterministic PRNG; pond uses `Math.random()` for varied placement each reload. Pond is placed first and modifies the grid (via `score` parameter and BFS re-run) so trees avoid the pond and its shore. Trees support two modes: default `density` (capped ramp-up) and `factor F` (random 0..floor(F*score) per cell). Scenery is preserved across UI toggles (Random/Manual, Clean/Design) — only regenerated on new layout load.
+**Scenery:** `trees` and `pond` DSL statements place scenery in open areas using the shared grid-based distance scoring system. Grid cell size is configurable via `grid size N` (default 8 inches). Only visible track is scored (track inside tunnels, generators, and bins is excluded). Trees use deterministic PRNG; pond uses `Math.random()` for varied placement each reload. Pond is placed first and modifies the grid (via `score` parameter and BFS re-run) so trees avoid the pond and its shore. Trees support two modes: default `density` (capped ramp-up) and `factor F` (deterministic floor(F*score) per cell). Scenery grid overlay is visible in Design mode. Scenery is preserved across UI toggles (Random/Manual, Clean/Design) — only regenerated on new layout load.
 
 ## Documentation
 

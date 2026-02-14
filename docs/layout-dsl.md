@@ -1082,15 +1082,16 @@ trees                            # Enable trees with defaults
 trees none                       # Explicitly disable trees
 trees clearance N                # Min distance score for placement (default: 2)
 trees density N                  # Max trees per cell at full density (default: 3)
-trees factor F                   # Score multiplier mode: random 0..floor(F*score) trees per cell
+trees factor F                   # Score multiplier mode: floor(F*score) trees per cell
 trees clearance N density M      # Parameters in any order
+grid size N                      # Grid cell size in inches (default: 8)
 ```
 
 ### Behavior
 
 Trees are placed using a grid-based distance scoring algorithm:
-1. The layout area is divided into a grid of ~4-inch cells
-2. Cells containing **visible** track are scored 0 (track inside tunnels is excluded)
+1. The layout area is divided into a grid of cells (default 8 inches, configurable via `grid size N`)
+2. Cells containing **visible** track are scored 0 (track inside tunnels, generators, and bins is excluded)
 3. BFS flood-fill assigns increasing scores to cells farther from track
 4. Trees are placed in cells where `score >= clearance`
 
@@ -1104,7 +1105,7 @@ Trees are placed using a grid-based distance scoring algorithm:
 | 3 | 2 | Moderate |
 | 4+ | 3 | Capped at density |
 
-**Factor mode:** When `factor F` is specified, the tree count per cell is a random integer in `[0, floor(F * score)]`. This makes tree count directly proportional to distance from track, scaled by `F`. For example, `factor 0.5` at score 10 gives 0–5 trees; `factor 2.0` at score 10 gives 0–20 trees. The clearance threshold still applies.
+**Factor mode:** When `factor F` is specified, the tree count per cell is `floor(F * score)`. This makes tree count deterministically proportional to distance from track, scaled by `F`. For example, `factor 0.5` at score 10 gives 5 trees; `factor 2.0` at score 10 gives 20 trees. The clearance threshold still applies.
 
 Each tree is rendered as a cluster of 3-5 overlapping dark green circles viewed from above. Trees do not affect camera framing (camera fits to tracks only).
 
@@ -1152,6 +1153,34 @@ The pond is rendered as overlapping blue circles at Y=0.003 (below trees at Y=0.
 ```
 trees clearance 3 density 2
 pond size 25 clearance 4
+gen cabs 1 cars 3 every 15 ; str x 2 ; crvl x 16 ; str x 2 ; bin
+```
+
+## Grid Size
+
+The `grid size` statement controls the cell size used by the scenery scoring grid. Both trees and pond placement use this grid.
+
+### Syntax
+
+```
+grid size N                      # Cell size in inches (default: 8)
+```
+
+### Behavior
+
+The grid cell size affects all scenery placement:
+- **Larger cells** = fewer cells, coarser scoring, generally fewer trees
+- **Smaller cells** = more cells, finer scoring, more precise placement
+- The grid overlay (visible in Design mode) shows cell boundaries and scores
+
+The `grid size` statement is a global setting and should appear before `trees` or `pond` statements.
+
+### Example
+
+```
+grid size 12                     # Larger cells = sparser scenery
+trees clearance 2 factor 0.3
+pond size 15
 gen cabs 1 cars 3 every 15 ; str x 2 ; crvl x 16 ; str x 2 ; bin
 ```
 

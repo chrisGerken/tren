@@ -1428,9 +1428,9 @@ trees factor F                   # Score multiplier mode (real number)
 
 **Design decisions:**
 - Opt-in via `trees` DSL statement (no trees by default)
-- Grid-based distance scoring: divide layout area into ~4-inch cells, BFS flood-fill from **visible** track cells to assign distance scores (track inside tunnels is excluded from scoring)
+- Grid-based distance scoring: divide layout area into cells (default 8", configurable via `grid size N` DSL statement), BFS flood-fill from **visible** track cells to assign distance scores (track inside tunnels is excluded from scoring)
 - Default mode: trees placed where `score >= clearance`, count per cell = `min(density, score - clearance + 1)` — gradual ramp from sparse fringe to full density
-- Factor mode: when `factor F` is specified, tree count per cell = random integer in `[0, floor(F * score)]` — directly proportional to distance, scaled by F
+- Factor mode: when `factor F` is specified, tree count per cell = `floor(F * score)` — deterministically proportional to distance, scaled by F
 - Defaults: clearance=2, density=3
 - Camera fits to tracks only (scenery group excluded from `fitToLayout()` bounding box)
 - Scenery is static geometry, rendered once at layout load
@@ -1451,21 +1451,36 @@ trees factor F                   # Score multiplier mode (real number)
 **Grid algorithm:**
 1. Compute bounding box from all track piece connection points and spline points (in screen coordinates with Z negated)
 2. Expand bounds by 30% on each side
-3. Create grid sized to cover expanded area at CELL_SIZE (4") resolution
-4. For each **visible** track piece (skip `inTunnel` pieces): transform spline points to world/screen coords, create CatmullRomCurve3, sample at ~1" intervals, mark containing grid cells as score 0
+3. Create grid sized to cover expanded area at configurable cell size (default 8", set via `grid size N`)
+4. For each **visible** track piece (skip `inTunnel`, `gen`, and `bin` pieces): transform spline points to world/screen coords, create CatmullRomCurve3, sample at ~1" intervals, mark containing grid cells as score 0
 5. BFS flood-fill from all score-0 cells using 4-directional adjacency
 
 **Architecture:**
-- `src/renderer/scenery-renderer.ts` — New file containing grid computation and tree rendering
+- `src/renderer/scenery-renderer.ts` — Grid computation, tree/pond rendering, and grid overlay
 - `TrackScene.sceneryGroup` — Separate THREE.Group for scenery (not included in track bounding box)
-- `TrackScene.clearScenery()` / `addSceneryGroup()` — Lifecycle methods
-- `clearLayout()` calls `clearScenery()` automatically
+- `TrackScene.gridOverlayGroup` — Separate THREE.Group for the design-mode grid overlay (toggled with labels)
+- `TrackScene.clearScenery()` / `addSceneryGroup()` / `addGridOverlay()` — Lifecycle methods
+- `clearLayout()` calls `clearScenery()` automatically (clears both scenery and grid overlay)
 - `renderScenery()` called from `track-renderer.ts` after track rendering, before `fitToLayout()`
+
+**Scenery grid overlay (Design mode):**
+- Rendered as a single `THREE.CanvasTexture` on a flat plane for efficiency (one draw call)
+- Each cell is color-coded: gray = track (score 0), yellow = buffer (below clearance), green gradient = tree zone
+- Score numbers drawn in each cell when pixel resolution is sufficient
+- Positioned at Y=0.008 (above trees/pond, below track infrastructure)
+- Visibility toggled with the Design/Clean button (same as labels), via `TrackScene.gridOverlayGroup.visible`
+- Preserved across Random/Manual and Design/Clean toggles; regenerated only on new layout load
+- Canvas size capped at 4096px with automatic scaling for large grids
+
+**Track exclusion from scoring:**
+- Pieces inside tunnels (`piece.inTunnel`) are excluded — track hidden by tunnels shouldn't repel scenery
+- Generator (`gen`) and bin (`bin`) pieces are excluded — their internal invisible track sections shouldn't affect scenery placement
+- This matches the track renderer's visibility logic: `isHidden = isGenOrBin || piece.inTunnel`
 
 **Why grid-based scoring (not analytical distance):**
 - Computing exact distance from each point to the nearest track spline is expensive (requires sampling all splines)
 - Grid discretization makes BFS trivial and fast — O(cells) time, single pass
-- Grid resolution (4" cells) is fine enough that individual trees (radius 1-3") look naturally placed
+- Grid resolution (default 8" cells, configurable via `grid size N`) is coarse enough for efficient scoring while individual trees (radius 1-3") still look naturally placed
 - Infrastructure is reusable for future scenery types (ponds, buildings, vegetation patches) by scoring cells differently
 
 ## Scenery: Pond Placement
@@ -1524,12 +1539,14 @@ pond size N clearance M score S         # Custom parameters (any order)
 
 ## UI: Context-Sensitive Button Labels
 
-Toolbar buttons show labels that describe their current state rather than the action they perform:
+Toolbar buttons use context-sensitive labels:
 
-- **Labels button**: "Clean" (labels hidden, default) / "Design" (labels visible — shows connection points, labels, switch indicators)
-- **Random button**: "Manual" (switch controls shown, default) / "Random" (switches randomize when trains pass)
+- **Design/Clean button**: Shows the **action** (what clicking will do). When in design mode (labels/grid visible), button says "Clean". When in clean mode, button says "Design". This follows the pattern of stop/resume buttons on train inspector widgets.
+- **Random/Manual button**: Shows the **current state**. When random mode is active, button says "Random". When manual mode is active, button says "Manual".
 
-Both HTML defaults and JavaScript toggle functions update `textContent` to match the current state.
+The Design/Clean button also toggles the scenery grid overlay visibility alongside track labels and connection points.
+
+Both HTML defaults and JavaScript toggle functions update `textContent` accordingly.
 
 ## Open Questions
 
