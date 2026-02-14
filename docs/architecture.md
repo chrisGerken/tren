@@ -20,6 +20,14 @@ The root container for the entire simulation.
 - `title`: Display name for the layout (default: "No Title")
 - `description`: Optional longer description of the layout
 - `minGap`: Minimum following distance between trains in inches (default: 1 inch)
+- `treesEnabled`: Whether tree scenery is enabled (default: false)
+- `treesClearance`: Min grid distance from track for tree placement (default: 2)
+- `treesDensity`: Max trees per grid cell (default: 3)
+- `pondEnabled`: Whether pond scenery is enabled (default: false)
+- `pondSize`: Number of grid cells for the pond (default: 20)
+- `pondClearance`: Min grid distance from track for pond placement (default: 3)
+- `pondScore`: Score assigned to pond cells for tree buffer calculation (default: min original score − 1)
+- `gridSize`: Grid cell size in inches for scenery scoring (default: 8)
 - `pieces`: Array of all track pieces in the layout
 
 **Responsibilities**:

@@ -2,7 +2,7 @@
  * Layout Builder - transforms AST into placed track pieces
  */
 
-import { parse, Statement, PieceStatement, NewStatement, ReferenceStatement, LoopCloseStatement, TitleStatement, DescriptionStatement, LockAheadStatement, SpliceStatement, RandomStatement, MaxTrainsStatement, FlexConnectStatement, CrossConnectStatement, DefineStatement, LogStatement, ArrayStatement, PrefabStatement, UseStatement } from './parser';
+import { parse, Statement, PieceStatement, NewStatement, ReferenceStatement, LoopCloseStatement, TitleStatement, DescriptionStatement, LockAheadStatement, SpliceStatement, RandomStatement, MaxTrainsStatement, FlexConnectStatement, CrossConnectStatement, DefineStatement, LogStatement, ArrayStatement, PrefabStatement, UseStatement, TreesStatement, PondStatement, GridStatement } from './parser';
 import { Layout, TrackPiece, Vec3, vec2, ConnectionPointDef, RangeValue as TypeRangeValue } from '../core/types';
 import { getArchetype, registerRuntimeArchetype } from '../core/archetypes';
 import type { TrackArchetype } from '../core/archetypes';
@@ -71,6 +71,15 @@ interface BuilderState {
   pendingFlexConnects: FlexConnectInfo[];
   pendingCrossConnects: CrossConnectInfo[];
   prefabs: Map<string, string>;  // name → raw body text
+  treesEnabled?: boolean;
+  treesClearance?: number;
+  treesDensity?: number;
+  treesFactor?: number;
+  pondEnabled?: boolean;
+  pondSize?: number;
+  pondClearance?: number;
+  pondScore?: number;
+  gridSize?: number;
 }
 
 /**
@@ -150,6 +159,15 @@ class LayoutBuilder {
       randomSwitches: this.state.randomSwitches,
       maxTrains: this.state.maxTrains,
       logLevel: this.state.logLevel,
+      treesEnabled: this.state.treesEnabled,
+      treesClearance: this.state.treesClearance,
+      treesDensity: this.state.treesDensity,
+      treesFactor: this.state.treesFactor,
+      pondEnabled: this.state.pondEnabled,
+      pondSize: this.state.pondSize,
+      pondClearance: this.state.pondClearance,
+      pondScore: this.state.pondScore,
+      gridSize: this.state.gridSize,
       pieces: this.state.pieces,
     };
   }
@@ -207,6 +225,15 @@ class LayoutBuilder {
       case 'use':
         this.processUse(stmt);
         break;
+      case 'trees':
+        this.processTrees(stmt);
+        break;
+      case 'pond':
+        this.processPond(stmt);
+        break;
+      case 'grid':
+        this.processGrid(stmt);
+        break;
     }
   }
 
@@ -219,6 +246,28 @@ class LayoutBuilder {
       'error': LogLevel.ERROR,
     };
     setLogLevel(levelMap[stmt.level]);
+  }
+
+  private processTrees(stmt: TreesStatement): void {
+    if (stmt.none) {
+      this.state.treesEnabled = false;
+    } else {
+      this.state.treesEnabled = true;
+      if (stmt.clearance !== undefined) this.state.treesClearance = stmt.clearance;
+      if (stmt.density !== undefined) this.state.treesDensity = stmt.density;
+      if (stmt.factor !== undefined) this.state.treesFactor = stmt.factor;
+    }
+  }
+
+  private processPond(stmt: PondStatement): void {
+    this.state.pondEnabled = true;
+    if (stmt.size !== undefined) this.state.pondSize = stmt.size;
+    if (stmt.clearance !== undefined) this.state.pondClearance = stmt.clearance;
+    if (stmt.score !== undefined) this.state.pondScore = stmt.score;
+  }
+
+  private processGrid(stmt: GridStatement): void {
+    if (stmt.size !== undefined) this.state.gridSize = stmt.size;
   }
 
   private processPrefab(stmt: PrefabStatement): void {

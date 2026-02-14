@@ -1,10 +1,14 @@
 title Layout: More loops and switches
 description Slightly more complex example with more loops, switches, tunnels and a simple yard
 
-max trains 6
+max trains 4
 lockahead distance 10 count 4
 
-gen cabs 1-2 cars 2-10 every 10 speed 7-16
+grid size 4 
+trees clearance 4 density 3
+random
+
+gen colorful cabs 1-2 cars 2-10 every 10 speed 7-16
 
 str ; crvr * 2 ; crvl * 2
 

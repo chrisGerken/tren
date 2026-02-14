@@ -402,7 +402,7 @@ gen cabs 1-2 cars 3-8 speed 6-24 every 15-30  # Randomized values
 - Trains follow `selectedRoutes` map at virtual switches
 
 **Car types:**
-- Cabs (engines): yellow, 4" long, distinctive shape with tapered front
+- Cabs (engines): dark orange, 4" long, distinctive shape with tapered front
 - Cars (rolling stock): randomly colored, 3" long, rounded rectangle
 - Gap between cars: 0.5"
 
@@ -423,13 +423,13 @@ gen cabs 1-2 cars 3-8 speed 6-24 every 15-30  # Randomized values
 - `colorful`: Vibrant colors (red, blue, green, purple, yellow) for playful appearance
 - `black`: All rolling stock is solid black (0x000000) for a uniform dark appearance
 - Color is assigned once at car creation, stored in `car.color` property
-- Cabs (engines) are always yellow regardless of color mode
+- Cabs (engines) are always dark orange regardless of color mode
 
 **DSL syntax for color modes:**
 ```
 gen gray                      # Gray cars (default)
 gen colorful                  # Colorful cars
-gen black                     # All-black cars (cabs remain yellow)
+gen black                     # All-black cars (cabs remain dark orange)
 gen cabs 2 cars 5 colorful    # Combined with other parameters
 ```
 
@@ -493,6 +493,17 @@ Example: `lockahead distance 15 count 3`
 5. Accumulate distance (zero-length pieces contribute 0)
 6. Repeat until distance ≥ minLockDistance AND points ≥ minLockCount
 7. Try to acquire all points in order; if any blocked, stop and wait
+
+**Bump (buffer stop) pre-locking:**
+- Bump pieces have both `in` and `out` connection points (3-inch straight section)
+- A virtual internal connection point (`stop`) is placed 3 inches beyond `out` (at distance = sectionLength + 3)
+- On simulation init and reset, only the virtual `stop` point is permanently locked using reserved trainId `'__bump__'`
+- The look-ahead discovers `stop` via the existing internal connection point mechanism and adds it to the lock list
+- Trains enter the bump via `in`, traverse the section, and begin emergency braking when the look-ahead hits the locked `stop` — which is 3 inches beyond the physical dead end, so trains stop closer to the visible buffer
+- Neither `in` nor `out` is locked, allowing trains to freely enter and traverse the bump
+- The `'__bump__'` locks are never released by any real train since `releaseAllLocks()` only operates on the calling train's ID
+- The virtual `stop` point has distance beyond section length, so `calculateStraddledPoints` never matches it (cars can't reach distance 6 on a 3-inch section)
+- Visual: red X spanning the roadbed width
 
 **Spawn blocking:**
 - Before spawning, simulation tries to acquire initial locks
@@ -1413,6 +1424,140 @@ use siding label "junction1"
 - Token-level substitution would require the body to be valid tokens, preventing flexible placeholder usage like `$[label]`
 - AST-level substitution would require new AST node types for parameterized fragments
 - Text substitution is the simplest approach and naturally supports any placement of `[key]` within DSL syntax
+
+## Scenery: Grid-Based Tree Placement
+
+Trees add visual interest to layouts by filling open areas away from tracks with dark green canopy clusters.
+
+**DSL syntax:**
+```
+trees                            # Enable with defaults
+trees none                       # Disable
+trees clearance N density M      # Custom parameters (any order)
+trees factor F                   # Score multiplier mode (real number)
+```
+
+**Design decisions:**
+- Opt-in via `trees` DSL statement (no trees by default)
+- Grid-based distance scoring: divide layout area into cells (default 8", configurable via `grid size N` DSL statement), BFS flood-fill from **visible** track cells to assign distance scores (track inside tunnels is excluded from scoring)
+- Default mode: trees placed where `score >= clearance`, count per cell = `min(density, score - clearance + 1)` — gradual ramp from sparse fringe to full density
+- Factor mode: when `factor F` is specified, tree count per cell = `floor(F * score)` — deterministically proportional to distance, scaled by F
+- Defaults: clearance=2, density=3
+- Camera fits to tracks only (scenery group excluded from `fitToLayout()` bounding box)
+- Scenery is static geometry, rendered once at layout load
+
+**Performance optimization — InstancedMesh:**
+- Initial implementation created individual `THREE.Mesh` per tree circle (3-5 circles per tree cluster), causing thousands of draw calls and noticeable frame rate drops during train animation
+- Replaced with `THREE.InstancedMesh`: one instance per material color (3 colors = 3 draw calls total)
+- Each circle's position, rotation (flat on ground), and scale (radius 1-3") are encoded in a per-instance transform matrix
+- Tree data is collected in a first pass, bucketed by material, then built into InstancedMesh objects
+- Result: constant GPU cost regardless of tree count
+
+**Tree visuals:**
+- Each tree = cluster of 3-5 overlapping `CircleGeometry` discs
+- Three dark green color variants (0x2d5a1e, 0x336622, 0x3a6b2a) for natural variation
+- Positioned at y=0.005 (above ground plane at -0.01, below track at 0+)
+- Deterministic pseudo-random placement (seeded PRNG) for consistent appearance across reloads
+
+**Grid algorithm:**
+1. Compute bounding box from all track piece connection points and spline points (in screen coordinates with Z negated)
+2. Expand bounds by 30% on each side
+3. Create grid sized to cover expanded area at configurable cell size (default 8", set via `grid size N`)
+4. For each **visible** track piece (skip `inTunnel`, `gen`, and `bin` pieces): transform spline points to world/screen coords, create CatmullRomCurve3, sample at ~1" intervals, mark containing grid cells as score 0
+5. BFS flood-fill from all score-0 cells using 4-directional adjacency
+
+**Architecture:**
+- `src/renderer/scenery-renderer.ts` — Grid computation, tree/pond rendering, and grid overlay
+- `TrackScene.sceneryGroup` — Separate THREE.Group for scenery (not included in track bounding box)
+- `TrackScene.gridOverlayGroup` — Separate THREE.Group for the design-mode grid overlay (toggled with labels)
+- `TrackScene.clearScenery()` / `addSceneryGroup()` / `addGridOverlay()` — Lifecycle methods
+- `clearLayout()` calls `clearScenery()` automatically (clears both scenery and grid overlay)
+- `renderScenery()` called from `track-renderer.ts` after track rendering, before `fitToLayout()`
+
+**Scenery grid overlay (Design mode):**
+- Rendered as a single `THREE.CanvasTexture` on a flat plane for efficiency (one draw call)
+- Each cell is color-coded: gray = track (score 0), yellow = buffer (below clearance), green gradient = tree zone
+- Score numbers drawn in each cell when pixel resolution is sufficient
+- Positioned at Y=0.008 (above trees/pond, below track infrastructure)
+- Visibility toggled with the Design/Clean button (same as labels), via `TrackScene.gridOverlayGroup.visible`
+- Preserved across Random/Manual and Design/Clean toggles; regenerated only on new layout load
+- Canvas size capped at 4096px with automatic scaling for large grids
+
+**Track exclusion from scoring:**
+- Pieces inside tunnels (`piece.inTunnel`) are excluded — track hidden by tunnels shouldn't repel scenery
+- Generator (`gen`) and bin (`bin`) pieces are excluded — their internal invisible track sections shouldn't affect scenery placement
+- This matches the track renderer's visibility logic: `isHidden = isGenOrBin || piece.inTunnel`
+
+**Why grid-based scoring (not analytical distance):**
+- Computing exact distance from each point to the nearest track spline is expensive (requires sampling all splines)
+- Grid discretization makes BFS trivial and fast — O(cells) time, single pass
+- Grid resolution (default 8" cells, configurable via `grid size N`) is coarse enough for efficient scoring while individual trees (radius 1-3") still look naturally placed
+- Infrastructure is reusable for future scenery types (ponds, buildings, vegetation patches) by scoring cells differently
+
+## Scenery: Pond Placement
+
+Ponds add a body of water to open areas, using the same grid infrastructure as trees.
+
+**DSL syntax:**
+```
+pond                                    # Enable with defaults
+pond size N clearance M score S         # Custom parameters (any order)
+```
+
+**Design decisions:**
+- Opt-in via `pond` DSL statement (no pond by default)
+- Defaults: size=20 cells, clearance=3, score=min original score of pond cells minus 1
+- Pond is placed BEFORE trees — it modifies the grid so trees naturally avoid the pond and its shore
+- Candidates restricted to camera-view bounds (tracks + 10%) so the pond is visible at initial zoom
+- True `Math.random()` (not seeded PRNG) so pond position varies each reload — deliberate contrast with trees which use deterministic placement
+- Randomized BFS growth from a random seed cell for organic blob shapes
+- Aspect ratio constraint (0.5–2.0 width:height) prevents elongated/river-like shapes; pond may be smaller than requested if constrained
+
+**Grid modification after pond placement:**
+- Pond cells are assigned score `S` (the `score` parameter, default: min original score among selected cells minus 1)
+- All other non-track cells are reset to unscored (-1)
+- BFS flood-fill is re-run from both track cells (score 0) and pond cells (score S)
+- This creates a natural buffer zone where trees won't grow, proportional to how low `S` is (score 0 = maximum buffer, same as track clearance)
+
+**BFS multi-source support:**
+- `bfsFloodFill()` was updated to seed from all already-scored cells (not just score-0), sorted by score for correct propagation order
+- This enables multi-source BFS with different starting scores (track=0, pond=S)
+
+**Pond rendering — smooth water body:**
+- Single blue color (0x3a7bbf) — one `InstancedMesh` draw call
+- Three circle layers per cell for smooth appearance:
+  1. **Base circle**: radius 110% of cell size at cell center — covers full cell, overlaps neighbors
+  2. **Midpoint circles**: radius 90% of cell, placed between horizontally/vertically adjacent pond cells — fills seams
+  3. **Border circles**: 3 per exposed edge at varied tangential positions (−0.3, 0, +0.3 of cell size) with slight jitter — creates smooth organic outline
+- Positioned at Y=0.003 (below trees at Y=0.005) so tree foliage can overlap pond edges
+
+## Scenery Preservation on UI Toggles
+
+**Problem:** Toggling Random/Manual or clicking switches re-rendered the entire layout including scenery, causing the pond (which uses `Math.random()`) to jump to a new position.
+
+**Solution:** `renderLayout()` accepts a `preserveScenery` parameter (default `false`):
+- When `true`: calls `scene.clearTrack()` (new method — clears only track meshes and labels) and skips `renderScenery()`
+- When `false`: calls `scene.clearLayout()` (clears everything) and runs `renderScenery()` for fresh scenery
+
+**Callers using `preserveScenery = true`:**
+- Random/Manual toggle — only switch indicators change
+- Switch click callbacks — only route indicators change
+- Inspector widget switch changes
+
+**Callers using default `false` (fresh scenery):**
+- Initial layout load from import
+- Layout selection from dialog
+
+## UI: Context-Sensitive Button Labels
+
+Toolbar buttons use context-sensitive labels:
+
+- **Design/Clean button**: Shows the **action** (what clicking will do). When in design mode (labels/grid visible), button says "Clean". When in clean mode, button says "Design". This follows the pattern of stop/resume buttons on train inspector widgets.
+- **Random/Manual button**: Shows the **current state**. When random mode is active, button says "Random". When manual mode is active, button says "Manual".
+
+The Design/Clean button also toggles the scenery grid overlay visibility alongside track labels and connection points.
+
+Both HTML defaults and JavaScript toggle functions update `textContent` accordingly.
 
 ## Open Questions
 

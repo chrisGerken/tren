@@ -7,6 +7,11 @@ lockahead distance 10 count 4
 def crvr15  right  radius 15  arc 22.5
 def crvr20  right  radius 20  arc 22.5
 def crvr26  right  radius 26  arc 22.5
+
+trees clearance 4 density 1
+pond size 20 clearance 2 score 0
+
+
 #
 # Main loop
 #

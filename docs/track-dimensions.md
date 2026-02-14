@@ -343,8 +343,9 @@ Section 1:
 
 Connection Points:
   in: position (0, 0, 0), direction (-1, 0, 0), sections [1]
+  out: position (3, 0, 0), direction (1, 0, 0), sections [1]
 
-(No connection at buffer end - track terminates at x=3)
+(Virtual stop point placed 3" beyond out at simulation start, permanently locked)
 ```
 
 ---

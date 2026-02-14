@@ -48,13 +48,13 @@ Install Homebrew if you don't have it:
 
 Once a Homebrew tap is set up:
 ```bash
-brew tap YOUR_USERNAME/tren
+brew tap chrisGerken/tren
 brew install --cask tren
 ```
 
 #### Option 2: Manual Installation
 
-1. Download the latest `.dmg` file from the [Releases](https://github.com/YOUR_USERNAME/tren/releases) page
+1. Download the latest `.dmg` file from the [Releases](https://github.com/chrisGerken/tren/releases) page
 2. Open the DMG file
 3. Drag `Tren.app` to your Applications folder
 4. On first launch, right-click the app and select "Open" to bypass Gatekeeper
@@ -66,7 +66,7 @@ brew install --cask tren
 brew install node rust
 
 # Clone and build
-git clone https://github.com/YOUR_USERNAME/tren.git
+git clone https://github.com/chrisGerken/tren.git
 cd tren
 npm install
 npm run tauri build
@@ -82,7 +82,7 @@ See [publish/macos/README.md](publish/macos/README.md) for detailed build and di
 
 #### Option 1: Install from .deb Package (Recommended)
 
-1. Download the latest `.deb` file from the [Releases](https://github.com/YOUR_USERNAME/tren/releases) page
+1. Download the latest `.deb` file from the [Releases](https://github.com/chrisGerken/tren/releases) page
 2. Install:
    ```bash
    sudo apt install ./tren_*.deb
@@ -118,7 +118,7 @@ sudo apt install -y libwebkit2gtk-4.0-dev build-essential curl wget file \
     libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
 
 # Clone and build
-git clone https://github.com/YOUR_USERNAME/tren.git
+git clone https://github.com/chrisGerken/tren.git
 cd tren
 npm install
 npm run tauri build

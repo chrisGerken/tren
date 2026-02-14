@@ -255,7 +255,7 @@ For the initial 2D top-down version:
 
 ### Cab Shape
 - Cabs (engines) have a distinctive shape: rounded rear, tapered front with truncated triangle tip
-- Color: yellow
+- Color: dark orange (0xFF8C00)
 - Dimensions: 4" long × 2" wide × 1.5" height
 - The front tapers to about 35% of the body width, creating a locomotive-like silhouette
 

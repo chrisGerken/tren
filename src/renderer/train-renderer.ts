@@ -12,7 +12,7 @@ const CAR_WIDTH = 2;
 const CAR_HEIGHT = 1.5;
 
 // Colors
-const CAB_COLOR = 0xffff00;   // Yellow for cabs (engines)
+const CAB_COLOR = 0xFF8C00;   // Dark orange (was yellow 0xffff00) for cabs (engines)
 
 // Car colors - vibrant colors for rolling stock (colorful mode)
 const CAR_COLORS = [

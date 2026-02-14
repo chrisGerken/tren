@@ -205,6 +205,7 @@ const archetypes: TrackArchetype[] = [
     ],
     connectionPoints: [
       { name: 'in', position: vec2(0, 0), direction: vec2(-1, 0), sectionIndices: [0] },
+      { name: 'out', position: vec2(3, 0), direction: vec2(1, 0), sectionIndices: [0] },
     ],
   },
 

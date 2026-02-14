@@ -192,7 +192,7 @@ gen cars 3                    # One train: 1 cab, 3 cars
 gen speed 24                  # One train at 24 inches/second
 gen colorful                  # One train with vibrant colored cars
 gen gray                      # One train with grayscale cars (default)
-gen black                     # One train with all-black cars (cabs remain yellow)
+gen black                     # One train with all-black cars (cabs remain dark orange)
 gen cabs 2 cars 3 speed 6 every 15 colorful    # Full specification</code></pre>
     <p>Parameters: <code>cabs N</code> (default 1), <code>cars M</code> (default 5), <code>speed S</code> (default 12 inches/sec), <code>every S</code> (spawn interval in seconds), <code>colorful</code>, <code>gray</code>, or <code>black</code> (car color mode).</p>
     <p>Without <code>every</code>, the generator spawns one train and disables. With <code>every N</code>, it spawns a new train every N seconds.</p>
@@ -200,7 +200,7 @@ gen cabs 2 cars 3 speed 6 every 15 colorful    # Full specification</code></pre>
     <ul>
       <li><code>gray</code> (default) - Rolling stock uses shades of gray for a realistic look</li>
       <li><code>colorful</code> - Rolling stock uses vibrant colors (red, blue, green, purple, yellow)</li>
-      <li><code>black</code> - All rolling stock is solid black (cabs remain yellow)</li>
+      <li><code>black</code> - All rolling stock is solid black (cabs remain dark orange)</li>
     </ul>
 
     <h3>Range Values</h3>
@@ -503,7 +503,7 @@ str * 3
       <tr><th>Archetype</th><th>Connection Points</th><th>Default In</th><th>Default Out</th></tr>
       <tr><td><code>str*</code>, <code>crv*</code>, <code>flex</code></td><td><code>in</code>, <code>out</code></td><td><code>in</code></td><td><code>out</code></td></tr>
       <tr><td><code>x90</code>, <code>x45</code></td><td><code>in1</code>, <code>out1</code>, <code>in2</code>, <code>out2</code></td><td><code>in1</code></td><td><code>out1</code></td></tr>
-      <tr><td><code>bump</code></td><td><code>in</code></td><td><code>in</code></td><td>(none)</td></tr>
+      <tr><td><code>bump</code></td><td><code>in</code>, <code>out</code></td><td><code>in</code></td><td><code>out</code></td></tr>
       <tr><td><code>ph</code>, <code>tun</code></td><td><code>in</code>, <code>out</code></td><td><code>in</code></td><td><code>out</code></td></tr>
       <tr><td><code>gen</code></td><td><code>in</code>, <code>out</code></td><td><code>in</code></td><td><code>out</code></td></tr>
       <tr><td><code>bin</code></td><td><code>in</code>, <code>out</code></td><td><code>in</code></td><td><code>out</code></td></tr>
@@ -583,6 +583,36 @@ str x 4
       <tr><td><strong>&times;</strong></td><td>Close the widget</td></tr>
     </table>
     <p><strong>Spawn behavior:</strong> Trains are spawned inside the generator section. If the exit track is blocked, the train waits at speed 0 until the exit clears. If the generator section is still occupied by a previous train, spawning is deferred. Changes to parameters take effect on the next spawned train.</p>
+  </div>
+
+  <div class="section">
+    <h2>Trees</h2>
+    <p>The <code>trees</code> statement places tree scenery in open areas away from tracks. Trees are dark green clusters viewed from above.</p>
+    <table>
+      <tr><th>Syntax</th><th>Effect</th></tr>
+      <tr><td><code>trees</code></td><td>Enable trees with default settings</td></tr>
+      <tr><td><code>trees none</code></td><td>Explicitly disable trees</td></tr>
+      <tr><td><code>trees clearance N</code></td><td>Min grid distance from track to start placing trees (default: 2)</td></tr>
+      <tr><td><code>trees density N</code></td><td>Max trees per grid cell at full density (default: 3)</td></tr>
+      <tr><td><code>trees factor F</code></td><td>Score multiplier: floor(F&times;score) trees per cell (real number)</td></tr>
+      <tr><td><code>grid size N</code></td><td>Grid cell size in inches for scenery scoring (default: 8)</td></tr>
+    </table>
+    <p>Parameters can appear in any order: <code>trees clearance 1 density 5</code></p>
+    <p>Tree count ramps up gradually from the clearance boundary. Higher <code>clearance</code> creates a wider buffer around tracks. Higher <code>density</code> places more trees in open areas. When <code>factor</code> is specified, tree count is deterministically proportional to distance from track: <code>floor(factor &times; score)</code>. Larger <code>grid size</code> means fewer, larger cells and generally fewer trees. Only visible track is considered (track inside tunnels, generators, and bins is excluded).</p>
+  </div>
+
+  <div class="section">
+    <h2>Pond</h2>
+    <p>The <code>pond</code> statement places a body of water in an open area away from tracks. The pond is rendered as overlapping blue circles.</p>
+    <table>
+      <tr><th>Syntax</th><th>Effect</th></tr>
+      <tr><td><code>pond</code></td><td>Enable pond with default settings</td></tr>
+      <tr><td><code>pond size N</code></td><td>Number of grid cells for the pond (default: 20)</td></tr>
+      <tr><td><code>pond clearance N</code></td><td>Min grid distance from track for pond placement (default: 3)</td></tr>
+      <tr><td><code>pond score S</code></td><td>Score assigned to pond cells for tree buffer (default: min original &minus; 1; use 0 for max buffer)</td></tr>
+    </table>
+    <p>Parameters can appear in any order: <code>pond size 25 clearance 4 score 0</code></p>
+    <p>The pond grows organically from a random seed cell (position varies each reload), constrained to a 0.5&ndash;2.0 aspect ratio for a rounded shape. The pond is always placed within the initial camera view. After placement, the grid scores are recalculated so trees naturally avoid the pond and its shore. Lower <code>score</code> values create wider tree-free buffers around the pond.</p>
   </div>
 
 </body>

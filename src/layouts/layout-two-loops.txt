@@ -3,12 +3,28 @@ description   A generator, several nested loops, some switches and a bin
 
 random
 
+grid size 5
+trees clearance 3 density 1 factor 0.9
+
 start: ph
 
-crvl x 4
+crvl x 3
 
 ph1: crvl
-crvl * 11
+crvl * 4
+str * 3
+tunnel
+str * 2
+tunnel
+str * 5
+crvl * 8
+str * 5
+tunnel
+str * 2
+tunnel
+str * 3
+crvl * 4
+
 
 new
 gen cabs 1-2 cars 2-8 speed 8-12 every 20-40
@@ -18,14 +34,15 @@ str
 
 new from out.$ph1
 str
-crv * 4
+crvl * 4
 str * 2
-crv * 4
+crvl * 4
 str * 2
-crv * 4
+crvl * 4
 str * 2
-crv * 3
-exit: crv
+crvl * 2
+exit: crvl
+crvl
 str
 
 $exit.out

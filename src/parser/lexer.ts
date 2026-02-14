@@ -49,6 +49,15 @@ export enum TokenType {
   LOG = 'LOG',                 // log/logging keyword (for log level configuration)
   PREFAB = 'PREFAB',           // prefab/prefabrication keyword (for prefab definition)
   USE = 'USE',                 // use keyword (for prefab expansion)
+  TREES = 'TREES',             // trees keyword (for scenery configuration)
+  CLEARANCE = 'CLEARANCE',     // clearance keyword (for trees)
+  DENSITY = 'DENSITY',         // density keyword (for trees)
+  FACTOR = 'FACTOR',           // factor keyword (for trees - score multiplier)
+  GRID = 'GRID',               // grid keyword (for grid size configuration)
+  NONE = 'NONE',               // none keyword (for disabling features)
+  POND = 'POND',               // pond keyword (for scenery configuration)
+  SIZE = 'SIZE',               // size keyword (for pond)
+  SCORE = 'SCORE',             // score keyword (for pond)
   EOF = 'EOF',
 }
 
@@ -678,6 +687,96 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
       if (lowerValue === 'use') {
         tokens.push({
           type: TokenType.USE,
+          value: value,
+          line: lineNum,
+          column: startPos + 1,
+        });
+        continue;
+      }
+
+      if (lowerValue === 'grid') {
+        tokens.push({
+          type: TokenType.GRID,
+          value: value,
+          line: lineNum,
+          column: startPos + 1,
+        });
+        continue;
+      }
+
+      if (lowerValue === 'trees') {
+        tokens.push({
+          type: TokenType.TREES,
+          value: value,
+          line: lineNum,
+          column: startPos + 1,
+        });
+        continue;
+      }
+
+      if (lowerValue === 'clearance') {
+        tokens.push({
+          type: TokenType.CLEARANCE,
+          value: value,
+          line: lineNum,
+          column: startPos + 1,
+        });
+        continue;
+      }
+
+      if (lowerValue === 'density') {
+        tokens.push({
+          type: TokenType.DENSITY,
+          value: value,
+          line: lineNum,
+          column: startPos + 1,
+        });
+        continue;
+      }
+
+      if (lowerValue === 'factor') {
+        tokens.push({
+          type: TokenType.FACTOR,
+          value: value,
+          line: lineNum,
+          column: startPos + 1,
+        });
+        continue;
+      }
+
+      if (lowerValue === 'none') {
+        tokens.push({
+          type: TokenType.NONE,
+          value: value,
+          line: lineNum,
+          column: startPos + 1,
+        });
+        continue;
+      }
+
+      if (lowerValue === 'pond') {
+        tokens.push({
+          type: TokenType.POND,
+          value: value,
+          line: lineNum,
+          column: startPos + 1,
+        });
+        continue;
+      }
+
+      if (lowerValue === 'size') {
+        tokens.push({
+          type: TokenType.SIZE,
+          value: value,
+          line: lineNum,
+          column: startPos + 1,
+        });
+        continue;
+      }
+
+      if (lowerValue === 'score') {
+        tokens.push({
+          type: TokenType.SCORE,
           value: value,
           line: lineNum,
           column: startPos + 1,

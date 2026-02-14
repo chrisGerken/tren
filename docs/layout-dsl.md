@@ -304,7 +304,7 @@ gen cabs 2 cars 3             # One train: 2 cabs, 3 cars
 gen every 10                  # New train every 10 seconds: 1 cab, 5 cars
 gen colorful                  # One train with vibrant colored cars
 gen gray                      # One train with grayscale cars (default)
-gen black                     # One train with all-black cars (cabs remain yellow)
+gen black                     # One train with all-black cars (cabs remain dark orange)
 gen cabs 2 cars 3 speed 6 every 10 colorful    # Full specification with colors
 ```
 
@@ -315,14 +315,14 @@ gen cabs 2 cars 3 speed 6 every 10 colorful    # Full specification with colors
 - `every S` - Spawn frequency in seconds. If omitted, only one train is spawned.
 - `colorful` - Use vibrant colors (red, blue, green, purple, yellow) for rolling stock
 - `gray` - Use grayscale shades for rolling stock (default)
-- `black` - All rolling stock is black (cabs remain yellow)
+- `black` - All rolling stock is black (cabs remain dark orange)
 
 Parameters can appear in any order after `gen`.
 
 **Color Modes:**
 - `gray` (default): Rolling stock uses various shades of gray, creating a more realistic, industrial appearance
 - `colorful`: Rolling stock uses vibrant colors (red, blue, green, purple, yellow) for a more playful appearance
-- `black`: All rolling stock is solid black (0x000000), creating a uniform dark appearance. Cabs remain yellow.
+- `black`: All rolling stock is solid black (0x000000), creating a uniform dark appearance. Cabs remain dark orange.
 
 The `gray` and `colorful` modes use weighted random selection where the previous car's color has a higher chance of being repeated, creating natural-looking car groupings. The `black` mode uses a single fixed color for all cars.
 
@@ -1069,6 +1069,119 @@ str x 5 ; bump
 $yard_2.out ; str x 5 ; bump
 $yard_3.out ; str x 5 ; bump
 $yard_4.out ; str x 5 ; bump
+```
+
+## Trees
+
+The `trees` statement enables tree scenery placement in open areas away from tracks.
+
+### Syntax
+
+```
+trees                            # Enable trees with defaults
+trees none                       # Explicitly disable trees
+trees clearance N                # Min distance score for placement (default: 2)
+trees density N                  # Max trees per cell at full density (default: 3)
+trees factor F                   # Score multiplier mode: floor(F*score) trees per cell
+trees clearance N density M      # Parameters in any order
+grid size N                      # Grid cell size in inches (default: 8)
+```
+
+### Behavior
+
+Trees are placed using a grid-based distance scoring algorithm:
+1. The layout area is divided into a grid of cells (default 8 inches, configurable via `grid size N`)
+2. Cells containing **visible** track are scored 0 (track inside tunnels, generators, and bins is excluded)
+3. BFS flood-fill assigns increasing scores to cells farther from track
+4. Trees are placed in cells where `score >= clearance`
+
+**Default mode (density):** Tree count per cell ramps up gradually: `min(density, score - clearance + 1)`.
+
+| Score | Trees (clearance=2, density=3) | Reason |
+|-------|-------------------------------|--------|
+| 0 | 0 | Track cell |
+| 1 | 0 | Within clearance buffer |
+| 2 | 1 | Sparse fringe |
+| 3 | 2 | Moderate |
+| 4+ | 3 | Capped at density |
+
+**Factor mode:** When `factor F` is specified, the tree count per cell is `floor(F * score)`. This makes tree count deterministically proportional to distance from track, scaled by `F`. For example, `factor 0.5` at score 10 gives 5 trees; `factor 2.0` at score 10 gives 20 trees. The clearance threshold still applies.
+
+Each tree is rendered as a cluster of 3-5 overlapping dark green circles viewed from above. Trees do not affect camera framing (camera fits to tracks only).
+
+### Example
+
+```
+trees
+gen cabs 1 cars 3 every 15 ; str x 2 ; crvl x 16 ; str x 2 ; bin
+```
+
+## Pond
+
+The `pond` statement places a body of water in an open area away from tracks. The pond uses the same grid-based distance scoring as trees.
+
+### Syntax
+
+```
+pond                             # Enable pond with defaults
+pond size N                      # Number of grid cells (default: 20)
+pond clearance N                 # Min distance score for placement (default: 3)
+pond score S                     # Score assigned to pond cells (default: min original - 1)
+pond size N clearance M score S  # Parameters in any order
+```
+
+### Behavior
+
+The pond is placed using a randomized BFS growth algorithm:
+1. Candidate cells are those with `score >= clearance` within the initial camera view (tracks + 10%)
+2. A random seed cell is chosen from the candidates (varies each reload)
+3. The pond grows by randomly selecting frontier cells (organic shape)
+4. An aspect ratio constraint (0.5–2.0 width:height) prevents elongated shapes
+5. Growth stops when `size` cells are reached or the frontier is exhausted
+
+After placement, the pond modifies the distance-score grid:
+- Pond cells are set to score `S` (default: the minimum original score among pond cells minus 1)
+- All other non-track cells are reset to unscored
+- BFS flood-fill is re-run from both track cells (score 0) and pond cells (score S)
+
+This creates a natural buffer zone around the pond. Lower `score` values create wider buffers. Setting `score 0` treats the pond like track, giving trees the same clearance from the pond as from tracks.
+
+The pond is rendered as overlapping blue circles at Y=0.003 (below trees at Y=0.005), so tree foliage naturally overlaps pond edges. Each cell has 2–3 circles with radius 60–90% of the grid cell size, creating smooth rounded edges.
+
+### Example
+
+```
+trees clearance 3 density 2
+pond size 25 clearance 4
+gen cabs 1 cars 3 every 15 ; str x 2 ; crvl x 16 ; str x 2 ; bin
+```
+
+## Grid Size
+
+The `grid size` statement controls the cell size used by the scenery scoring grid. Both trees and pond placement use this grid.
+
+### Syntax
+
+```
+grid size N                      # Cell size in inches (default: 8)
+```
+
+### Behavior
+
+The grid cell size affects all scenery placement:
+- **Larger cells** = fewer cells, coarser scoring, generally fewer trees
+- **Smaller cells** = more cells, finer scoring, more precise placement
+- The grid overlay (visible in Design mode) shows cell boundaries and scores
+
+The `grid size` statement is a global setting and should appear before `trees` or `pond` statements.
+
+### Example
+
+```
+grid size 12                     # Larger cells = sparser scenery
+trees clearance 2 factor 0.3
+pond size 15
+gen cabs 1 cars 3 every 15 ; str x 2 ; crvl x 16 ; str x 2 ; bin
 ```
 
 ## Building Patterns

@@ -70,7 +70,7 @@ Trains are ordered car lists (consists). The primary cab (first cab in train) co
 
 **Log level:** `log debug|info|warn|error` — controls browser console output verbosity (default: `warn`). `logging` is accepted as alias for `log`, `warning` as alias for `warn`.
 
-**Generator syntax:** `gen cabs N cars M speed S every T` - N cabs (default 1), M cars (default 5), speed S inches/sec (default 12), spawn every T seconds (omit for one-shot). Parameters can appear in any order. Any parameter can use range syntax `LOW-HIGH` for randomization (e.g., `cabs 1-2 cars 3-8 speed 6-24`). Color modes: `colorful` (vibrant), `gray` (default), `black` (all cars black, cabs remain yellow).
+**Generator syntax:** `gen cabs N cars M speed S every T` - N cabs (default 1), M cars (default 5), speed S inches/sec (default 12), spawn every T seconds (omit for one-shot). Parameters can appear in any order. Any parameter can use range syntax `LOW-HIGH` for randomization (e.g., `cabs 1-2 cars 3-8 speed 6-24`). Color modes: `colorful` (vibrant), `gray` (default), `black` (all cars black, cabs remain dark orange).
 
 **Route memory:** Each train remembers which route it took at each switch. All cars in the train follow the same route, even if the switch is changed while the train is crossing.
 
@@ -114,6 +114,8 @@ Example (semicolon-separated statements):
 ```
 gen ; str ; crvl x 16 ; str ; bin   # Circle with generator and bin sidetracks
 ```
+
+**Scenery:** `trees` and `pond` DSL statements place scenery in open areas using the shared grid-based distance scoring system. Grid cell size is configurable via `grid size N` (default 8 inches). Only visible track is scored (track inside tunnels, generators, and bins is excluded). Trees use deterministic PRNG; pond uses `Math.random()` for varied placement each reload. Pond is placed first and modifies the grid (via `score` parameter and BFS re-run) so trees avoid the pond and its shore. Trees support two modes: default `density` (capped ramp-up) and `factor F` (deterministic floor(F*score) per cell). Scenery grid overlay is visible in Design mode. Scenery is preserved across UI toggles (Random/Manual, Clean/Design) — only regenerated on new layout load.
 
 ## Documentation
 

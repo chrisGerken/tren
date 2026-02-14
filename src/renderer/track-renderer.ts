@@ -6,18 +6,18 @@ import * as THREE from 'three';
 import { TrackPiece, Layout, Connection } from '../core/types';
 import { getArchetype, TrackArchetype } from '../core/archetypes';
 import { TrackScene } from './scene';
+import { renderScenery } from './scenery-renderer';
 import { logger } from '../core/logger';
 
 // Track colors (hex values with RGB equivalents)
-const RAIL_COLOR = 0x5c4033;  // Silver (R:192, G:192, B:192)    0xc0c0c0
-const TIE_COLOR = 0x5c4033;  // Dark wood brown (R:92, G:64, B:51)
-const BALLAST_COLOR = 0xd8d8c8;  // Light gray (R:216, G:216, B:200)
-const ROADBED_COLOR = 0xc8b8a0;  // Light tan (R:200, G:184, B:160)
+const RAIL_COLOR = 0xc0c0c8;  // Polished steel silver (R:192, G:192, B:200)
+const TIE_COLOR = 0x2e2018;  // Dark wood brown (R:46, G:32, B:24)
+const BALLAST_COLOR = 0x5a5a52;  // Dark gray gravel (R:90, G:90, B:82)
+const ROADBED_COLOR = 0x5a3830;  // Dark reddish-brown dirt (R:90, G:56, B:48)
 const CONNECTION_POINT_UNLOCKED_COLOR = 0xffffff;  // White for unlocked
 const CONNECTION_POINT_LOCKED_COLOR = 0xff0000;  // Red for locked
 const GENERATOR_COLOR = 0x22aa22;  // Green
 const BIN_COLOR = 0xcc2222;  // Red
-const BUMPER_COLOR = 0x444444;  // Dark gray
 const TUNNEL_COLOR = 0x4a4a4a;  // Dark gray for tunnel portal
 const SWITCH_SELECTED_COLOR = 0x00ff00;  // Bright green for selected route
 const SWITCH_UNSELECTED_COLOR = 0xff0000;  // Red for unselected routes
@@ -35,7 +35,7 @@ const TIE_HEIGHT = 0.15;  // Tie height (visible in top-down)
 const TIE_DEPTH = 0.25;  // Tie thickness along track direction
 const TIE_SPACING = 1.0;  // Distance between ties
 const BALLAST_WIDTH = 2.0;  // Width of gravel bed
-const ROADBED_WIDTH = 2.4;  // Width of raised dirt surface
+const ROADBED_WIDTH = 2.64;  // Width of raised dirt surface
 const ROADBED_HEIGHT = 0.1;  // Height of roadbed above ground
 
 // Set to true to show simplified debug view
@@ -138,9 +138,14 @@ export function updateDecouplerColor(pieceId: string, activated: boolean): void 
 
 /**
  * Render a complete layout
+ * @param preserveScenery - if true, keep existing trees/pond (for UI toggles that don't change layout)
  */
-export function renderLayout(scene: TrackScene, layout: Layout): void {
-  scene.clearLayout();
+export function renderLayout(scene: TrackScene, layout: Layout, preserveScenery = false): void {
+  if (preserveScenery) {
+    scene.clearTrack();
+  } else {
+    scene.clearLayout();
+  }
 
   // Clear connection point mesh references
   connectionPointMeshes.clear();
@@ -176,6 +181,10 @@ export function renderLayout(scene: TrackScene, layout: Layout): void {
       const offsetZ = -Math.sin(piece.rotation + Math.PI / 2) * labelOffset;
       scene.addLabel(piece.label, center.x + offsetX, center.z + offsetZ);
     }
+  }
+
+  if (!preserveScenery) {
+    renderScenery(scene, layout);
   }
 
   scene.fitToLayout();
@@ -368,8 +377,9 @@ function renderTrackSectionWorld(worldPoints: THREE.Vector3[]): THREE.Group {
   // Materials
   const railMaterial = new THREE.MeshStandardMaterial({
     color: RAIL_COLOR,
-    roughness: 0.5,
-    metalness: 0.2,
+    roughness: 0.2,
+    metalness: 0.85,
+    envMapIntensity: 1.0,
   });
 
   const tieMaterial = new THREE.MeshStandardMaterial({
@@ -832,52 +842,59 @@ function getPieceCenter(piece: TrackPiece, archetype: TrackArchetype): { x: numb
 }
 
 /**
- * Render bumper stop at world position
+ * Render bumper stop as a red X spanning the roadbed
  */
 function renderBumperStopWorld(
-  piece: TrackPiece,
-  archetype: TrackArchetype,
+  _piece: TrackPiece,
+  _archetype: TrackArchetype,
   toWorld: (local: { x: number; y: number; z: number }) => THREE.Vector3
-): THREE.Mesh {
-  const section = archetype.sections[0];
-  let worldPos: THREE.Vector3;
-  let tangentAngle = piece.rotation;
+): THREE.Group {
+  const group = new THREE.Group();
+  const halfWidth = ROADBED_WIDTH / 2;
+  const barThickness = 0.15;
+  const yPos = 0.5; // Sit above the rails
 
-  if (!section || section.splinePoints.length < 2) {
-    worldPos = toWorld({ x: 0, y: 0, z: 0 });
-  } else {
-    // Get position at end of track
-    const endPoint = section.splinePoints[section.splinePoints.length - 1];
-    worldPos = toWorld(endPoint);
+  // Four corners of the X in local coordinates
+  const inLeft = toWorld({ x: 0, y: 0, z: -halfWidth });
+  const inRight = toWorld({ x: 0, y: 0, z: halfWidth });
+  const outLeft = toWorld({ x: 3, y: 0, z: -halfWidth });
+  const outRight = toWorld({ x: 3, y: 0, z: halfWidth });
 
-    // Calculate tangent direction at end of spline (from second-to-last to last point)
-    const p1 = section.splinePoints[section.splinePoints.length - 2];
-    const p2 = section.splinePoints[section.splinePoints.length - 1];
-    const localTangent = { x: p2.x - p1.x, z: p2.z - p1.z };
+  const material = new THREE.MeshStandardMaterial({ color: 0xff0000 });
 
-    // Transform tangent to world coordinates (rotation only, not translation)
-    // Note: Z is negated to match the screen orientation flip
-    const cos = Math.cos(piece.rotation);
-    const sin = Math.sin(piece.rotation);
-    const worldTangent = {
-      x: localTangent.x * cos - localTangent.z * sin,
-      z: -(localTangent.x * sin + localTangent.z * cos),
-    };
+  // Diagonal 1: inLeft to outRight
+  const dx1 = outRight.x - inLeft.x;
+  const dz1 = outRight.z - inLeft.z;
+  const len1 = Math.sqrt(dx1 * dx1 + dz1 * dz1);
+  const angle1 = Math.atan2(dz1, dx1);
 
-    // Bumper should be perpendicular to tangent
-    tangentAngle = Math.atan2(worldTangent.z, worldTangent.x);
-  }
+  const geom1 = new THREE.BoxGeometry(len1, barThickness, barThickness);
+  const bar1 = new THREE.Mesh(geom1, material);
+  bar1.position.set(
+    (inLeft.x + outRight.x) / 2,
+    yPos,
+    (inLeft.z + outRight.z) / 2
+  );
+  bar1.rotation.y = -angle1; // Negate for Three.js Y-up rotation convention
+  group.add(bar1);
 
-  const geometry = new THREE.BoxGeometry(0.5, 1, 2);
-  const material = new THREE.MeshStandardMaterial({ color: BUMPER_COLOR });
+  // Diagonal 2: inRight to outLeft
+  const dx2 = outLeft.x - inRight.x;
+  const dz2 = outLeft.z - inRight.z;
+  const len2 = Math.sqrt(dx2 * dx2 + dz2 * dz2);
+  const angle2 = Math.atan2(dz2, dx2);
 
-  const mesh = new THREE.Mesh(geometry, material);
-  mesh.position.set(worldPos.x, 0.5, worldPos.z);
-  // Rotate bumper perpendicular to track direction
-  // The box's long axis (Z) should be perpendicular to the tangent
-  mesh.rotation.y = tangentAngle;
+  const geom2 = new THREE.BoxGeometry(len2, barThickness, barThickness);
+  const bar2 = new THREE.Mesh(geom2, material);
+  bar2.position.set(
+    (inRight.x + outLeft.x) / 2,
+    yPos,
+    (inRight.z + outLeft.z) / 2
+  );
+  bar2.rotation.y = -angle2;
+  group.add(bar2);
 
-  return mesh;
+  return group;
 }
 
 // Maximum distance to search along track (inches)

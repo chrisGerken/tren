@@ -22,7 +22,10 @@ export type Statement =
   | LogStatement
   | ArrayStatement
   | PrefabStatement
-  | UseStatement;
+  | UseStatement
+  | TreesStatement
+  | PondStatement
+  | GridStatement;
 
 export interface NewStatement {
   type: 'new';
@@ -164,6 +167,29 @@ export interface UseStatement {
   line: number;
 }
 
+export interface TreesStatement {
+  type: 'trees';
+  none?: boolean;
+  clearance?: number;
+  density?: number;
+  factor?: number;
+  line: number;
+}
+
+export interface PondStatement {
+  type: 'pond';
+  size?: number;
+  clearance?: number;
+  score?: number;
+  line: number;
+}
+
+export interface GridStatement {
+  type: 'grid';
+  size?: number;
+  line: number;
+}
+
 /**
  * Parse DSL text into an array of statements
  */
@@ -239,6 +265,15 @@ class Parser {
 
       case TokenType.USE:
         return this.parseUseStatement();
+
+      case TokenType.TREES:
+        return this.parseTreesStatement();
+
+      case TokenType.POND:
+        return this.parsePondStatement();
+
+      case TokenType.GRID:
+        return this.parseGridStatement();
 
       case TokenType.LABEL_DEF:
         return this.parseLabeledPiece();
@@ -709,6 +744,86 @@ class Parser {
     }
 
     return { type: 'use', name, params, line: token.line };
+  }
+
+  private parseTreesStatement(): TreesStatement {
+    const token = this.advance(); // consume 'trees'
+
+    let none: boolean | undefined;
+    let clearance: number | undefined;
+    let density: number | undefined;
+    let factor: number | undefined;
+
+    // Parse modifiers in any order: none, clearance N, density N, factor N
+    while (this.check(TokenType.NONE) || this.check(TokenType.CLEARANCE) || this.check(TokenType.DENSITY) || this.check(TokenType.FACTOR)) {
+      if (this.check(TokenType.NONE)) {
+        this.advance(); // consume 'none'
+        none = true;
+      } else if (this.check(TokenType.CLEARANCE)) {
+        this.advance(); // consume 'clearance'
+        if (this.check(TokenType.NUMBER)) {
+          clearance = parseInt(this.advance().value, 10);
+        }
+      } else if (this.check(TokenType.DENSITY)) {
+        this.advance(); // consume 'density'
+        if (this.check(TokenType.NUMBER)) {
+          density = parseInt(this.advance().value, 10);
+        }
+      } else if (this.check(TokenType.FACTOR)) {
+        this.advance(); // consume 'factor'
+        if (this.check(TokenType.NUMBER)) {
+          factor = parseFloat(this.advance().value);
+        }
+      }
+    }
+
+    return { type: 'trees', none, clearance, density, factor, line: token.line };
+  }
+
+  private parsePondStatement(): PondStatement {
+    const token = this.advance(); // consume 'pond'
+
+    let size: number | undefined;
+    let clearance: number | undefined;
+    let score: number | undefined;
+
+    // Parse modifiers in any order: size N, clearance N, score N
+    while (this.check(TokenType.SIZE) || this.check(TokenType.CLEARANCE) || this.check(TokenType.SCORE)) {
+      if (this.check(TokenType.SIZE)) {
+        this.advance(); // consume 'size'
+        if (this.check(TokenType.NUMBER)) {
+          size = parseInt(this.advance().value, 10);
+        }
+      } else if (this.check(TokenType.CLEARANCE)) {
+        this.advance(); // consume 'clearance'
+        if (this.check(TokenType.NUMBER)) {
+          clearance = parseInt(this.advance().value, 10);
+        }
+      } else if (this.check(TokenType.SCORE)) {
+        this.advance(); // consume 'score'
+        if (this.check(TokenType.NUMBER)) {
+          score = parseInt(this.advance().value, 10);
+        }
+      }
+    }
+
+    return { type: 'pond', size, clearance, score, line: token.line };
+  }
+
+  private parseGridStatement(): GridStatement {
+    const token = this.advance(); // consume 'grid'
+
+    let size: number | undefined;
+
+    // Parse modifier: size N
+    if (this.check(TokenType.SIZE)) {
+      this.advance(); // consume 'size'
+      if (this.check(TokenType.NUMBER)) {
+        size = parseInt(this.advance().value, 10);
+      }
+    }
+
+    return { type: 'grid', size, line: token.line };
   }
 
   private parseLabeledPiece(): PieceStatement {
