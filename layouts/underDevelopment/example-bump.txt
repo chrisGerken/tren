@@ -1,0 +1,11 @@
+title Example: Bump
+description Using a bump piece to end a section of track
+
+
+max trains 1
+
+gen cabs 2  cars 3
+
+str * 20
+
+bump
