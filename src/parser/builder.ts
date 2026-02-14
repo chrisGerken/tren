@@ -74,6 +74,7 @@ interface BuilderState {
   treesEnabled?: boolean;
   treesClearance?: number;
   treesDensity?: number;
+  treesFactor?: number;
   pondEnabled?: boolean;
   pondSize?: number;
   pondClearance?: number;
@@ -160,6 +161,7 @@ class LayoutBuilder {
       treesEnabled: this.state.treesEnabled,
       treesClearance: this.state.treesClearance,
       treesDensity: this.state.treesDensity,
+      treesFactor: this.state.treesFactor,
       pondEnabled: this.state.pondEnabled,
       pondSize: this.state.pondSize,
       pondClearance: this.state.pondClearance,
@@ -248,6 +250,7 @@ class LayoutBuilder {
       this.state.treesEnabled = true;
       if (stmt.clearance !== undefined) this.state.treesClearance = stmt.clearance;
       if (stmt.density !== undefined) this.state.treesDensity = stmt.density;
+      if (stmt.factor !== undefined) this.state.treesFactor = stmt.factor;
     }
   }
 

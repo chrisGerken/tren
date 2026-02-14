@@ -4,7 +4,7 @@ description Slightly more complex example with more loops, switches, tunnels and
 max trains 4
 lockahead distance 10 count 4
 
-trees clearance 4 density 3
+trees clearance 4 density 3 factor 0.6
 random
 
 gen colorful cabs 1-2 cars 2-10 every 10 speed 7-16

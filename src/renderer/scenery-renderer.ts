@@ -139,8 +139,9 @@ export function renderScenery(scene: TrackScene, layout: Layout): void {
   if (treesEnabled) {
     const clearance = layout.treesClearance ?? DEFAULT_TREE_CLEARANCE;
     const density = layout.treesDensity ?? DEFAULT_DENSITY;
+    const factor = layout.treesFactor;
 
-    const treesGroup = placeTrees(grid, bounds, gridWidth, gridHeight, clearance, density);
+    const treesGroup = placeTrees(grid, bounds, gridWidth, gridHeight, clearance, density, factor);
     scene.addSceneryGroup(treesGroup);
   }
 }
@@ -226,6 +227,9 @@ function markTrackCells(
   gridHeight: number
 ): void {
   for (const piece of pieces) {
+    // Skip invisible track (pieces inside tunnels)
+    if (piece.inTunnel) continue;
+
     const archetype = getArchetype(piece.archetypeCode);
     if (!archetype) continue;
 
@@ -334,7 +338,8 @@ function placeTrees(
   gridWidth: number,
   gridHeight: number,
   clearance: number,
-  density: number
+  density: number,
+  factor?: number
 ): THREE.Group {
   const group = new THREE.Group();
   const materials = getTreeMaterials();
@@ -355,7 +360,14 @@ function placeTrees(
       const score = grid[row][col];
       if (score < clearance) continue;
 
-      const treeCount = Math.min(density, score - clearance + 1);
+      let treeCount: number;
+      if (factor !== undefined) {
+        // Factor mode: max = floor(factor * score), then random int in [0, max]
+        const max = Math.floor(factor * score);
+        treeCount = max <= 0 ? 0 : Math.floor(random() * (max + 1));
+      } else {
+        treeCount = Math.min(density, score - clearance + 1);
+      }
 
       for (let t = 0; t < treeCount; t++) {
         const wx = bounds.minX + (col + random()) * CELL_SIZE;

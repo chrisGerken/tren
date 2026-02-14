@@ -594,9 +594,10 @@ str x 4
       <tr><td><code>trees none</code></td><td>Explicitly disable trees</td></tr>
       <tr><td><code>trees clearance N</code></td><td>Min grid distance from track to start placing trees (default: 2)</td></tr>
       <tr><td><code>trees density N</code></td><td>Max trees per grid cell at full density (default: 3)</td></tr>
+      <tr><td><code>trees factor F</code></td><td>Score multiplier: random 0..floor(F&times;score) trees per cell (real number)</td></tr>
     </table>
     <p>Parameters can appear in any order: <code>trees clearance 1 density 5</code></p>
-    <p>Tree count ramps up gradually from the clearance boundary. Higher <code>clearance</code> creates a wider buffer around tracks. Higher <code>density</code> places more trees in open areas.</p>
+    <p>Tree count ramps up gradually from the clearance boundary. Higher <code>clearance</code> creates a wider buffer around tracks. Higher <code>density</code> places more trees in open areas. When <code>factor</code> is specified, tree count is randomized proportionally to distance from track. Only visible track is considered (track inside tunnels is excluded).</p>
   </div>
 
   <div class="section">

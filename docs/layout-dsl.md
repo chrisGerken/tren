@@ -1082,6 +1082,7 @@ trees                            # Enable trees with defaults
 trees none                       # Explicitly disable trees
 trees clearance N                # Min distance score for placement (default: 2)
 trees density N                  # Max trees per cell at full density (default: 3)
+trees factor F                   # Score multiplier mode: random 0..floor(F*score) trees per cell
 trees clearance N density M      # Parameters in any order
 ```
 
@@ -1089,11 +1090,11 @@ trees clearance N density M      # Parameters in any order
 
 Trees are placed using a grid-based distance scoring algorithm:
 1. The layout area is divided into a grid of ~4-inch cells
-2. Cells containing track are scored 0
+2. Cells containing **visible** track are scored 0 (track inside tunnels is excluded)
 3. BFS flood-fill assigns increasing scores to cells farther from track
 4. Trees are placed in cells where `score >= clearance`
 
-Tree count per cell ramps up gradually: `min(density, score - clearance + 1)`.
+**Default mode (density):** Tree count per cell ramps up gradually: `min(density, score - clearance + 1)`.
 
 | Score | Trees (clearance=2, density=3) | Reason |
 |-------|-------------------------------|--------|
@@ -1102,6 +1103,8 @@ Tree count per cell ramps up gradually: `min(density, score - clearance + 1)`.
 | 2 | 1 | Sparse fringe |
 | 3 | 2 | Moderate |
 | 4+ | 3 | Capped at density |
+
+**Factor mode:** When `factor F` is specified, the tree count per cell is a random integer in `[0, floor(F * score)]`. This makes tree count directly proportional to distance from track, scaled by `F`. For example, `factor 0.5` at score 10 gives 0–5 trees; `factor 2.0` at score 10 gives 0–20 trees. The clearance threshold still applies.
 
 Each tree is rendered as a cluster of 3-5 overlapping dark green circles viewed from above. Trees do not affect camera framing (camera fits to tracks only).
 

@@ -444,6 +444,9 @@
 #
 # trees clearance 1 density 5    # Denser trees, closer to tracks
 # gen cabs 1 cars 3 every 15 ; str x 2 ; crvl x 16 ; str x 2 ; bin
+#
+# trees factor 0.5               # Factor mode: random trees proportional to distance
+# gen cabs 1 cars 3 every 15 ; str x 2 ; crvl x 16 ; str x 2 ; bin
 
 # =============================================================================
 # SAMPLE 20: Layout with pond

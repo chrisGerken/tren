@@ -52,6 +52,7 @@ export enum TokenType {
   TREES = 'TREES',             // trees keyword (for scenery configuration)
   CLEARANCE = 'CLEARANCE',     // clearance keyword (for trees)
   DENSITY = 'DENSITY',         // density keyword (for trees)
+  FACTOR = 'FACTOR',           // factor keyword (for trees - score multiplier)
   NONE = 'NONE',               // none keyword (for disabling features)
   POND = 'POND',               // pond keyword (for scenery configuration)
   SIZE = 'SIZE',               // size keyword (for pond)
@@ -715,6 +716,16 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
       if (lowerValue === 'density') {
         tokens.push({
           type: TokenType.DENSITY,
+          value: value,
+          line: lineNum,
+          column: startPos + 1,
+        });
+        continue;
+      }
+
+      if (lowerValue === 'factor') {
+        tokens.push({
+          type: TokenType.FACTOR,
           value: value,
           line: lineNum,
           column: startPos + 1,

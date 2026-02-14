@@ -1423,12 +1423,14 @@ Trees add visual interest to layouts by filling open areas away from tracks with
 trees                            # Enable with defaults
 trees none                       # Disable
 trees clearance N density M      # Custom parameters (any order)
+trees factor F                   # Score multiplier mode (real number)
 ```
 
 **Design decisions:**
 - Opt-in via `trees` DSL statement (no trees by default)
-- Grid-based distance scoring: divide layout area into ~4-inch cells, BFS flood-fill from track cells to assign distance scores
-- Trees placed where `score >= clearance`, count per cell = `min(density, score - clearance + 1)` — gradual ramp from sparse fringe to full density
+- Grid-based distance scoring: divide layout area into ~4-inch cells, BFS flood-fill from **visible** track cells to assign distance scores (track inside tunnels is excluded from scoring)
+- Default mode: trees placed where `score >= clearance`, count per cell = `min(density, score - clearance + 1)` — gradual ramp from sparse fringe to full density
+- Factor mode: when `factor F` is specified, tree count per cell = random integer in `[0, floor(F * score)]` — directly proportional to distance, scaled by F
 - Defaults: clearance=2, density=3
 - Camera fits to tracks only (scenery group excluded from `fitToLayout()` bounding box)
 - Scenery is static geometry, rendered once at layout load
@@ -1450,7 +1452,7 @@ trees clearance N density M      # Custom parameters (any order)
 1. Compute bounding box from all track piece connection points and spline points (in screen coordinates with Z negated)
 2. Expand bounds by 30% on each side
 3. Create grid sized to cover expanded area at CELL_SIZE (4") resolution
-4. For each track piece: transform spline points to world/screen coords, create CatmullRomCurve3, sample at ~1" intervals, mark containing grid cells as score 0
+4. For each **visible** track piece (skip `inTunnel` pieces): transform spline points to world/screen coords, create CatmullRomCurve3, sample at ~1" intervals, mark containing grid cells as score 0
 5. BFS flood-fill from all score-0 cells using 4-directional adjacency
 
 **Architecture:**

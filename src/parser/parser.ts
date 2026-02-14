@@ -171,6 +171,7 @@ export interface TreesStatement {
   none?: boolean;
   clearance?: number;
   density?: number;
+  factor?: number;
   line: number;
 }
 
@@ -741,9 +742,10 @@ class Parser {
     let none: boolean | undefined;
     let clearance: number | undefined;
     let density: number | undefined;
+    let factor: number | undefined;
 
-    // Parse modifiers in any order: none, clearance N, density N
-    while (this.check(TokenType.NONE) || this.check(TokenType.CLEARANCE) || this.check(TokenType.DENSITY)) {
+    // Parse modifiers in any order: none, clearance N, density N, factor N
+    while (this.check(TokenType.NONE) || this.check(TokenType.CLEARANCE) || this.check(TokenType.DENSITY) || this.check(TokenType.FACTOR)) {
       if (this.check(TokenType.NONE)) {
         this.advance(); // consume 'none'
         none = true;
@@ -757,10 +759,15 @@ class Parser {
         if (this.check(TokenType.NUMBER)) {
           density = parseInt(this.advance().value, 10);
         }
+      } else if (this.check(TokenType.FACTOR)) {
+        this.advance(); // consume 'factor'
+        if (this.check(TokenType.NUMBER)) {
+          factor = parseFloat(this.advance().value);
+        }
       }
     }
 
-    return { type: 'trees', none, clearance, density, line: token.line };
+    return { type: 'trees', none, clearance, density, factor, line: token.line };
   }
 
   private parsePondStatement(): PondStatement {
