@@ -273,6 +273,18 @@ const archetypes: TrackArchetype[] = [
     ],
   },
 
+  // Speed limit (sets speed cap for passing trains)
+  // Zero-length track piece with configurable speed limit
+  {
+    code: 'spd',
+    aliases: ['speedlimit'],
+    sections: [],
+    connectionPoints: [
+      { name: 'in', position: vec2(0, 0), direction: vec2(-1, 0), sectionIndices: [] },
+      { name: 'out', position: vec2(0, 0), direction: vec2(1, 0), sectionIndices: [] },
+    ],
+  },
+
   // 90° Crossing
   {
     code: 'x90',

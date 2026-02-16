@@ -265,13 +265,16 @@ export function moveCar(
   selectedRoutes: Map<string, number>,
   trainRoutes?: Map<string, number>,
   routesToClearAfterLastCar?: Set<string>
-): void {
+): string[] {
+  // Track zero-length piece IDs traversed during this move (for speed limit detection etc.)
+  const traversedZeroLength: string[] = [];
+
   // Apply sectionDirection: when -1, positive distance decreases distanceAlongSection
   // (car traverses spline from out→in instead of in→out)
   car.distanceAlongSection += distance * car.sectionDirection;
 
   let piece = layout.pieces.find(p => p.id === car.currentPieceId);
-  if (!piece) return;
+  if (!piece) return traversedZeroLength;
 
   let sectionIndex = getSectionIndexForEntry(car.entryPoint);
   let sectionLength = getSectionLength(piece, sectionIndex);
@@ -281,6 +284,8 @@ export function moveCar(
   let safetyCounter = 0;
   while (sectionLength === 0 && safetyCounter < 10) {
     safetyCounter++;
+    // Record this zero-length piece for callers (e.g., speed limit detection)
+    traversedZeroLength.push(car.currentPieceId);
 
     // Determine exit point: opposite of entry, or based on distance if no entry recorded
     let exitPoint: string;
@@ -305,7 +310,7 @@ export function moveCar(
     if (!nextSection) {
       car.distanceAlongSection = 0;
       updateCarWorldPosition(car, layout);
-      return;
+      return traversedZeroLength;
     }
 
     // Flip sectionDirection at same-polarity junctions
@@ -317,7 +322,7 @@ export function moveCar(
     car.currentPieceId = nextSection.pieceId;
     car.entryPoint = nextSection.entryPoint;
     piece = layout.pieces.find(p => p.id === car.currentPieceId);
-    if (!piece) return;
+    if (!piece) return traversedZeroLength;
     sectionIndex = getSectionIndexForEntry(car.entryPoint);
     sectionLength = getSectionLength(piece, sectionIndex);
   }
@@ -334,7 +339,7 @@ export function moveCar(
     );
     if (!nextSection) {
       car.distanceAlongSection = sectionLength;
-      return;
+      return traversedZeroLength;
     }
 
     // Flip sectionDirection at same-polarity junctions
@@ -414,6 +419,7 @@ export function moveCar(
 
   // Update world position
   updateCarWorldPosition(car, layout);
+  return traversedZeroLength;
 }
 
 /**

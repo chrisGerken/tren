@@ -56,6 +56,7 @@ export interface TrackPiece {
   genConfig?: GeneratorConfig;  // Generator configuration (only for 'gen' pieces)
   semaphoreConfig?: SemaphoreConfig;  // Semaphore configuration (only for 'sem' pieces)
   decouplerConfig?: DecouplerConfig;  // Decoupler configuration (only for 'dec' pieces)
+  speedLimitConfig?: SpeedLimitConfig;  // Speed limit configuration (only for 'spd' pieces)
   inTunnel?: boolean;     // True if piece is inside a tunnel (between tunnel pieces)
   internalConnectionPoints?: InternalConnectionPoint[];  // Connection points along the track (not at endpoints)
 }
@@ -116,6 +117,7 @@ export interface Train {
   travelDirection: 'forward' | 'backward'; // Current direction of travel
   coupling: boolean;               // True when in coupling mode (moving to connect with another train)
   couplingSpeed: number;           // Speed during coupling (inches/sec, default 3)
+  speedLimit: number;              // Current speed limit from last spd piece passed
 }
 
 /** Range value for randomized parameters */
@@ -146,6 +148,11 @@ export interface SemaphoreConfig {
 /** Decoupler configuration - splits a stopped train */
 export interface DecouplerConfig {
   activated: boolean;              // True when decoupler has been triggered (briefly)
+}
+
+/** Speed limit configuration - sets speed cap for passing trains */
+export interface SpeedLimitConfig {
+  limit: number;                   // Speed limit in inches/second
 }
 
 /** Helper to create a Vec3 */

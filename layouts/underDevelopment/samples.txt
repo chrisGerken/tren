@@ -36,6 +36,7 @@
 #   gen, generator                  Train source (see GENERATOR SYNTAX below)
 #   bin                             Train sink (removes trains)
 #   tun, tunnel                     Visibility toggle (hides track/trains)
+#   spd N, speedlimit N             Speed limit sign (N = inches/sec, default 12)
 #   flex                            Flex track
 #
 # GENERATOR SYNTAX:

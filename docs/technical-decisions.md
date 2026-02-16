@@ -1609,6 +1609,24 @@ The `$label+N` / `$label-N` syntax provides inline traversal offsets for label r
 
 - **Works in all label contexts:** The offset is propagated through `parseConnectionPointRef()` (used by `new`, `flex connect`, `splice`) and standalone parse methods (`parseReference`, `parsePointLabelReference`, `parseLoopClose`, `parseCrossConnectStatement`). In the builder, all label resolution call sites use `resolveLabelWithOffset()`.
 
+## Speed Limit Archetype
+
+A zero-length track piece (`spd N`) that sets a speed cap for passing trains. Follows the same zero-length pattern as `sem`, `dec`, `ph`, `tun`.
+
+**Design decisions:**
+- Per-train `speedLimit` field tracks the current limit, initialized to the generator's resolved speed at spawn
+- Effective target speed = `min(desiredSpeed, speedLimit)` — trains use normal braking/acceleration to reach it, no emergency stop
+- `moveCar()` returns `string[]` of zero-length piece IDs traversed during the move, enabling the simulation to detect when the lead car passes through a `spd` piece
+- Only the lead car's traversals update the train's speed limit — trailing cars passing the sign don't re-trigger it
+- Split trains inherit the parent's speed limit; coupled trains keep their own
+- Default limit if N is omitted: 12 inches/second
+
+**Rendering:**
+- Uses `CanvasTexture` on a `PlaneGeometry(2.5, 2.5)` laid flat in the X-Z plane
+- 64x64 canvas draws a white filled circle with dark gray border and bold black speed number
+- Font size adapts for 3+ digit numbers (24px vs 32px)
+- Positioned at Y=0.7 (same elevation as semaphore dots) for consistent visual layer
+
 ## Open Questions
 
 These will be addressed in user scenario discussions:

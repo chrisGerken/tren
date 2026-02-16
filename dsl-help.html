@@ -184,6 +184,7 @@ crvl         # Place a left curve (22" radius default)</code></pre>
       <tr><td><code>tun</code>, <code>tunnel</code></td><td>Visibility toggle</td></tr>
       <tr><td><code>sem</code>, <code>semaphore</code></td><td>Manual signal (see Semaphore Syntax below)</td></tr>
       <tr><td><code>dec</code>, <code>decoupler</code></td><td>Train splitter (see Decoupler Syntax below)</td></tr>
+      <tr><td><code>spd</code>, <code>speedlimit</code></td><td>Speed limit sign (see Speed Limit Syntax below)</td></tr>
     </table>
 
     <h3>Repetition</h3>
@@ -241,6 +242,16 @@ split: dec                    # Labeled decoupler</code></pre>
     <p><strong>Visual appearance:</strong> Two small triangles on each side of the track (orange = inactive, red = activated).</p>
     <p><strong>Interaction:</strong> Click either triangle to activate. If a stopped train straddles the decoupler, the train is split into two stopped trains. The decoupler flashes red for 1 second.</p>
     <p><strong>Use cases:</strong> Splitting trains for shunting, dropping off cars at sidings.</p>
+
+    <h3>Speed Limit Syntax</h3>
+    <p>Speed limit signs set a maximum speed for passing trains:</p>
+    <pre><code>spd 6                         # Speed limit of 6 inches/second
+spd 24                        # Speed limit of 24 inches/second
+speedlimit 12                 # Same as spd 12 (alias)
+slow: spd 6                   # Labeled speed limit</code></pre>
+    <p><strong>Visual appearance:</strong> White circle with the speed limit number in bold black text.</p>
+    <p><strong>Behavior:</strong> When a train passes the sign, its speed is capped at <code>min(desiredSpeed, limit)</code>. Trains brake normally to the new speed. The limit persists until the train passes another <code>spd</code> piece. Default limit if N is omitted: 12.</p>
+    <p><strong>Use cases:</strong> Slowing trains through curves, stations, or yards. Place a higher-value <code>spd</code> after the restricted zone to let trains speed back up.</p>
   </div>
 
   <div class="section">
@@ -541,6 +552,7 @@ cross connect $one $two</code></pre>
       <tr><td>Red dot in circle</td><td>Semaphore - locked (click to unlock)</td></tr>
       <tr><td>Orange triangles</td><td>Decoupler - inactive (click to split stopped train)</td></tr>
       <tr><td>Red triangles</td><td>Decoupler - activated (briefly flashes)</td></tr>
+      <tr><td>White circle with number</td><td>Speed limit sign</td></tr>
       <tr><td>Green dot (small)</td><td>Selected route at virtual switch</td></tr>
       <tr><td>Red dot (small)</td><td>Unselected route at virtual switch (click to select)</td></tr>
       <tr><td>White sphere (small)</td><td>Connection point - unlocked (only visible when Labels is on)</td></tr>

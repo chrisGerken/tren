@@ -672,6 +672,13 @@ class LayoutBuilder {
         };
       }
 
+      // Apply speed limit config for 'spd' pieces
+      if (archetype.code === 'spd' && i === 0) {
+        piece.speedLimitConfig = {
+          limit: stmt.spdLimit ?? 12,
+        };
+      }
+
       this.state.pieces.push(piece);
       this.state.currentSegment.pieces.push(piece);
       this.state.currentPiece = piece;

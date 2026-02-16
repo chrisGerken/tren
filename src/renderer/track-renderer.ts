@@ -357,6 +357,11 @@ function renderTrackPiece(
     const activated = piece.decouplerConfig?.activated ?? false;
     const decouplerGroup = renderDecouplerWorld(worldPos, piece.id, piece.rotation, activated);
     group.add(decouplerGroup);
+  } else if (archetype.code === 'spd' || archetype.code === 'speedlimit') {
+    const worldPos = toWorld({ x: 0, y: 0, z: 0 });
+    const limit = piece.speedLimitConfig?.limit ?? 0;
+    const spdMesh = renderSpeedLimitWorld(worldPos, limit);
+    group.add(spdMesh);
   }
 
   return group;
@@ -728,6 +733,52 @@ function renderDecouplerWorld(
   decouplerMeshes.set(pieceId, [leftTriangle, rightTriangle]);
 
   return group;
+}
+
+/**
+ * Render speed limit sign as a white circle with the speed number
+ * Uses CanvasTexture to draw text on a flat plane
+ * @param worldPos - Position in world coordinates
+ * @param limit - Speed limit value to display
+ */
+function renderSpeedLimitWorld(worldPos: THREE.Vector3, limit: number): THREE.Mesh {
+  const size = 64;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+
+  // White filled circle
+  ctx.beginPath();
+  ctx.arc(size / 2, size / 2, size / 2 - 2, 0, Math.PI * 2);
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+
+  // Dark gray border
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = '#333333';
+  ctx.stroke();
+
+  // Speed limit number in bold black, centered
+  const text = String(Math.round(limit));
+  ctx.fillStyle = '#000000';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = `bold ${text.length > 2 ? 24 : 32}px sans-serif`;
+  ctx.fillText(text, size / 2, size / 2);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  const geometry = new THREE.PlaneGeometry(2.5, 2.5);
+  const material = new THREE.MeshBasicMaterial({
+    map: texture,
+    transparent: true,
+    side: THREE.DoubleSide,
+  });
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.rotation.x = -Math.PI / 2;  // Lay flat in X-Z plane
+  mesh.position.set(worldPos.x, 0.7, worldPos.z);
+
+  return mesh;
 }
 
 /**

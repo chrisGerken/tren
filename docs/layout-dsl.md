@@ -341,6 +341,7 @@ Use archetype codes to specify track pieces. See [Track Dimensions](track-dimens
 | `tun`, `tunnel` | Visibility toggle (hide track/trains) |
 | `sem`, `semaphore` | Manual signal (see Semaphore Syntax below) |
 | `dec`, `decoupler` | Train splitter (see Decoupler Syntax below) |
+| `spd`, `speedlimit` | Speed limit sign (see Speed Limit Syntax below) |
 
 ### Generator Syntax
 
@@ -453,6 +454,33 @@ split: dec                    # Labeled decoupler
 - Splitting trains for shunting/switching operations
 - Dropping off cars at sidings
 - Creating separate train consists from a single train
+
+### Speed Limit Syntax
+
+Speed limit signs set a maximum speed for passing trains:
+
+```
+spd 6                         # Speed limit of 6 inches/second
+spd 24                        # Speed limit of 24 inches/second
+speedlimit 12                 # Same as spd 12 (alias)
+slow: spd 6                   # Labeled speed limit
+```
+
+**Behavior:**
+- When a train's lead car passes a `spd` piece, the train's speed limit is set to the specified value
+- The train's effective speed becomes `min(desiredSpeed, speedLimit)`
+- If the speed limit is higher than the train's desired speed, there is no effect
+- Trains brake normally to reach the new lower speed (no emergency stop)
+- The limit persists until the train passes another `spd` piece with a different value
+- Default limit if N is omitted: 12 inches/second
+
+**Visual appearance:**
+- White circle with the speed limit number displayed in bold black text
+
+**Use cases:**
+- Slowing trains through curves, stations, or yards
+- Creating speed zones on specific stretches of track
+- Simulating realistic speed restrictions
 
 ### Repetition
 

@@ -357,6 +357,7 @@ export class Simulation {
       travelDirection: 'forward',
       coupling: false,
       couplingSpeed: COUPLING_SPEED,
+      speedLimit: desiredSpeed,  // Initial limit = generator's speed (no restriction)
     };
 
     // Generator has an internal section - cars spawn inside it
@@ -454,23 +455,24 @@ export class Simulation {
         this.simulationTime
       );
 
-      // Step 2: Adjust speed based on lock acquisition and coupling mode
+      // Step 2: Adjust speed based on lock acquisition, coupling mode, and speed limit
+      const effectiveDesired = Math.min(train.desiredSpeed, train.speedLimit);
       if (train.coupling) {
         // Coupling mode: move at coupling speed, ignore lock failures
         train.currentSpeed = train.couplingSpeed;
       } else if (!lockResult.success) {
         // Can't acquire locks - emergency braking
         train.currentSpeed = Math.max(0, train.currentSpeed - EMERGENCY_BRAKING * deltaTime);
-      } else if (train.currentSpeed > train.desiredSpeed) {
-        // Locks acquired but going too fast - normal braking to desired speed
+      } else if (train.currentSpeed > effectiveDesired) {
+        // Locks acquired but going too fast - normal braking to effective desired speed
         train.currentSpeed = Math.max(
-          train.desiredSpeed,
+          effectiveDesired,
           train.currentSpeed - NORMAL_BRAKING * deltaTime
         );
-      } else if (train.currentSpeed < train.desiredSpeed) {
-        // Locks acquired - accelerate toward desired speed
+      } else if (train.currentSpeed < effectiveDesired) {
+        // Locks acquired - accelerate toward effective desired speed
         train.currentSpeed = Math.min(
-          train.desiredSpeed,
+          effectiveDesired,
           train.currentSpeed + ACCELERATION * deltaTime
         );
       }
@@ -483,10 +485,12 @@ export class Simulation {
       const routesToClear = new Set<string>();
 
       // Move each car, passing the clear set only to the tail car
+      // Capture traversed zero-length pieces from lead car for speed limit detection
+      const leadCarIdx = train.travelDirection === 'forward' ? 0 : train.cars.length - 1;
       const tailCarIdx = getTailCarIndex(train);
       for (let i = 0; i < train.cars.length; i++) {
         const isLastCar = i === tailCarIdx;
-        moveCar(
+        const traversed = moveCar(
           train.cars[i],
           distance,
           this.layout,
@@ -494,6 +498,16 @@ export class Simulation {
           train.routesTaken,
           isLastCar ? routesToClear : undefined
         );
+
+        // Check lead car's traversed pieces for speed limit signs
+        if (i === leadCarIdx) {
+          for (const pieceId of traversed) {
+            const piece = this.layout.pieces.find(p => p.id === pieceId);
+            if (piece?.speedLimitConfig) {
+              train.speedLimit = piece.speedLimitConfig.limit;
+            }
+          }
+        }
       }
 
       // Clear routes that the last car has now passed
@@ -815,6 +829,7 @@ export class Simulation {
       travelDirection: train.travelDirection,
       coupling: false,
       couplingSpeed: COUPLING_SPEED,
+      speedLimit: train.speedLimit,
     };
 
     // Update original train to only have front cars

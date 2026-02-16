@@ -58,6 +58,8 @@ export interface PieceStatement {
   genSpeed?: number | RangeValue;     // Train speed in inches/second (default 12)
   genEvery?: number | RangeValue;     // Spawn frequency in seconds (undefined = one-shot)
   genColorMode?: 'colorful' | 'gray' | 'black'; // Car color mode ('colorful', 'gray', or 'black', default 'gray')
+  // Speed limit parameter (only for 'spd' archetype)
+  spdLimit?: number;               // Speed limit in inches/second
 }
 
 export interface ReferenceStatement {
@@ -1126,6 +1128,14 @@ class Parser {
       }
     }
 
+    // Parse speed limit value: spd N (e.g., spd 6)
+    let spdLimit: number | undefined;
+    if (archetypeCode === 'spd' || archetypeCode === 'speedlimit') {
+      if (this.check(TokenType.NUMBER)) {
+        spdLimit = parseFloat(this.advance().value);
+      }
+    }
+
     // Check for repetition: x N or * N
     let count = 1;
     if (this.check(TokenType.REPETITION)) {
@@ -1146,6 +1156,7 @@ class Parser {
       genSpeed,
       genEvery,
       genColorMode,
+      spdLimit,
     };
   }
 

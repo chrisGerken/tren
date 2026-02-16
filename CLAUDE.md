@@ -33,7 +33,7 @@ Track pieces are instances of archetypes (templates). Archetypes define:
 
 **Coordinate System:** X = primary direction (positive = forward), Z = lateral (positive = left), Y = vertical (0 for 2D). Units are inches.
 
-**Key archetype codes:** `str` (straight), `crv`/`crvl`/`crvr` (curves), `x90`/`x45` (crossings), `bump` (buffer), `gen` (generator - train source, click to toggle), `bin` (train sink), `flex`, `ph` (placeholder - zero-length junction point), `tun` (tunnel - visibility toggle), `sem` (semaphore - manual signal, click to lock/unlock), `dec` (decoupler - splits stopped trains, click to activate).
+**Key archetype codes:** `str` (straight), `crv`/`crvl`/`crvr` (curves), `x90`/`x45` (crossings), `bump` (buffer), `gen` (generator - train source, click to toggle), `bin` (train sink), `flex`, `ph` (placeholder - zero-length junction point), `tun` (tunnel - visibility toggle), `sem` (semaphore - manual signal, click to lock/unlock), `dec` (decoupler - splits stopped trains, click to activate), `spd` (speed limit - sets speed cap for passing trains).
 
 **Connection point naming:** `in`/`out` for default input/output, `in1`/`out1`/`in2`/`out2` for crossings.
 
@@ -75,6 +75,8 @@ Trains are ordered car lists (consists). The primary cab (first cab in train) co
 **Route memory:** Each train remembers which route it took at each switch. All cars in the train follow the same route, even if the switch is changed while the train is crossing.
 
 **Collision prevention:** Trains use connection point locking. Each train locks connection points ahead before proceeding. If a point is already locked by another train, the approaching train stops and waits. Configure via `lockahead distance N count M` DSL statement (default: 10 inches, 2 points).
+
+**Speed limits:** The `spd N` track piece sets a speed limit. Trains passing the sign slow to `min(desiredSpeed, N)`. Place a higher `spd` value later to let trains speed back up. Rendered as a white circle with the speed number. Default limit if N is omitted: 12.
 
 **Train limits:** The `max trains N` DSL statement limits the number of trains that can exist simultaneously (default: 5). Generators will not spawn new trains when the layout already has N trains. Once a train is destroyed (e.g., enters a bin), generators can spawn again.
 
