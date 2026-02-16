@@ -1,7 +1,7 @@
 title Layout: Iteratively Built
 description   We''ll see what happens
 
-max trains 2
+max trains 4
 lockahead distance 10 count 3
 
 trees clearance 4 density 1
@@ -12,6 +12,11 @@ pond size 10 clearance 2 score 0
 # Main loop
 #
 
+generator colorful cabs 1-3 cars 4-12 speed 16 every 15 
+
+str * 2
+crvr * 2
+crvl * 2
 
 str1: str * 30
 crv1: crvl * 4
@@ -26,4 +31,39 @@ crv4: crvl * 4
 # Track to Clarksville
 #
 
-assign 
+new from $str1+25
+
+crvl * 3
+str * 5
+bin1: crvr
+str
+tunnel
+str * 3
+tunnel
+str * 7
+bin 
+
+#
+# Yard
+#
+
+new from $bin1-1
+crvl
+yard: str * 4
+array count 5 angle 90 distance 10 prefix yard_
+str * 23
+tunnel
+crvl*2
+tunnel
+crvl*3
+flex connect @  $str3+7.in
+
+flex connect $yard.out  $yard_2.in
+flex connect $yard.out  $yard_3.in
+flex connect $yard.out  $yard_4.in
+
+new from $yard_2.out; str * 8; crvr; str; flex connect @ $yard_1+13.in
+
+new from $yard_3.out; str * 8; crvr; str; flex connect @  $yard_1+15.in 
+
+new from $yard_4.out; str * 8; crvr; str; flex connect @  $yard_1+18.in 

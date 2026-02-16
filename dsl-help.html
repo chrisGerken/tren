@@ -139,6 +139,10 @@ log debug                      # Set log level: debug, info, warn, error</code><
     <pre><code>assign entry to start + 3      # Label piece 3 steps forward from 'start'
 assign x to end - 2            # Label piece 2 steps backward from 'end'</code></pre>
     <p>This avoids breaking compact definitions like <code>str * 8</code> with inline labels. Assigned labels can be referenced immediately by subsequent <code>$label</code> statements.</p>
+    <p>Label references also support inline offsets: <code>$label+N</code> traverses N pieces forward, <code>$label-N</code> traverses N backward. Unlike <code>assign</code>, this does not create a new label &mdash; it&rsquo;s resolved inline wherever <code>$label</code> references are used:</p>
+    <pre><code>new from $start+3.out    # Branch from 3rd piece after 'start'
+$start-2.out             # Reference 2nd piece before 'start'
+&gt; in.$start+3            # Loop close to 3rd piece after 'start'</code></pre>
 
     <h3>Custom Track Pieces</h3>
     <p>Create custom curve or straight pieces with the <code>define</code> (or <code>def</code>) statement:</p>
@@ -374,9 +378,67 @@ crvl x 16               # Full circle of curves
   </div>
 
   <div class="section">
+    <h2>Splice</h2>
+    <p>The <code>splice</code> statement solves a common problem when creating passing tracks or sidings: when a diverging track curves back to rejoin the main line, the merge point often falls between connection points on the main line track pieces.</p>
+
+    <h3>Syntax</h3>
+    <pre><code>splice                        # Split track at current connection point
+splice $label.point           # Split track at the labeled point's position
+splice using $label.point     # Same as above ('using' is optional)</code></pre>
+
+    <h3>How It Works</h3>
+    <ol>
+      <li>The splice statement specifies a connection point that should connect to an existing track</li>
+      <li>The system finds the track piece whose spline the connection point falls on (even if there's no connection point there)</li>
+      <li>That track piece is split into two pieces at the splice location</li>
+      <li>A new connection point is created at the split, enabling auto-connect to create a virtual switch</li>
+    </ol>
+
+    <h3>Example: Passing Siding</h3>
+    <pre><code># Main line
+str x 2
+main: str x 8            # This will be spliced
+str x 2
+bump
+
+# Passing track diverges from main
+$main.in
+crvl                     # Diverge left
+str x 4                  # Parallel section
+crvr                     # Curve back toward main
+crvl                     # Rejoin angle
+splice                   # Splice at current position into main line</code></pre>
+
+    <p>Or with an explicit label:</p>
+    <pre><code>$main.in
+crvl ; str x 4 ; crvr
+merge: crvl
+splice $merge.out        # Same effect, using labeled piece</code></pre>
+
+    <p>Without splice, you would need to calculate exact piece lengths to ensure the merge point lands precisely on a connection point. With splice, the track piece is automatically split at the correct location.</p>
+
+    <h3>Tolerances and Error Handling</h3>
+    <ul>
+      <li><strong>Position tolerance:</strong> 2.0 inches &mdash; the splice point must be within 2 inches of a track spline</li>
+      <li><strong>Angle tolerance:</strong> None &mdash; auto-connect handles direction matching after the split</li>
+      <li><strong>On failure:</strong> A warning is logged, the piece is labeled &ldquo;can't splice&rdquo; for visual debugging, and the layout continues (non-fatal)</li>
+    </ul>
+
+    <h3>Limitations</h3>
+    <ul>
+      <li>The splice point must fall on a track piece's spline (within tolerance)</li>
+      <li>Works best with straight pieces; curved pieces may have less precise results</li>
+      <li>The target track must have <code>in</code> and <code>out</code> connection points (crossings not supported)</li>
+    </ul>
+  </div>
+
+  <div class="section">
     <h2>Flex Connect</h2>
     <p>The <code>flex connect</code> statement creates custom track pieces to bridge gaps that can't be closed with standard pieces.</p>
-    <pre><code>flex connect $label1.point1 $label2.point2</code></pre>
+    <pre><code>flex connect $label1.point1 $label2.point2
+flex connect @ $label2.point2
+flex connect @.point $label2.point2</code></pre>
+    <p>Use <code>@</code> as shorthand for the current piece's current connection point. <code>@.point</code> specifies an explicit point on the current piece.</p>
     <p>The solver automatically calculates the best solution to smoothly connect the two points:</p>
     <ul>
       <li><strong>Straight + Curve</strong> or <strong>Curve + Straight</strong> - for most gaps</li>

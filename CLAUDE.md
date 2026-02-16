@@ -90,6 +90,7 @@ Layouts are defined in text files. All keywords, archetype names, and connection
 - `$label.point` — reference a labeled piece's connection point (creates branch)
 - `> point.$label` — close loop: connect current output to labeled piece's input
 - `assign label1 to label2 +/- N` — assign a label to a piece N steps forward (+) or backward (-) from an already-labeled piece
+- `$label+N.point` / `$label-N.point` — inline label offset: traverse N pieces forward/backward without creating a new label (works in all `$label` contexts)
 
 **Auto-connect:** After layout parsing, all connection points are scanned. Any two connection points at approximately the same position with approximately opposite directions are automatically connected (configurable tolerances). This automatically creates virtual switches where tracks meet—e.g., `gen ; str ; crvl x 16 ; str ; bin` creates a circle with generator and bin sidetracks. Auto-connected points are marked with a small yellow circle when displayed.
 

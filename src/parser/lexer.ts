@@ -6,6 +6,7 @@ export enum TokenType {
   IDENTIFIER = 'IDENTIFIER',   // piece codes, labels
   LABEL_DEF = 'LABEL_DEF',     // label: (includes the colon)
   LABEL_REF = 'LABEL_REF',     // $label
+  CURRENT_REF = 'CURRENT_REF', // @ (current piece)
   DOT = 'DOT',                 // .
   REPETITION = 'REPETITION',   // x or *
   NUMBER = 'NUMBER',           // numeric values
@@ -227,6 +228,18 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
       continue;
     }
 
+    // Current piece reference: @
+    if (char === '@') {
+      tokens.push({
+        type: TokenType.CURRENT_REF,
+        value: '@',
+        line: lineNum,
+        column: startPos + 1,
+      });
+      pos++;
+      continue;
+    }
+
     // Dot
     if (char === '.') {
       tokens.push({
@@ -279,8 +292,14 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
     if (/[0-9]/.test(char) || (char === '-' && pos + 1 < statement.length && /[0-9]/.test(statement[pos + 1]))) {
       const start = pos;
       if (char === '-') pos++;
-      while (pos < statement.length && /[0-9.]/.test(statement[pos])) {
-        pos++;
+      while (pos < statement.length) {
+        if (/[0-9]/.test(statement[pos])) {
+          pos++;
+        } else if (statement[pos] === '.' && pos + 1 < statement.length && /[0-9]/.test(statement[pos + 1])) {
+          pos++; // consume dot only when followed by a digit (e.g., 9.5 but not 9.in)
+        } else {
+          break;
+        }
       }
 
       // Check for range syntax: number immediately followed by - and another number
@@ -290,8 +309,14 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
         pos++; // skip the dash
         if (pos < statement.length && /[0-9]/.test(statement[pos])) {
           // This is a range - parse the second number
-          while (pos < statement.length && /[0-9.]/.test(statement[pos])) {
-            pos++;
+          while (pos < statement.length) {
+            if (/[0-9]/.test(statement[pos])) {
+              pos++;
+            } else if (statement[pos] === '.' && pos + 1 < statement.length && /[0-9]/.test(statement[pos + 1])) {
+              pos++;
+            } else {
+              break;
+            }
           }
           tokens.push({
             type: TokenType.RANGE,

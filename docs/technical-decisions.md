@@ -665,6 +665,14 @@ The `flex connect` statement creates custom track pieces to bridge gaps between 
 - Also check that delta points same direction as D1 (dot > 0.98)
 - Tolerance: sin(angle) < 0.02 ≈ 1.1° deviation
 
+**`@` shorthand for current piece:**
+- `@` or `@.point` can be used in place of `$label.point` in flex connect arguments
+- Follows the same pattern as splice (which also supports omitting the label to use the current piece)
+- The current piece and connection point are captured at statement time in `processFlexConnect()`, stored as `currentPieceId`/`currentPointName` on `FlexConnectInfo`
+- Resolved in `performFlexConnect()` by looking up the piece by ID from `this.state.pieces`
+- The sentinel label `'@'` is safe from collisions — real labels must match `[a-zA-Z_][a-zA-Z0-9_]*`
+- Auto-generated flex piece labels use the resolved piece's `.label` property if it has one, otherwise the piece's `.id`
+
 **Runtime archetypes:**
 - Flex pieces use dynamically created archetypes registered at runtime
 - Straight: Simple two-point spline with calculated length
@@ -1586,6 +1594,20 @@ assign <label> to <target> +/- N
 **Why not deferred processing (like splice/flex):**
 - Splice and flex connect are deferred to after all pieces are placed because they only create connections, not labels.
 - ASSIGN creates labels that subsequent build statements may reference (`$label`), so it must execute during the main build loop.
+
+## Label Offset Syntax
+
+The `$label+N` / `$label-N` syntax provides inline traversal offsets for label references, working anywhere `$label` references are used (references, new-from, loop close, flex connect, cross connect, splice).
+
+**Design decisions:**
+
+- **Inline traversal, no label creation:** Unlike `assign`, which creates a persistent named label, `$label+N` is a temporary traversal resolved at the point of use. This keeps the labeled piece map clean and avoids namespace pollution for one-off references.
+
+- **Reuses `findNextPieceAlongTrack()`:** The same position-matching traversal logic used by `assign` is shared via a common `resolveLabelWithOffset()` helper in the builder. Forward (+) exits via `out`, backward (-) exits via `in`, with the same 0.5" position tolerance and direction-opposite matching.
+
+- **Parser approach:** A `parseLabelOffset()` helper is called after every LABEL_REF token consumption. It handles `PLUS NUMBER`, `MINUS NUMBER`, and negative `NUMBER` (for `$label-3` where the lexer may produce a single negative number token). The offset is stored as an optional `LabelOffset` field on the AST node.
+
+- **Works in all label contexts:** The offset is propagated through `parseConnectionPointRef()` (used by `new`, `flex connect`, `splice`) and standalone parse methods (`parseReference`, `parsePointLabelReference`, `parseLoopClose`, `parseCrossConnectStatement`). In the builder, all label resolution call sites use `resolveLabelWithOffset()`.
 
 ## Open Questions
 

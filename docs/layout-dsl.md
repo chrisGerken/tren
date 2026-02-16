@@ -130,6 +130,28 @@ start: ph ; str * 8 ; assign entry to start + 3
 - Dead-end traversal (no adjacent piece at a step)
 - Ambiguous traversal (multiple pieces at the same connection point — use explicit labels instead)
 
+### Label Offset
+
+Label references support inline traversal offsets: `$label+N` traverses N pieces forward, `$label-N` traverses N backward. Unlike `assign`, this does NOT create a new label — it's a temporary, inline traversal resolved at the point of use.
+
+```
+$label+N.point           # Traverse N forward from label, use connection point
+$label-N.point           # Traverse N backward from label, use connection point
+point.$label+N           # Same using point.$label syntax
+new from $start+3.out    # Start new segment from 3rd piece after 'start'
+> in.$start+3            # Loop close to 3rd piece after 'start'
+```
+
+**Example — branching without intermediate labels:**
+```
+start: ph ; str * 8
+new from $start+3.out    # Branch from the 3rd piece after 'start'
+crvl * 3
+bump
+```
+
+The offset syntax uses the same traversal logic as `assign`: forward (+) exits via `out`, backward (-) exits via `in`, matching adjacent pieces by world position and direction.
+
 ### Custom Track Pieces (Define)
 
 The `define` statement creates custom curve or straight track pieces for use throughout the layout:
@@ -663,11 +685,17 @@ The `flex connect` statement automatically creates custom track pieces to bridge
 
 ```
 flex connect $label1.point1 $label2.point2
+flex connect @ $label2.point2
+flex connect @.point $label2.point2
 ```
 
 Where:
 - `$label1.point1` - The first connection point (typically the "out" of the last piece before the gap)
 - `$label2.point2` - The second connection point (typically the "in" of the first piece after the gap)
+- `@` - Shorthand for the current piece's current connection point (captured at statement time)
+- `@.point` - Current piece with an explicit connection point name
+
+The `@` shorthand can be used for either or both arguments. It captures the current piece and connection point at the time the `flex connect` statement is encountered, so it refers to whatever piece was most recently placed or referenced.
 
 ### Auto-Generated Labels
 
@@ -721,6 +749,27 @@ flex connect $before.out $after.in
 # The flex pieces can now be referenced:
 # $before_after_str - the straight piece
 # $before_after_crv - the curve piece
+```
+
+### Using `@` Shorthand
+
+Instead of labeling the last piece before a gap just for `flex connect`, use `@` to refer to the current piece:
+
+```
+new from $yard.out
+str * 8
+crvr
+str
+flex connect @ $target.in    # @ = the str we just placed, using its current point (out)
+```
+
+This is equivalent to:
+```
+new from $yard.out
+str * 8
+crvr
+siding: str
+flex connect $siding.out $target.in
 ```
 
 ### Chaining Flex Connects

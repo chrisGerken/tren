@@ -2,7 +2,7 @@
  * Layout Builder - transforms AST into placed track pieces
  */
 
-import { parse, Statement, PieceStatement, NewStatement, ReferenceStatement, LoopCloseStatement, TitleStatement, DescriptionStatement, LockAheadStatement, SpliceStatement, RandomStatement, MaxTrainsStatement, FlexConnectStatement, CrossConnectStatement, DefineStatement, LogStatement, ArrayStatement, PrefabStatement, UseStatement, TreesStatement, PondStatement, GridStatement, AssignStatement } from './parser';
+import { parse, Statement, PieceStatement, NewStatement, ReferenceStatement, LoopCloseStatement, TitleStatement, DescriptionStatement, LockAheadStatement, SpliceStatement, RandomStatement, MaxTrainsStatement, FlexConnectStatement, CrossConnectStatement, DefineStatement, LogStatement, ArrayStatement, PrefabStatement, UseStatement, TreesStatement, PondStatement, GridStatement, AssignStatement, LabelOffset } from './parser';
 import { Layout, TrackPiece, Vec3, vec2, ConnectionPointDef, RangeValue as TypeRangeValue } from '../core/types';
 import { getArchetype, registerRuntimeArchetype } from '../core/archetypes';
 import type { TrackArchetype } from '../core/archetypes';
@@ -11,6 +11,7 @@ import { setLogLevel, LogLevel, logger } from '../core/logger';
 interface SpliceInfo {
   label?: string;
   point?: string;
+  offset?: LabelOffset;
   // If no label, use these (captured at parse time)
   currentPieceId?: string;
   currentPointName?: string;
@@ -20,8 +21,14 @@ interface SpliceInfo {
 interface FlexConnectInfo {
   point1Label: string;
   point1Name: string;
+  point1Offset?: LabelOffset;
+  point1CurrentPieceId?: string;
+  point1CurrentPointName?: string;
   point2Label: string;
   point2Name: string;
+  point2Offset?: LabelOffset;
+  point2CurrentPieceId?: string;
+  point2CurrentPointName?: string;
   line: number;
 }
 
@@ -41,6 +48,8 @@ interface FlexSolution {
 interface CrossConnectInfo {
   label1: string;
   label2: string;
+  offset1?: LabelOffset;
+  offset2?: LabelOffset;
   line: number;
 }
 
@@ -458,6 +467,7 @@ class LayoutBuilder {
     this.state.pendingSplices.push({
       label: stmt.label,
       point: stmt.point,
+      offset: stmt.offset,
       currentPieceId: this.state.currentPiece?.id,
       currentPointName: this.state.currentPointName,
       line: stmt.line,
@@ -466,11 +476,20 @@ class LayoutBuilder {
 
   private processFlexConnect(stmt: FlexConnectStatement): void {
     // Collect for post-processing (after all pieces are placed)
+    // When label is '@', capture current piece state (like splice does)
+    const isAt1 = stmt.point1Label === '@';
+    const isAt2 = stmt.point2Label === '@';
     this.state.pendingFlexConnects.push({
       point1Label: stmt.point1Label,
-      point1Name: stmt.point1Name || 'out',
+      point1Name: isAt1 ? (stmt.point1Name || this.state.currentPointName) : (stmt.point1Name || 'out'),
+      point1Offset: stmt.point1Offset,
+      point1CurrentPieceId: isAt1 ? this.state.currentPiece?.id : undefined,
+      point1CurrentPointName: isAt1 ? (stmt.point1Name || this.state.currentPointName) : undefined,
       point2Label: stmt.point2Label,
-      point2Name: stmt.point2Name || 'in',
+      point2Name: isAt2 ? (stmt.point2Name || this.state.currentPointName) : (stmt.point2Name || 'in'),
+      point2Offset: stmt.point2Offset,
+      point2CurrentPieceId: isAt2 ? this.state.currentPiece?.id : undefined,
+      point2CurrentPointName: isAt2 ? (stmt.point2Name || this.state.currentPointName) : undefined,
       line: stmt.line,
     });
   }
@@ -480,8 +499,54 @@ class LayoutBuilder {
     this.state.pendingCrossConnects.push({
       label1: stmt.label1,
       label2: stmt.label2,
+      offset1: stmt.offset1,
+      offset2: stmt.offset2,
       line: stmt.line,
     });
+  }
+
+  /**
+   * Resolve a label with an optional inline offset ($label+N / $label-N).
+   * If no offset, returns the piece directly from labeledPieces.
+   * If offset is present, traverses N pieces forward/backward using findNextPieceAlongTrack().
+   */
+  private resolveLabelWithOffset(label: string, offset: LabelOffset | undefined, line: number): TrackPiece {
+    const basePiece = this.state.labeledPieces.get(label);
+    if (!basePiece) {
+      throw new Error(`Unknown label '${label}' at line ${line}`);
+    }
+
+    if (!offset) {
+      return basePiece;
+    }
+
+    let currentPiece = basePiece;
+    let exitPointName = offset.direction === '+' ? 'out' : 'in';
+
+    for (let step = 0; step < offset.count; step++) {
+      const result = this.findNextPieceAlongTrack(currentPiece, exitPointName);
+      if (!result) {
+        throw new Error(
+          `Label offset $${label}${offset.direction}${offset.count} failed at step ${step + 1}: ` +
+          `no adjacent piece found at '${exitPointName}' of piece ${currentPiece.id} (${currentPiece.archetypeCode}) at line ${line}`
+        );
+      }
+
+      currentPiece = result.piece;
+      // Continue in the same direction: exit from the opposite point of where we entered
+      const archetype = getArchetype(currentPiece.archetypeCode);
+      const oppositePoint = this.getOppositePoint(archetype, result.entryPointName);
+      if (oppositePoint) {
+        exitPointName = oppositePoint;
+      } else if (step < offset.count - 1) {
+        throw new Error(
+          `Label offset $${label}${offset.direction}${offset.count} failed at step ${step + 1}: ` +
+          `piece ${currentPiece.id} (${currentPiece.archetypeCode}) has no opposite point for '${result.entryPointName}' at line ${line}`
+        );
+      }
+    }
+
+    return currentPiece;
   }
 
   private processNew(stmt: NewStatement): void {
@@ -495,10 +560,7 @@ class LayoutBuilder {
 
     // Check if starting from a labeled piece
     if (stmt.baseLabel) {
-      const labeledPiece = this.state.labeledPieces.get(stmt.baseLabel);
-      if (!labeledPiece) {
-        throw new Error(`Unknown label '${stmt.baseLabel}' in 'new' at line ${stmt.line}`);
-      }
+      const labeledPiece = this.resolveLabelWithOffset(stmt.baseLabel, stmt.baseOffset, stmt.line);
 
       const archetype = getArchetype(labeledPiece.archetypeCode);
       const pointName = stmt.basePoint || 'out';
@@ -697,10 +759,7 @@ class LayoutBuilder {
   }
 
   private processReference(stmt: ReferenceStatement): void {
-    const labeledPiece = this.state.labeledPieces.get(stmt.label);
-    if (!labeledPiece) {
-      throw new Error(`Unknown label reference: $${stmt.label} at line ${stmt.line}`);
-    }
+    const labeledPiece = this.resolveLabelWithOffset(stmt.label, stmt.offset, stmt.line);
 
     const archetype = getArchetype(labeledPiece.archetypeCode);
     const pointName = stmt.point || 'out';
@@ -733,10 +792,7 @@ class LayoutBuilder {
   private processLoopClose(stmt: LoopCloseStatement): void {
     // Connect current segment's output to the labeled piece's specified point
     // This repositions all pieces in the current segment to align the connection
-    const labeledPiece = this.state.labeledPieces.get(stmt.label);
-    if (!labeledPiece) {
-      throw new Error(`Unknown label reference in loop close: $${stmt.label} at line ${stmt.line}`);
-    }
+    const labeledPiece = this.resolveLabelWithOffset(stmt.label, stmt.offset, stmt.line);
 
     const targetArchetype = getArchetype(labeledPiece.archetypeCode);
     const targetPoint = this.getConnectionPoint(targetArchetype, stmt.point);
@@ -1025,16 +1081,9 @@ class LayoutBuilder {
       throw new Error(`Cross connect requires two different tracks at line ${info.line}`);
     }
 
-    // Get the two labeled pieces
-    const piece1 = this.state.labeledPieces.get(info.label1);
-    const piece2 = this.state.labeledPieces.get(info.label2);
-
-    if (!piece1) {
-      throw new Error(`Unknown label '${info.label1}' in cross connect at line ${info.line}`);
-    }
-    if (!piece2) {
-      throw new Error(`Unknown label '${info.label2}' in cross connect at line ${info.line}`);
-    }
+    // Get the two labeled pieces (with optional offset traversal)
+    const piece1 = this.resolveLabelWithOffset(info.label1, info.offset1, info.line);
+    const piece2 = this.resolveLabelWithOffset(info.label2, info.offset2, info.line);
 
     // Find intersection point
     const intersection = this.findSplineIntersection(piece1, piece2);
@@ -1327,15 +1376,39 @@ class LayoutBuilder {
    * Uses geometric calculation to find curve+straight or straight+curve combination.
    */
   private performFlexConnect(info: FlexConnectInfo): void {
-    // Get the two labeled pieces
-    const piece1 = this.state.labeledPieces.get(info.point1Label);
-    const piece2 = this.state.labeledPieces.get(info.point2Label);
-
-    if (!piece1) {
-      throw new Error(`Unknown label '${info.point1Label}' in flex connect at line ${info.line}`);
+    // Get the two pieces — resolve '@' via captured piece ID, others via label lookup
+    let piece1: TrackPiece;
+    let label1ForNaming: string;
+    if (info.point1Label === '@') {
+      if (!info.point1CurrentPieceId) {
+        throw new Error(`No current piece for '@' in flex connect at line ${info.line}`);
+      }
+      const found = this.state.pieces.find(p => p.id === info.point1CurrentPieceId);
+      if (!found) {
+        throw new Error(`Current piece not found for '@' in flex connect at line ${info.line}`);
+      }
+      piece1 = found;
+      label1ForNaming = found.label || found.id;
+    } else {
+      piece1 = this.resolveLabelWithOffset(info.point1Label, info.point1Offset, info.line);
+      label1ForNaming = info.point1Label;
     }
-    if (!piece2) {
-      throw new Error(`Unknown label '${info.point2Label}' in flex connect at line ${info.line}`);
+
+    let piece2: TrackPiece;
+    let label2ForNaming: string;
+    if (info.point2Label === '@') {
+      if (!info.point2CurrentPieceId) {
+        throw new Error(`No current piece for '@' in flex connect at line ${info.line}`);
+      }
+      const found = this.state.pieces.find(p => p.id === info.point2CurrentPieceId);
+      if (!found) {
+        throw new Error(`Current piece not found for '@' in flex connect at line ${info.line}`);
+      }
+      piece2 = found;
+      label2ForNaming = found.label || found.id;
+    } else {
+      piece2 = this.resolveLabelWithOffset(info.point2Label, info.point2Offset, info.line);
+      label2ForNaming = info.point2Label;
     }
 
     // Get archetypes and connection points
@@ -1393,7 +1466,7 @@ class LayoutBuilder {
     }
 
     // Create the flex track pieces (labels are derived from endpoint labels)
-    this.createFlexPieces(solution, piece1, info.point1Name, piece2, info.point2Name, info.point1Label, info.point2Label, info.line);
+    this.createFlexPieces(solution, piece1, info.point1Name, piece2, info.point2Name, label1ForNaming, label2ForNaming, info.line);
   }
 
   /**
@@ -2102,11 +2175,8 @@ class LayoutBuilder {
     let pointName: string;
 
     if (splice.label) {
-      // Use labeled piece
-      splicePiece = this.state.labeledPieces.get(splice.label);
-      if (!splicePiece) {
-        throw new Error(`Unknown label '${splice.label}' in splice at line ${splice.line}`);
-      }
+      // Use labeled piece (with optional offset traversal)
+      splicePiece = this.resolveLabelWithOffset(splice.label, splice.offset, splice.line);
       pointName = splice.point || 'out';
     } else {
       // Use current piece (captured when splice statement was processed)
