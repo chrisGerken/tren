@@ -1621,6 +1621,11 @@ A zero-length track piece (`spd N`) that sets a speed cap for passing trains. Fo
 - Split trains inherit the parent's speed limit; coupled trains keep their own
 - Default limit if N is omitted: 12 inches/second
 
+**Zero-length piece detection robustness:**
+The initial zero-length loop in `moveCar()` only fires when the car STARTS a frame on a zero-length piece. When the overflow handler transitions a car onto a zero-length piece mid-frame, the piece isn't recorded until the next frame — a one-frame delay. Additionally, the underflow handler explicitly refuses to enter zero-length pieces (`nextSectionLength === 0 → break`), blocking cars with `sectionDirection === -1` from ever reaching the piece. To fix both cases, `moveCar()` performs a final check after all overflow/underflow handling:
+1. If the car ended up on a zero-length piece (from overflow), record it immediately
+2. If the car is at `distanceAlongSection === 0` on a normal piece (underflow blocked), check the adjacent piece via 'in' and record it if zero-length
+
 **Rendering:**
 - Uses `CanvasTexture` on a `PlaneGeometry(2.5, 2.5)` laid flat in the X-Z plane
 - 64x64 canvas draws a white filled circle with dark gray border and bold black speed number
