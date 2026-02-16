@@ -1627,9 +1627,9 @@ The initial zero-length loop in `moveCar()` only fires when the car STARTS a fra
 2. If the car is at `distanceAlongSection === 0` on a normal piece (underflow blocked), check the adjacent piece via 'in' and record it if zero-length
 
 **Rendering:**
-- Uses `CanvasTexture` on a `PlaneGeometry(2.5, 2.5)` laid flat in the X-Z plane
-- 64x64 canvas draws a white filled circle with dark gray border and bold black speed number
-- Font size adapts for 3+ digit numbers (24px vs 32px)
+- Uses `CanvasTexture` on a `PlaneGeometry(5.0, 5.0)` laid flat in the X-Z plane
+- 128x128 canvas draws a white filled circle with dark gray border and bold black speed number
+- Font size adapts for 3+ digit numbers (48px vs 64px)
 - Positioned at Y=0.7 (same elevation as semaphore dots) for consistent visual layer
 
 ## Open Questions

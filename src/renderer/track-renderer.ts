@@ -742,7 +742,7 @@ function renderDecouplerWorld(
  * @param limit - Speed limit value to display
  */
 function renderSpeedLimitWorld(worldPos: THREE.Vector3, limit: number): THREE.Mesh {
-  const size = 64;
+  const size = 128;
   const canvas = document.createElement('canvas');
   canvas.width = size;
   canvas.height = size;
@@ -750,12 +750,12 @@ function renderSpeedLimitWorld(worldPos: THREE.Vector3, limit: number): THREE.Me
 
   // White filled circle
   ctx.beginPath();
-  ctx.arc(size / 2, size / 2, size / 2 - 2, 0, Math.PI * 2);
+  ctx.arc(size / 2, size / 2, size / 2 - 4, 0, Math.PI * 2);
   ctx.fillStyle = '#ffffff';
   ctx.fill();
 
   // Dark gray border
-  ctx.lineWidth = 3;
+  ctx.lineWidth = 6;
   ctx.strokeStyle = '#333333';
   ctx.stroke();
 
@@ -764,11 +764,11 @@ function renderSpeedLimitWorld(worldPos: THREE.Vector3, limit: number): THREE.Me
   ctx.fillStyle = '#000000';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = `bold ${text.length > 2 ? 24 : 32}px sans-serif`;
+  ctx.font = `bold ${text.length > 2 ? 48 : 64}px sans-serif`;
   ctx.fillText(text, size / 2, size / 2);
 
   const texture = new THREE.CanvasTexture(canvas);
-  const geometry = new THREE.PlaneGeometry(2.5, 2.5);
+  const geometry = new THREE.PlaneGeometry(5.0, 5.0);
   const material = new THREE.MeshBasicMaterial({
     map: texture,
     transparent: true,

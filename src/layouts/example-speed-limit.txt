@@ -14,9 +14,9 @@ str1: str * 12
 crv1: crvl * 4
 
 str2: str * 12
-speedlimit 5
 crv2: crvl * 4
 
+speedlimit 15
 str3: str * 12
 speedlimit 20
 crv3: crvl * 4
@@ -25,6 +25,14 @@ str4: str * 12
 crv4: crvl * 4
 
 
+new from $crv1-2
+crvl * 4
+speedlimit 5
+str * 11
+crvl * 4
+str * 11
+speedlimit 20
+crvl * 4
 
 
 
