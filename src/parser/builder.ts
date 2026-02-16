@@ -2,7 +2,7 @@
  * Layout Builder - transforms AST into placed track pieces
  */
 
-import { parse, Statement, PieceStatement, NewStatement, ReferenceStatement, LoopCloseStatement, TitleStatement, DescriptionStatement, LockAheadStatement, SpliceStatement, RandomStatement, MaxTrainsStatement, FlexConnectStatement, CrossConnectStatement, DefineStatement, LogStatement, ArrayStatement, PrefabStatement, UseStatement, TreesStatement, PondStatement, GridStatement } from './parser';
+import { parse, Statement, PieceStatement, NewStatement, ReferenceStatement, LoopCloseStatement, TitleStatement, DescriptionStatement, LockAheadStatement, SpliceStatement, RandomStatement, MaxTrainsStatement, FlexConnectStatement, CrossConnectStatement, DefineStatement, LogStatement, ArrayStatement, PrefabStatement, UseStatement, TreesStatement, PondStatement, GridStatement, AssignStatement } from './parser';
 import { Layout, TrackPiece, Vec3, vec2, ConnectionPointDef, RangeValue as TypeRangeValue } from '../core/types';
 import { getArchetype, registerRuntimeArchetype } from '../core/archetypes';
 import type { TrackArchetype } from '../core/archetypes';
@@ -233,6 +233,9 @@ class LayoutBuilder {
         break;
       case 'grid':
         this.processGrid(stmt);
+        break;
+      case 'assign':
+        this.processAssign(stmt);
         break;
     }
   }
@@ -857,6 +860,124 @@ class LayoutBuilder {
       y: point.y,
       z: point.x * sin + point.z * cos,
     };
+  }
+
+  /**
+   * Process an assign statement: assign a label to a piece found by traversing
+   * forward or backward from an already-labeled piece.
+   */
+  private processAssign(stmt: AssignStatement): void {
+    // Check that the new label is not already defined
+    if (this.state.labeledPieces.has(stmt.label)) {
+      throw new Error(`Label '${stmt.label}' is already defined (assign at line ${stmt.line})`);
+    }
+
+    // Look up the target label
+    const startPiece = this.state.labeledPieces.get(stmt.targetLabel);
+    if (!startPiece) {
+      throw new Error(`Unknown label '${stmt.targetLabel}' in assign statement at line ${stmt.line}`);
+    }
+
+    // Determine exit point for traversal direction
+    // + (forward) means we leave via 'out', - (backward) means we leave via 'in'
+    let currentPiece = startPiece;
+    let exitPointName = stmt.direction === '+' ? 'out' : 'in';
+
+    for (let step = 0; step < stmt.count; step++) {
+      const result = this.findNextPieceAlongTrack(currentPiece, exitPointName);
+      if (!result) {
+        throw new Error(
+          `Assign traversal from '${stmt.targetLabel}' ${stmt.direction}${stmt.count} failed at step ${step + 1}: ` +
+          `no adjacent piece found at '${exitPointName}' of piece ${currentPiece.id} (${currentPiece.archetypeCode}) at line ${stmt.line}`
+        );
+      }
+
+      currentPiece = result.piece;
+      // The entry point is where we arrived; to continue in the same direction,
+      // exit from the opposite point
+      const archetype = getArchetype(currentPiece.archetypeCode);
+      const oppositePoint = this.getOppositePoint(archetype, result.entryPointName);
+      if (!oppositePoint && step < stmt.count - 1) {
+        throw new Error(
+          `Assign traversal from '${stmt.targetLabel}' ${stmt.direction}${stmt.count} failed at step ${step + 1}: ` +
+          `piece ${currentPiece.id} (${currentPiece.archetypeCode}) has no opposite point for '${result.entryPointName}' at line ${stmt.line}`
+        );
+      }
+      if (oppositePoint) {
+        exitPointName = oppositePoint;
+      }
+    }
+
+    // Assign the label to the found piece
+    this.state.labeledPieces.set(stmt.label, currentPiece);
+    if (!currentPiece.label) {
+      currentPiece.label = stmt.label;
+    }
+
+    logger.debug(`Line ${stmt.line}: Assigned label '${stmt.label}' to piece ${currentPiece.id} (${currentPiece.archetypeCode}) via ${stmt.targetLabel} ${stmt.direction}${stmt.count}`);
+  }
+
+  /**
+   * Find the adjacent piece at a given connection point by matching world positions
+   * and opposite directions — the same logic as detectAutoConnections but applied
+   * on-demand during the build loop (before connections are established).
+   */
+  private findNextPieceAlongTrack(piece: TrackPiece, exitPointName: string): { piece: TrackPiece; entryPointName: string } | null {
+    const POSITION_TOLERANCE = 0.5;  // Same as detectAutoConnections
+    const DIRECTION_TOLERANCE = 0.1; // Same as detectAutoConnections
+
+    const archetype = getArchetype(piece.archetypeCode);
+    const exitPoint = this.getConnectionPoint(archetype, exitPointName);
+    if (!exitPoint) return null;
+
+    // Compute world position and direction of the exit point
+    const rotatedPos = this.rotatePoint(exitPoint.position, piece.rotation);
+    const worldPos = {
+      x: piece.position.x + rotatedPos.x,
+      y: 0,
+      z: piece.position.z + rotatedPos.z,
+    };
+    const worldDir = this.rotatePoint(exitPoint.direction, piece.rotation);
+
+    // Scan all pieces for a matching connection point
+    let match: { piece: TrackPiece; entryPointName: string } | null = null;
+
+    for (const candidatePiece of this.state.pieces) {
+      if (candidatePiece.id === piece.id) continue;
+
+      const candidateArch = getArchetype(candidatePiece.archetypeCode);
+      for (const cp of candidateArch.connectionPoints) {
+        const cpRotatedPos = this.rotatePoint(cp.position, candidatePiece.rotation);
+        const cpWorldPos = {
+          x: candidatePiece.position.x + cpRotatedPos.x,
+          y: 0,
+          z: candidatePiece.position.z + cpRotatedPos.z,
+        };
+
+        const dx = worldPos.x - cpWorldPos.x;
+        const dz = worldPos.z - cpWorldPos.z;
+        const distance = Math.sqrt(dx * dx + dz * dz);
+        if (distance > POSITION_TOLERANCE) continue;
+
+        // Check directions are opposite (dot product close to -1)
+        const cpWorldDir = this.rotatePoint(cp.direction, candidatePiece.rotation);
+        const dot = worldDir.x * cpWorldDir.x + worldDir.z * cpWorldDir.z;
+        if (dot > -1 + DIRECTION_TOLERANCE) continue;
+
+        if (match !== null) {
+          // Ambiguous — multiple pieces match. This is fine for auto-connect but
+          // problematic for assign traversal where we need a single path.
+          throw new Error(
+            `Assign traversal: ambiguous junction at '${exitPointName}' of piece ${piece.id} — ` +
+            `multiple adjacent pieces found at the same position`
+          );
+        }
+
+        match = { piece: candidatePiece, entryPointName: cp.name };
+      }
+    }
+
+    return match;
   }
 
   /**

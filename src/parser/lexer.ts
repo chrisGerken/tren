@@ -58,6 +58,10 @@ export enum TokenType {
   POND = 'POND',               // pond keyword (for scenery configuration)
   SIZE = 'SIZE',               // size keyword (for pond)
   SCORE = 'SCORE',             // score keyword (for pond)
+  ASSIGN = 'ASSIGN',           // assign keyword (for assign statement)
+  TO = 'TO',                   // to keyword (for assign statement)
+  PLUS = 'PLUS',               // + operator (for assign statement)
+  MINUS = 'MINUS',             // - operator (for assign statement)
   EOF = 'EOF',
 }
 
@@ -240,6 +244,30 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
       tokens.push({
         type: TokenType.REPETITION,
         value: '*',
+        line: lineNum,
+        column: startPos + 1,
+      });
+      pos++;
+      continue;
+    }
+
+    // Plus operator
+    if (char === '+') {
+      tokens.push({
+        type: TokenType.PLUS,
+        value: '+',
+        line: lineNum,
+        column: startPos + 1,
+      });
+      pos++;
+      continue;
+    }
+
+    // Minus operator (standalone, not followed by digit — digit case handled below as negative number)
+    if (char === '-' && !(pos + 1 < statement.length && /[0-9]/.test(statement[pos + 1]))) {
+      tokens.push({
+        type: TokenType.MINUS,
+        value: '-',
         line: lineNum,
         column: startPos + 1,
       });
@@ -777,6 +805,26 @@ function tokenizeStatement(statement: string, lineNum: number): Token[] {
       if (lowerValue === 'score') {
         tokens.push({
           type: TokenType.SCORE,
+          value: value,
+          line: lineNum,
+          column: startPos + 1,
+        });
+        continue;
+      }
+
+      if (lowerValue === 'assign') {
+        tokens.push({
+          type: TokenType.ASSIGN,
+          value: value,
+          line: lineNum,
+          column: startPos + 1,
+        });
+        continue;
+      }
+
+      if (lowerValue === 'to') {
+        tokens.push({
+          type: TokenType.TO,
           value: value,
           line: lineNum,
           column: startPos + 1,

@@ -25,7 +25,8 @@ export type Statement =
   | UseStatement
   | TreesStatement
   | PondStatement
-  | GridStatement;
+  | GridStatement
+  | AssignStatement;
 
 export interface NewStatement {
   type: 'new';
@@ -190,6 +191,15 @@ export interface GridStatement {
   line: number;
 }
 
+export interface AssignStatement {
+  type: 'assign';
+  label: string;        // New label to create
+  targetLabel: string;  // Existing label to start from
+  direction: '+' | '-'; // Forward (+) or backward (-)
+  count: number;        // Number of pieces to traverse
+  line: number;
+}
+
 /**
  * Parse DSL text into an array of statements
  */
@@ -274,6 +284,9 @@ class Parser {
 
       case TokenType.GRID:
         return this.parseGridStatement();
+
+      case TokenType.ASSIGN:
+        return this.parseAssignStatement();
 
       case TokenType.LABEL_DEF:
         return this.parseLabeledPiece();
@@ -824,6 +837,72 @@ class Parser {
     }
 
     return { type: 'grid', size, line: token.line };
+  }
+
+  private parseAssignStatement(): AssignStatement {
+    const token = this.advance(); // consume 'assign'
+
+    // Expect IDENTIFIER for the new label name
+    if (!this.check(TokenType.IDENTIFIER)) {
+      throw new Error(`Expected label name after 'assign' at line ${token.line}`);
+    }
+    const label = this.advance().value;
+
+    // Expect TO keyword
+    if (!this.check(TokenType.TO)) {
+      throw new Error(`Expected 'to' after 'assign ${label}' at line ${token.line}`);
+    }
+    this.advance(); // consume 'to'
+
+    // Expect target label: either $label or bare identifier
+    let targetLabel: string;
+    if (this.check(TokenType.LABEL_REF)) {
+      targetLabel = this.advance().value;
+    } else if (this.check(TokenType.IDENTIFIER)) {
+      targetLabel = this.advance().value;
+    } else {
+      throw new Error(`Expected target label after 'to' in assign statement at line ${token.line}`);
+    }
+
+    // Expect direction (+ or -) and count
+    let direction: '+' | '-';
+    let count: number;
+
+    if (this.check(TokenType.PLUS)) {
+      this.advance(); // consume '+'
+      direction = '+';
+      if (!this.check(TokenType.NUMBER)) {
+        throw new Error(`Expected number after '+' in assign statement at line ${token.line}`);
+      }
+      count = parseInt(this.advance().value, 10);
+    } else if (this.check(TokenType.MINUS)) {
+      this.advance(); // consume '-'
+      direction = '-';
+      if (!this.check(TokenType.NUMBER)) {
+        throw new Error(`Expected number after '-' in assign statement at line ${token.line}`);
+      }
+      count = parseInt(this.advance().value, 10);
+    } else if (this.check(TokenType.NUMBER)) {
+      // Handle case where lexer parsed "-N" as a single negative number token
+      const numStr = this.advance().value;
+      const numVal = parseInt(numStr, 10);
+      if (numVal < 0) {
+        direction = '-';
+        count = Math.abs(numVal);
+      } else {
+        // Positive number without explicit + sign — treat as forward
+        direction = '+';
+        count = numVal;
+      }
+    } else {
+      throw new Error(`Expected '+' or '-' followed by count in assign statement at line ${token.line}`);
+    }
+
+    if (count <= 0) {
+      throw new Error(`Assign count must be positive at line ${token.line}`);
+    }
+
+    return { type: 'assign', label, targetLabel, direction, count, line: token.line };
   }
 
   private parseLabeledPiece(): PieceStatement {

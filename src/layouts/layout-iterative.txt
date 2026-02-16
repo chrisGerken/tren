@@ -1,0 +1,29 @@
+title Layout: Iteratively Built
+description   We''ll see what happens
+
+max trains 2
+lockahead distance 10 count 3
+
+trees clearance 4 density 1
+pond size 10 clearance 2 score 0
+
+
+#
+# Main loop
+#
+
+
+str1: str * 30
+crv1: crvl * 4
+str2: str * 30
+crv2: crvl * 4
+str3: str * 30
+crv3: crvl * 4
+str4: str * 30
+crv4: crvl * 4
+
+# 
+# Track to Clarksville
+#
+
+assign 

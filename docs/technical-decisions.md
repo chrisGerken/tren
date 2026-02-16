@@ -1559,6 +1559,34 @@ The Design/Clean button also toggles the scenery grid overlay visibility alongsi
 
 Both HTML defaults and JavaScript toggle functions update `textContent` accordingly.
 
+## Assign Statement
+
+The `assign` statement assigns a label to an existing track piece by counting forward or backward from an already-labeled piece. This enables adding branches to compact track definitions (like `str * 8`) without restructuring them into individual labeled pieces.
+
+**DSL syntax:**
+```
+assign <label> to <target> +/- N
+```
+
+**Design decisions:**
+
+- **Position-matching traversal (not connection-graph traversal):** ASSIGN must be processed during the main build loop so that labels it creates are immediately available for subsequent `$label` references. However, sequential connections between pieces are only established by auto-connect at the END of building. The solution traverses by physical position/direction matching — the same logic auto-connect uses (position tolerance 0.5", direction dot product < -0.9) — but applied on-demand for each step.
+
+- **Forward = out, backward = in:** The traversal direction maps to connection point names. Forward (+) exits via the piece's `out` point, backward (-) exits via `in`. At each step, after arriving at a piece through its entry point, the builder uses `getOppositePoint()` to determine the exit point for the next step.
+
+- **Ambiguity rejection:** If multiple pieces match at any traversal step (e.g., at a virtual switch), the builder throws an error rather than guessing which path to follow. Users should use explicit labels for pieces at branch points.
+
+- **Label immutability:** The assigned label is stored in `labeledPieces` and optionally set on the piece's `label` field (only if the piece doesn't already have one). This prevents overwriting labels assigned by inline `label: piece` syntax.
+
+**Implementation:**
+1. **Lexer:** Four new token types: `ASSIGN`, `TO`, `PLUS`, `MINUS`. The `+` and `-` characters are tokenized as operators; standalone `-` (not followed by a digit) becomes MINUS while `-digit` remains a negative NUMBER.
+2. **Parser:** `AssignStatement` interface with label, targetLabel, direction, count fields. Handles both `+ N` (separate tokens) and `-N` (single negative number token) forms.
+3. **Builder:** `processAssign()` validates labels and calls `findNextPieceAlongTrack()` for each step. The helper computes world position/direction of exit points and scans all placed pieces for a matching connection point with opposite direction.
+
+**Why not deferred processing (like splice/flex):**
+- Splice and flex connect are deferred to after all pieces are placed because they only create connections, not labels.
+- ASSIGN creates labels that subsequent build statements may reference (`$label`), so it must execute during the main build loop.
+
 ## Open Questions
 
 These will be addressed in user scenario discussions:

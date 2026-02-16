@@ -1,0 +1,8 @@
+title       Example: Assign
+description Using Assign to more easily associate labels and track pieces.
+
+# start: ph
+
+start: str * 8
+
+assign entry to start + 3

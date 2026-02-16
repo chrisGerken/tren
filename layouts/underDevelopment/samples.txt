@@ -12,6 +12,7 @@
 # METADATA:
 #   title TEXT             Layout title for UI display (max one, default: "Simulador de Tren")
 #   description TEXT       Layout description (multiple allowed, concatenated)
+#   assign LABEL to TARGET +/- N   Assign label to piece N steps from target
 #
 # CASE INSENSITIVITY:
 #   All keywords, archetype names, and connection point names are case-insensitive.

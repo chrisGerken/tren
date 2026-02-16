@@ -101,6 +101,35 @@ log error                     # Show only errors
 
 `warning` is accepted as an alias for `warn`. Multiple `log` statements are allowed. Each changes the level from that point forward during layout building; the last one sets the runtime level. If no `log` statement is present, the default level is `warn`.
 
+### Assign
+
+The `assign` statement assigns a label to an existing track piece by counting forward or backward from an already-labeled piece. This avoids breaking up compact track definitions (like `str * 8`) with inline labels.
+
+```
+assign <label> to <target> + N    # Label the piece N steps forward from target
+assign <label> to <target> - N    # Label the piece N steps backward from target
+assign <label> to $target + N     # $target reference also accepted
+```
+
+**Example — equivalent definitions:**
+
+These two definitions produce the same result:
+```
+# Without assign: must break up str * 8 to place the label
+start: ph ; str * 2 ; entry: str ; str * 5
+
+# With assign: keep compact definition, add label afterward
+start: ph ; str * 8 ; assign entry to start + 3
+```
+
+**Traversal:** Forward (+) exits via each piece's `out` connection point, backward (-) exits via `in`. At each step, the builder locates the adjacent piece by matching world position (tolerance 0.5") and opposite direction (same logic as auto-connect). This runs during the main build loop, so assigned labels are immediately available for subsequent `$label` references.
+
+**Error conditions:**
+- Duplicate label (label already defined)
+- Unknown target label
+- Dead-end traversal (no adjacent piece at a step)
+- Ambiguous traversal (multiple pieces at the same connection point — use explicit labels instead)
+
 ### Custom Track Pieces (Define)
 
 The `define` statement creates custom curve or straight track pieces for use throughout the layout:

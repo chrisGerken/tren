@@ -135,6 +135,10 @@ log debug                      # Set log level: debug, info, warn, error</code><
     <p>The <code>random</code> statement enables automatic switch changes after each train passes, creating varied autonomous behavior ideal for demonstrations or computer art.</p>
     <p>The <code>max trains</code> statement limits the number of trains that can exist simultaneously (default: 5). Generators will not spawn new trains when the limit is reached. Trains destroyed by bins free up slots for new trains.</p>
     <p>The <code>log</code> (or <code>logging</code>) statement controls browser console output verbosity. Levels: <code>debug</code> (all messages), <code>info</code>, <code>warn</code> (default), <code>error</code> (least verbose). <code>warning</code> is accepted as an alias for <code>warn</code>.</p>
+    <p>The <code>assign</code> statement labels an existing piece by counting forward or backward from a labeled piece:</p>
+    <pre><code>assign entry to start + 3      # Label piece 3 steps forward from 'start'
+assign x to end - 2            # Label piece 2 steps backward from 'end'</code></pre>
+    <p>This avoids breaking compact definitions like <code>str * 8</code> with inline labels. Assigned labels can be referenced immediately by subsequent <code>$label</code> statements.</p>
 
     <h3>Custom Track Pieces</h3>
     <p>Create custom curve or straight pieces with the <code>define</code> (or <code>def</code>) statement:</p>
