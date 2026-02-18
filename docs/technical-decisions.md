@@ -700,6 +700,18 @@ After all pieces and flex connects are processed, auto-connect scans for connect
 - Auto-connect then adds connections between adjacent pieces (like s2→f2) even if one endpoint is also a flex endpoint
 - This creates proper virtual switches where trains can arrive from multiple paths
 
+**Zero-length piece bypass prevention:**
+- Zero-length pieces (`spd`, `sem`, `dec`, `tun`, `ph`, `bin`) have both connection points at the same world position
+- When placed between two regular pieces (e.g., `str → spd → str`), all 4 points end up in the same position group
+- Without protection, auto-connect would create `str.out → str.in` directly, bypassing the zero-length piece
+- Fix: Before auto-connecting a pair (A, B), build a transitive connectivity graph within the group using internal edges (same-piece points) and external edges (existing explicit connections), then BFS to check if A and B are already reachable — if so, skip
+- This preserves intentional virtual switches (ph junctions with multiple branches) because separate branches are not transitively connected
+
+**Connection graph debugging:**
+- `log debug graph` dumps the full connection graph after layout building
+- Output shows each piece with its ID, archetype, source line, label, position, rotation, speed limit config, and all connections (explicit vs auto)
+- Uses `logger.isEnabled('debug', 'graph')` to avoid building the dump string when not needed
+
 ## UI: Labels Toggle
 
 The Labels button toggles visibility of track piece labels and connection point indicators in the viewport.

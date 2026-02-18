@@ -247,6 +247,51 @@ Both connection points occupy the same position with opposite directions (like p
 
 ---
 
+### Semaphore (`sem`)
+
+| Point | Position | Direction | Section | Description |
+|-------|----------|-----------|---------|-------------|
+| `in` | (0, 0, 0) | (-1, 0, 0) | (none) | Entry side |
+| `out` | (0, 0, 0) | (1, 0, 0) | (none) | Exit side |
+
+```
+    [in]●[out]
+```
+
+Both connection points occupy the same position (zero-length piece). Click the dot to toggle between locked (red, trains stop) and unlocked (green, trains pass).
+
+---
+
+### Decoupler (`dec`)
+
+| Point | Position | Direction | Section | Description |
+|-------|----------|-----------|---------|-------------|
+| `in` | (0, 0, 0) | (-1, 0, 0) | (none) | Entry side |
+| `out` | (0, 0, 0) | (1, 0, 0) | (none) | Exit side |
+
+```
+    [in]◆[out]
+```
+
+Both connection points occupy the same position (zero-length piece). Click the triangles to split a stopped train straddling the decoupler.
+
+---
+
+### Speed Limit (`spd`)
+
+| Point | Position | Direction | Section | Description |
+|-------|----------|-----------|---------|-------------|
+| `in` | (0, 0, 0) | (-1, 0, 0) | (none) | Entry side |
+| `out` | (0, 0, 0) | (1, 0, 0) | (none) | Exit side |
+
+```
+    [in]⊙[out]
+```
+
+Both connection points occupy the same position (zero-length piece). Renders as a white circle with the speed limit number. When a train's lead car passes through, the train's speed limit is updated.
+
+---
+
 ## Connection Point Summary Table
 
 | Archetype | Connection Points |
@@ -262,6 +307,9 @@ Both connection points occupy the same position with opposite directions (like p
 | `gen` | `out` |
 | `bin` | `in` |
 | `tun` | `in`, `out` |
+| `sem` | `in`, `out` |
+| `dec` | `in`, `out` |
+| `spd` | `in`, `out` |
 
 ---
 

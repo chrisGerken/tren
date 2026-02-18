@@ -65,7 +65,7 @@ function getSelectedRouteByKey(key: string): number {
     selectedRoutes.set(key, 0); // Default to first connection
   }
   const value = selectedRoutes.get(key)!;
-  logger.debug(`getSelectedRouteByKey: key="${key}" → ${value}`);
+  logger.debug('switch', `getSelectedRouteByKey: key="${key}" → ${value}`);
   return value;
 }
 
@@ -74,7 +74,7 @@ function getSelectedRouteByKey(key: string): number {
  */
 export function setSelectedRouteByKey(key: string, connectionIndex: number): void {
   const oldValue = selectedRoutes.get(key);
-  logger.debug(`setSelectedRouteByKey: key="${key}" ${oldValue} → ${connectionIndex}`);
+  logger.debug('switch', `setSelectedRouteByKey: key="${key}" ${oldValue} → ${connectionIndex}`);
   selectedRoutes.set(key, connectionIndex);
 }
 
@@ -236,11 +236,11 @@ function renderTrackPieceDebug(piece: TrackPiece, archetype: TrackArchetype): TH
     sphere.position.set(world.x, 0.5, world.z);
     group.add(sphere);
 
-    logger.debug(`  ${piece.id}.${cp.name}: world=(${world.x.toFixed(3)}, ${world.z.toFixed(3)})`);
+    logger.debug('render', `  ${piece.id}.${cp.name}: world=(${world.x.toFixed(3)}, ${world.z.toFixed(3)})`);
   }
 
   // Log piece position for debugging
-  logger.debug(`Piece ${piece.id} (${archetype.code}): pos=(${piece.position.x.toFixed(2)}, ${piece.position.z.toFixed(2)}), rot=${(piece.rotation * 180 / Math.PI).toFixed(1)}°`);
+  logger.debug('render', `Piece ${piece.id} (${archetype.code}): pos=(${piece.position.x.toFixed(2)}, ${piece.position.z.toFixed(2)}), rot=${(piece.rotation * 180 / Math.PI).toFixed(1)}°`);
 
   return group;
 }
@@ -298,7 +298,7 @@ function renderTrackPiece(
 
       // Render switch indicators if this is a virtual switch (multiple connections)
       // Skip if random mode is on (hideIndicators)
-      logger.debug(`  ${piece.id}.${cp.name}: ${connections.length} connections`);
+      logger.debug('render', `  ${piece.id}.${cp.name}: ${connections.length} connections`);
       if (connections.length > 1 && !hideIndicators) {
       const switchIndicators = renderSwitchIndicators(
         piece,
@@ -324,7 +324,7 @@ function renderTrackPiece(
         );
         const icpMesh = renderConnectionPointWorld(screenPos, icp.id);
         group.add(icpMesh);
-        logger.debug(`  Internal connection point ${icp.id} at (${icp.worldPosition.x.toFixed(1)}, ${icp.worldPosition.z.toFixed(1)})`);
+        logger.debug('render', `  Internal connection point ${icp.id} at (${icp.worldPosition.x.toFixed(1)}, ${icp.worldPosition.z.toFixed(1)})`);
       }
     }
   }
@@ -1036,8 +1036,8 @@ function renderDirectionalSwitchIndicators(
   const routeKey = `junction.${canonicalJunctionId}.${direction}`;
   const selectedIndex = getSelectedRouteByKey(routeKey);
 
-  logger.debug(`renderSwitchIndicators: ${routeKey}, ${connections.length} connections, selectedIndex=${selectedIndex}`);
-  connections.forEach((c, i) => logger.debug(`  route[${i}]: ${c.pieceId}.${c.pointName} ${c.isAutoConnect ? '(auto)' : ''}`));
+  logger.debug('switch', `renderSwitchIndicators: ${routeKey}, ${connections.length} connections, selectedIndex=${selectedIndex}`);
+  connections.forEach((c, i) => logger.debug('switch', `  route[${i}]: ${c.pieceId}.${c.pointName} ${c.isAutoConnect ? '(auto)' : ''}`));
 
   // Build curve info for each connection
   const curveInfos: (CurveInfo | null)[] = [];
@@ -1063,7 +1063,7 @@ function renderDirectionalSwitchIndicators(
   // Create indicator meshes
   for (let i = 0; i < connections.length; i++) {
     const pos = positions[i];
-    logger.debug(`  Indicator ${i}: pos=${pos ? `(${pos.x.toFixed(2)}, ${pos.z.toFixed(2)})` : 'null'}, curveInfo=${curveInfos[i] ? 'valid' : 'null'}`);
+    logger.debug('switch', `  Indicator ${i}: pos=${pos ? `(${pos.x.toFixed(2)}, ${pos.z.toFixed(2)})` : 'null'}, curveInfo=${curveInfos[i] ? 'valid' : 'null'}`);
     if (!pos) continue;
 
     const isSelected = i === selectedIndex;
@@ -1081,7 +1081,7 @@ function renderDirectionalSwitchIndicators(
       connectionIndex: i,
     };
 
-    logger.debug(`  Created indicator ${i} at (${pos.x.toFixed(2)}, 0.7, ${pos.z.toFixed(2)}), selected=${isSelected}, color=${isSelected ? 'green' : 'red'}`);
+    logger.debug('switch', `  Created indicator ${i} at (${pos.x.toFixed(2)}, 0.7, ${pos.z.toFixed(2)}), selected=${isSelected}, color=${isSelected ? 'green' : 'red'}`);
     indicators.push(mesh);
   }
 

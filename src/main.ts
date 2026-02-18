@@ -4,6 +4,7 @@
 
 import { open, save } from '@tauri-apps/api/dialog';
 import { readTextFile, writeTextFile, writeBinaryFile } from '@tauri-apps/api/fs';
+import { appWindow } from '@tauri-apps/api/window';
 
 // Import bundled layouts dynamically using Vite's import.meta.glob
 const layoutModules = import.meta.glob('./layouts/*.txt', { eager: true, query: '?raw', import: 'default' });
@@ -20,7 +21,7 @@ import { renderTrains } from './renderer/train-renderer';
 import { buildLayout } from './parser/builder';
 import { Simulation } from './core/simulation';
 import { Layout } from './core/types';
-import { setLogLevel, LogLevel, logger } from './core/logger';
+import { setLogLevel, setDebugCategories, LogLevel, logger } from './core/logger';
 import { InspectorManager } from './inspector/inspector-manager';
 import { TrainInspectorWidget } from './inspector/train-inspector';
 import { GeneratorInspectorWidget } from './inspector/generator-inspector';
@@ -44,7 +45,7 @@ let simulation: Simulation | null = null;
 
 // Set up switch click callback
 scene.setSwitchClickCallback((routeKey, connectionIndex) => {
-  logger.debug(`Switch click callback: ${routeKey} -> ${connectionIndex}`);
+  logger.debug('switch', `Switch click callback: ${routeKey} -> ${connectionIndex}`);
 
   // Check if the junction is locked by a train
   if (simulation?.isJunctionLocked(routeKey)) {
@@ -54,24 +55,24 @@ scene.setSwitchClickCallback((routeKey, connectionIndex) => {
 
   setSelectedRouteByKey(routeKey, connectionIndex);
   if (currentLayout) {
-    logger.debug(`Calling renderLayout with ${currentLayout.pieces.length} pieces`);
+    logger.debug('render', `Calling renderLayout with ${currentLayout.pieces.length} pieces`);
     renderLayout(scene, currentLayout, true);
     setStatus(`Switch toggled: ${routeKey} → route ${connectionIndex + 1}`);
   } else {
-    logger.debug('currentLayout is null!');
+    logger.debug('render', 'currentLayout is null!');
   }
 });
 
 // Set up semaphore click callback
 scene.setSemaphoreClickCallback((pieceId) => {
-  logger.debug(`Semaphore click callback: ${pieceId}`);
+  logger.debug('switch', `Semaphore click callback: ${pieceId}`);
 
   if (!currentLayout) return;
 
   // Find the semaphore piece
   const piece = currentLayout.pieces.find(p => p.id === pieceId);
   if (!piece || !piece.semaphoreConfig) {
-    logger.debug(`Semaphore piece ${pieceId} not found or has no config`);
+    logger.debug('switch', `Semaphore piece ${pieceId} not found or has no config`);
     return;
   }
 
@@ -89,14 +90,14 @@ scene.setSemaphoreClickCallback((pieceId) => {
 
 // Set up decoupler click callback
 scene.setDecouplerClickCallback((pieceId) => {
-  logger.debug(`Decoupler click callback: ${pieceId}`);
+  logger.debug('train', `Decoupler click callback: ${pieceId}`);
 
   if (!currentLayout || !simulation) return;
 
   // Find the decoupler piece
   const piece = currentLayout.pieces.find(p => p.id === pieceId);
   if (!piece || !piece.decouplerConfig) {
-    logger.debug(`Decoupler piece ${pieceId} not found or has no config`);
+    logger.debug('train', `Decoupler piece ${pieceId} not found or has no config`);
     return;
   }
 
@@ -153,6 +154,41 @@ function setStatus(message: string): void {
 }
 
 /**
+ * Apply layout validation warnings: update the window title bar.
+ * Warnings are already logged at WARN level by the builder itself.
+ * If there are warnings the title shows the count; otherwise restores default.
+ * Updates both document.title (browser tab) and the native Tauri window title.
+ */
+function applyLayoutWarnings(layout: Layout): void {
+  const warnings = layout.warnings;
+  const title = warnings && warnings.length > 0
+    ? `⚠ ${warnings.length} layout warning${warnings.length === 1 ? '' : 's'} - Tren`
+    : 'Tren - Train Simulator';
+  document.title = title;
+  // Update native Tauri window title (silently ignored when running in browser)
+  appWindow.setTitle(title).catch(() => { /* not in Tauri */ });
+}
+
+/**
+ * Save layout source to sessionStorage so it survives HMR reloads.
+ * For bundled layouts, save the filename so the freshly-imported (possibly edited) content is used on restore.
+ * For imported/pasted layouts, save the raw DSL text.
+ */
+function saveLayoutText(text: string): void {
+  try {
+    sessionStorage.removeItem('tren-layout-file');
+    sessionStorage.setItem('tren-layout', text);
+  } catch {}
+}
+
+function saveLayoutFile(filename: string): void {
+  try {
+    sessionStorage.removeItem('tren-layout');
+    sessionStorage.setItem('tren-layout-file', filename);
+  } catch {}
+}
+
+/**
  * Apply the log level from a layout (or default to WARNING)
  */
 function applyLogLevel(layout: Layout): void {
@@ -163,6 +199,7 @@ function applyLogLevel(layout: Layout): void {
     'error': LogLevel.ERROR,
   };
   setLogLevel(layout.logLevel ? levelMap[layout.logLevel] : LogLevel.WARNING);
+  setDebugCategories(layout.logCategories ?? null);
 }
 
 /**
@@ -194,7 +231,7 @@ function startSimulation(layout: Layout): void {
   // Start the simulation
   simulation.start();
 
-  logger.debug('Simulation started');
+  logger.debug('train', 'Simulation started');
 }
 
 /**
@@ -220,11 +257,13 @@ async function importLayout(): Promise<void> {
     setStatus(`Loading: ${selected}`);
 
     const content = await readTextFile(selected);
+    saveLayoutText(content);
 
     setStatus('Parsing layout...');
     const layout = buildLayout(content);
     currentLayout = layout;
     applyLogLevel(layout);
+    applyLayoutWarnings(layout);
 
     // Update random button to reflect layout's setting
     updateRandomButtonState();
@@ -373,15 +412,38 @@ if (captureBtn) {
 scene.render();
 setStatus('Ready - click "Import Layout" to load a layout file');
 
+// Restore layout from sessionStorage (survives HMR reloads)
+// Bundled layouts are stored by filename so edits to the .txt file are picked up on reload.
+const savedFile = sessionStorage.getItem('tren-layout-file');
+const savedText = sessionStorage.getItem('tren-layout');
+const restoreText = savedFile ? bundledLayouts[savedFile] : savedText;
+if (restoreText) {
+  try {
+    const layout = buildLayout(restoreText);
+    currentLayout = layout;
+    applyLogLevel(layout);
+    applyLayoutWarnings(layout);
+    updateRandomButtonState();
+    renderLayout(scene, layout);
+    startSimulation(layout);
+    setStatus(`Layout restored: ${layout.pieces.length} pieces - simulation running`);
+  } catch {
+    sessionStorage.removeItem('tren-layout');
+    sessionStorage.removeItem('tren-layout-file');
+  }
+}
+
 // For development: also support drag-and-drop or paste
 document.addEventListener('paste', async (e) => {
   const text = e.clipboardData?.getData('text');
   if (text && text.trim()) {
     try {
+      saveLayoutText(text);
       setStatus('Parsing pasted layout...');
       const layout = buildLayout(text);
       currentLayout = layout;
       applyLogLevel(layout);
+      applyLayoutWarnings(layout);
 
       // Update random button to reflect layout's setting
       updateRandomButtonState();
@@ -570,11 +632,13 @@ function runSelectedLayout(): void {
     closeLayoutsDialog();
 
     const content = getLayoutContent(filename);
+    saveLayoutFile(filename);
 
     setStatus('Parsing layout...');
     const layout = buildLayout(content);
     currentLayout = layout;
     applyLogLevel(layout);
+    applyLayoutWarnings(layout);
 
     updateRandomButtonState();
 

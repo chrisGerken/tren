@@ -63,10 +63,12 @@ Trains automatically regulate their speed to prevent collisions:
 - Normal braking: 12 inches/second² (comfortable slow-down when reducing desired speed)
 - Emergency braking: 24 inches/second² (hard stop when locks fail)
 
+**Speed limits:** Trains also respect speed limit signs (`spd N` track pieces). When a train's lead car passes a speed limit piece, the train's `speedLimit` field is updated. The effective target speed becomes `min(desiredSpeed, speedLimit)`. See [Speed Limits](#speed-limits) below.
+
 **Speed regulation priority:**
 1. **Lock failure** → emergency braking (24 in/s²) — hard stop to avoid collision
-2. **currentSpeed > desiredSpeed** → normal braking (12 in/s²) — smooth deceleration
-3. **currentSpeed < desiredSpeed** → acceleration (6 in/s²) — gradual speed-up
+2. **currentSpeed > effectiveDesired** → normal braking (12 in/s²) — smooth deceleration (where effectiveDesired = min(desiredSpeed, speedLimit))
+3. **currentSpeed < effectiveDesired** → acceleration (6 in/s²) — gradual speed-up
 
 **Lock ahead configuration**: Trains use connection point locking for collision prevention. The `lockahead` DSL statement configures how far ahead trains scan and how many connection points they must lock:
 - `distance N` - Minimum distance (in inches) to scan ahead (default: 10)
@@ -339,6 +341,46 @@ When a train crosses a same-polarity connection (out↔out or in↔in, typically
 This allows trains to seamlessly cross same-polarity junctions — the train continues in the same physical direction while the spline traversal direction reverses. Two consecutive same-polarity junctions cancel out, restoring normal direction.
 
 **Switch route keys** are always determined by the exit point type ('out' → 'fwd', 'in' → 'bwd'), independent of `sectionDirection`. This ensures trains respect UI switch settings regardless of their spline traversal direction.
+
+## Speed Limits
+
+Speed limit signs (`spd N`) provide per-train speed caps on specific stretches of track.
+
+### Per-Train Speed Limit
+
+Each train has a `speedLimit` field initialized to the generator's resolved speed at spawn. When the lead car passes a `spd` piece, the train's `speedLimit` is updated to the piece's configured limit. The effective target speed becomes:
+
+```
+effectiveDesired = min(desiredSpeed, speedLimit)
+```
+
+This means:
+- A speed limit lower than the train's desired speed causes the train to brake normally to the limit
+- A speed limit higher than the train's desired speed has no effect
+- Trains use normal braking/acceleration (no emergency stop) to reach the new effective speed
+
+### Detection Mechanism
+
+The `moveCar()` function returns a `string[]` of zero-length piece IDs that the car traversed during the move. The simulation checks the lead car's traversals each frame and updates `train.speedLimit` when a `spd` piece is found.
+
+**Robustness:** A final check after `moveCar()`'s overflow/underflow handling ensures zero-length pieces are recorded even when:
+1. The overflow handler deposits the car onto a zero-length piece mid-frame (would otherwise be missed until next frame)
+2. The underflow handler blocks entry to a zero-length piece (car at `distanceAlongSection === 0` with an adjacent zero-length piece)
+
+### Auto-Connect Bypass Prevention
+
+Because `spd` is a zero-length piece, its `in` and `out` connection points occupy the same world position as the adjacent pieces' connection points. Auto-connect's position grouping would previously create a direct connection between the adjacent pieces, allowing trains to skip the speed limit entirely. A transitive connectivity check in `detectAutoConnections()` now prevents this — if two points are already connected through zero-length pieces and explicit connections, the spurious auto-connect is skipped. See [Layout DSL - Zero-Length Piece Bypass Prevention](layout-dsl.md#zero-length-piece-bypass-prevention) for details.
+
+### Interaction with Other Systems
+
+- **Split trains**: Both halves inherit the parent's `speedLimit`
+- **Coupled trains**: The coupling train keeps its own speed limit
+- **Train inspector**: The desired speed slider still works; the speed limit acts as an independent cap
+- **Multiple spd pieces**: Last one the lead car passes wins (per-train state)
+- **Collision prevention**: Lock-based braking takes priority over speed limit braking
+- **Debugging**: Use `log debug speed` to see only speed-limit-related debug messages
+
+See [Track System - Speed Limit](track-system.md#speed-limit-spd) for archetype details.
 
 ## Coupling
 

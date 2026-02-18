@@ -266,15 +266,15 @@ export function moveCar(
   trainRoutes?: Map<string, number>,
   routesToClearAfterLastCar?: Set<string>
 ): string[] {
-  // Track zero-length piece IDs traversed during this move (for speed limit detection etc.)
-  const traversedZeroLength: string[] = [];
+  // Track piece IDs traversed during this move (for speed limit detection etc.)
+  const traversedPieces: string[] = [];
 
   // Apply sectionDirection: when -1, positive distance decreases distanceAlongSection
   // (car traverses spline from out→in instead of in→out)
   car.distanceAlongSection += distance * car.sectionDirection;
 
   let piece = layout.pieces.find(p => p.id === car.currentPieceId);
-  if (!piece) return traversedZeroLength;
+  if (!piece) return traversedPieces;
 
   let sectionIndex = getSectionIndexForEntry(car.entryPoint);
   let sectionLength = getSectionLength(piece, sectionIndex);
@@ -285,7 +285,7 @@ export function moveCar(
   while (sectionLength === 0 && safetyCounter < 10) {
     safetyCounter++;
     // Record this zero-length piece for callers (e.g., speed limit detection)
-    traversedZeroLength.push(car.currentPieceId);
+    traversedPieces.push(car.currentPieceId);
 
     // Determine exit point: opposite of entry, or based on distance if no entry recorded
     let exitPoint: string;
@@ -310,7 +310,7 @@ export function moveCar(
     if (!nextSection) {
       car.distanceAlongSection = 0;
       updateCarWorldPosition(car, layout);
-      return traversedZeroLength;
+      return traversedPieces;
     }
 
     // Flip sectionDirection at same-polarity junctions
@@ -322,7 +322,7 @@ export function moveCar(
     car.currentPieceId = nextSection.pieceId;
     car.entryPoint = nextSection.entryPoint;
     piece = layout.pieces.find(p => p.id === car.currentPieceId);
-    if (!piece) return traversedZeroLength;
+    if (!piece) return traversedPieces;
     sectionIndex = getSectionIndexForEntry(car.entryPoint);
     sectionLength = getSectionLength(piece, sectionIndex);
   }
@@ -339,7 +339,7 @@ export function moveCar(
     );
     if (!nextSection) {
       car.distanceAlongSection = sectionLength;
-      return traversedZeroLength;
+      return traversedPieces;
     }
 
     // Flip sectionDirection at same-polarity junctions
@@ -350,6 +350,7 @@ export function moveCar(
     car.previousPieceId = car.currentPieceId;
     car.currentPieceId = nextSection.pieceId;
     car.entryPoint = nextSection.entryPoint;
+    traversedPieces.push(nextSection.pieceId);
 
     const newPiece = layout.pieces.find(p => p.id === nextSection.pieceId);
     if (newPiece) {
@@ -403,6 +404,7 @@ export function moveCar(
       car.previousPieceId = car.currentPieceId;
       car.currentPieceId = nextSection.pieceId;
       car.entryPoint = nextSection.entryPoint;
+      traversedPieces.push(nextSection.pieceId);
 
       if (isInPoint(nextSection.entryPoint)) {
         // Entering via 'in' - position at the beginning
@@ -427,7 +429,7 @@ export function moveCar(
     const finalSectionLength = getSectionLength(piece, finalSectionIndex);
     if (finalSectionLength === 0) {
       // Car is on a zero-length piece (overflow deposited it here)
-      traversedZeroLength.push(car.currentPieceId);
+      traversedPieces.push(car.currentPieceId);
     } else if (car.distanceAlongSection === 0 && finalSectionLength > 0) {
       // Car was blocked at section boundary by underflow handler refusing zero-length piece.
       // Check if the adjacent piece via 'in' is a zero-length piece the car should have crossed.
@@ -439,7 +441,7 @@ export function moveCar(
         if (adjPiece) {
           const adjLength = getSectionLength(adjPiece, getSectionIndexForEntry(adjacentSection.entryPoint));
           if (adjLength === 0) {
-            traversedZeroLength.push(adjacentSection.pieceId);
+            traversedPieces.push(adjacentSection.pieceId);
           }
         }
       }
@@ -448,7 +450,7 @@ export function moveCar(
 
   // Update world position
   updateCarWorldPosition(car, layout);
-  return traversedZeroLength;
+  return traversedPieces;
 }
 
 /**

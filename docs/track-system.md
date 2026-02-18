@@ -137,8 +137,9 @@ The starter collection is based on standard HO model railroad track pieces, excl
 | `tun` | Tunnel | 0 | `in`, `out` | 0 |
 | `sem` | Semaphore | 0 | `in`, `out` | 0 |
 | `dec` | Decoupler | 0 | `in`, `out` | 0 |
+| `spd` | Speed Limit | 0 | `in`, `out` | 0 |
 
-**Default aliases**: `str`→`str9`, `crv`→`crvl22`, `crvl`→`crvl22`, `crvr`→`crvr22`, `placeholder`→`ph`, `tunnel`→`tun`, `semaphore`→`sem`, `decoupler`→`dec`
+**Default aliases**: `str`→`str9`, `crv`→`crvl22`, `crvl`→`crvl22`, `crvr`→`crvr22`, `placeholder`→`ph`, `tunnel`→`tun`, `semaphore`→`sem`, `decoupler`→`dec`, `speedlimit`→`spd`
 
 See [Track Dimensions](track-dimensions.md) for complete spline point data.
 
@@ -387,6 +388,45 @@ bump
 ```
 
 See [Trains - Decoupling](trains.md#decoupling) for detailed behavior.
+
+#### Speed Limit (`spd`)
+
+- **Code**: `spd` (alias: `speedlimit`)
+- **Sections**: 0 (zero-length)
+- **Connection Points**: `in`, `out` (same position, opposite directions)
+- **Collision Points**: None
+- **Visual**: White circle with the speed limit number in bold black text (5" diameter PlaneGeometry, 128×128 canvas texture)
+
+A speed limit sign is a zero-length piece that sets a per-train speed cap when the train's lead car passes through it. The train's effective speed becomes `min(desiredSpeed, speedLimit)`.
+
+**Behavior:**
+- Only the lead car's traversal updates the train's speed limit — trailing cars passing the sign don't re-trigger it
+- Trains brake normally to reach the new lower speed (no emergency stop)
+- The limit persists until the train passes another `spd` piece with a different value
+- Default limit if N is omitted: 12 inches/second
+- Split trains inherit the parent's speed limit
+
+**Detection robustness:** The `moveCar()` function returns a list of zero-length piece IDs traversed during the move. A final check after overflow/underflow handling ensures pieces are recorded even when the car transitions onto a zero-length piece mid-frame or is blocked at a boundary adjacent to one.
+
+**Auto-connect bypass prevention:** Because `spd` is zero-length, its connection points share positions with adjacent pieces. Auto-connect's transitive connectivity check prevents creating bypass connections that would let trains skip the speed limit piece. See [Layout DSL - Zero-Length Piece Bypass Prevention](../docs/layout-dsl.md#zero-length-piece-bypass-prevention).
+
+**Use Cases:**
+- Slowing trains through curves, stations, or yards
+- Creating speed zones on specific stretches of track
+- Simulating realistic speed restrictions
+
+Example:
+```
+gen speed 24
+str x 5
+spd 6               # Slow zone
+str x 10
+spd 24              # Resume normal speed
+str x 5
+bump
+```
+
+See [Trains - Speed Limits](trains.md#speed-limits) for behavior details.
 
 ## Spline Implementation
 
