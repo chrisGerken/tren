@@ -1,6 +1,6 @@
 # Train Simulator
 
-A 2D top-down train simulator built with Three.js and Tauri for cross-platform desktop deployment.
+A 2D top-down train simulator with a layout specification language optimized for how one designs track layouts in real life.
 
 ## Project Status
 

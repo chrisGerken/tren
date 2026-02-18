@@ -185,7 +185,7 @@ crvl         # Place a left curve (22" radius default)</code></pre>
       <tr><td><code>bump</code></td><td>Buffer stop</td></tr>
       <tr><td><code>ph</code>, <code>placeholder</code></td><td>Zero-length junction point</td></tr>
       <tr><td><code>gen</code>, <code>generator</code></td><td>Train source (see Generator Syntax below)</td></tr>
-      <tr><td><code>bin</code></td><td>Train sink (removes trains)</td></tr>
+      <tr><td><code>bin</code></td><td>Train sink — removes trains; rendered as two red bracket-shaped portals</td></tr>
       <tr><td><code>tun</code>, <code>tunnel</code></td><td>Visibility toggle</td></tr>
       <tr><td><code>sem</code>, <code>semaphore</code></td><td>Manual signal (see Semaphore Syntax below)</td></tr>
       <tr><td><code>dec</code>, <code>decoupler</code></td><td>Train splitter (see Decoupler Syntax below)</td></tr>
@@ -199,6 +199,7 @@ crvl x 4     # Four left curves (90° total)
 crvr * 8     # Eight right curves (180°)</code></pre>
 
     <h3>Generator Syntax</h3>
+    <p><strong>Visual appearance:</strong> Two green bracket-shaped portals (like a tunnel entrance) marking the track position. Double-click to open the generator inspector.</p>
     <p>Generators spawn trains with configurable car counts, speed, and colors:</p>
     <pre><code>gen                           # One train: 1 cab, 5 cars, 12"/sec, gray
 gen cabs 2                    # One train: 2 cabs, 5 cars
@@ -230,7 +231,7 @@ gen every 10-30               # Random spawn interval</code></pre>
     <pre><code>sem                           # Place a semaphore
 semaphore                     # Same as sem (alias)
 signal: sem                   # Labeled semaphore</code></pre>
-    <p><strong>Visual appearance:</strong> A colored status dot inside a circle outline (same size as gen/bin).</p>
+    <p><strong>Visual appearance:</strong> A colored status dot inside a circular ring outline (1.5" radius).</p>
     <p><strong>Colors:</strong></p>
     <ul>
       <li><strong>Green dot</strong> = Unlocked (trains can pass)</li>

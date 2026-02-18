@@ -8,7 +8,8 @@ max trains 8
 
 lockahead distance 10 count 4
 
-trees clearance 4 density 1
+grid 20
+trees clearance 5 density 1 
 pond size 10 clearance 2 score 0
 
 

@@ -360,9 +360,11 @@ Track is rendered with realistic components visible from the top-down view:
 - The angle is negated when applied to `mesh.rotation.y` because Three.js Y rotation convention (clockwise from above) is opposite to our coordinate system (counter-clockwise)
 
 **Generator/Bin/Tunnel visuals:**
-- Generator: green circle, radius 1.5 inches
-- Bin: red circle, radius 1.5 inches
-- Tunnel: Two dark gray bracket shapes ([ ]) facing opposite directions, 3" wide × 0.8" deep × 1.5" tall. Each bracket opens toward the visible track (outside the tunnel). Uses ExtrudeGeometry with a custom Shape.
+- Generator: Two green bracket shapes ([ ]) facing opposite directions (same geometry as tunnel portals), plus an invisible click-target circle (radius 1.5") for double-click detection
+- Bin: Two red bracket shapes ([ ]) facing opposite directions
+- Tunnel: Two dark gray bracket shapes ([ ]) facing opposite directions, 4.2" wide × 0.8" deep × 1.5" tall. Each bracket opens toward the visible track (outside the tunnel). Uses ExtrudeGeometry with a custom Shape.
+- All three share `renderPortalBrackets(piece, color): THREE.Mesh[]` — extracts bracket geometry into one helper called by generator, bin, and tunnel renderers.
+- Generator's invisible click target: `CircleGeometry(1.5)` with `opacity: 0`, `visible: true`, carrying `userData.isGenerator` — raycasting detects transparent objects with `visible=true`, so click handling is preserved while showing the bracket visual.
 
 **Generator internal track:**
 - Generator has a 50" internal track section (invisible, like a tunnel)
@@ -1643,6 +1645,88 @@ The initial zero-length loop in `moveCar()` only fires when the car STARTS a fra
 - 128x128 canvas draws a white filled circle with dark gray border and bold black speed number
 - Font size adapts for 3+ digit numbers (48px vs 64px)
 - Positioned at Y=0.7 (same elevation as semaphore dots) for consistent visual layer
+
+## Tauri Native Window Title
+
+In Tauri v1, `document.title` changes are NOT reflected in the native OS window title bar. The WebView renders `document.title` in its own tab-style chrome, but the native window title is independent.
+
+**Fix:** Use `appWindow.setTitle()` from `@tauri-apps/api/window`:
+```typescript
+import { appWindow } from '@tauri-apps/api/window';
+
+appWindow.setTitle(title).catch(() => { /* silently ignore in browser mode */ });
+```
+
+**Required allowlist entry (`src-tauri/tauri.conf.json`):**
+```json
+"allowlist": {
+  "window": { "setTitle": true }
+}
+```
+
+**Design decisions:**
+- `.catch(() => {})` suppresses the error when running in browser (non-Tauri) mode — the browser doesn't have `appWindow`, so the call fails silently
+- Both `document.title` and `appWindow.setTitle()` are set for compatibility: browser tab vs. native window
+- The allowlist addition requires a full restart of `npm run tauri dev`; HMR does not pick up `tauri.conf.json` changes
+
+**Used in:** `applyLayoutWarnings()` in `src/main.ts` to surface layout validation warnings in the OS window title bar (e.g., "⚠ 3 layout warnings - Tren").
+
+## Flex Connect Ordering Constraint
+
+`flex connect` statements are deferred: `processFlexConnect()` queues them for execution after all pieces are placed, and does NOT advance `this.state.currentPiece`. This means any piece placed AFTER a `flex connect` statement on the same chain connects to the same piece that `@` captured — creating an unintended branch.
+
+**Consequence:** `speedlimit` (or any other piece) placed after `flex connect` becomes a dead-end branch at the captured piece, generating two layout warnings:
+1. "is a branch of switch at piece_NNN.out"
+2. "has unconnected endpoint 'out'"
+
+**Rule:** DSL statements that place track pieces must come BEFORE `flex connect` on the same chain, not after.
+
+**Example (incorrect):**
+```
+crvr * 2
+flex connect @ $crv3 - 14
+speedlimit 20          # BUG: connects to crvr, becomes dead-end
+```
+
+**Example (correct):**
+```
+crvr * 2
+speedlimit 20          # OK: connects to crvr as intended
+flex connect @ $crv3 - 14
+```
+
+This is documented as a constraint rather than a fix in the parser/builder because deferring flex connect is intentional (it needs world positions of all pieces to compute the geometry).
+
+## Camera-View-Aware Scenery Bounds
+
+`renderScenery()` originally computed tree/pond placement bounds as track bounding box expanded by a fixed 30% (`BOUNDS_EXPANSION = 0.30`). For tall layouts on widescreen monitors, `fitToLayout()` computes a much wider camera view (using the window aspect ratio), leaving uncovered strips on screen edges.
+
+**Root cause:** `fitToLayout()` derives camera view width as `rawSizeZ * aspect / 0.9` when the layout is taller than it is wide on the screen. This can be 2–3× wider than `rawSizeX * 1.3`.
+
+**Fix:** Compute the same camera half-extents as `fitToLayout()` using `scene.getContainerAspect()`, then take the max of (original 30% expansion, camera view + 10% buffer):
+
+```typescript
+const aspect = scene.getContainerAspect();
+const layoutAspect = rawSizeX / rawSizeZ;
+let cameraHalfW: number, cameraHalfH: number;
+if (layoutAspect > aspect) {
+  cameraHalfW = rawSizeX / (2 * 0.9);
+  cameraHalfH = cameraHalfW / aspect;
+} else {
+  cameraHalfH = rawSizeZ / (2 * 0.9);
+  cameraHalfW = cameraHalfH * aspect;
+}
+const buffer = Math.max(rawSizeX, rawSizeZ) * 0.10;
+bounds.minX = Math.min(bounds.minX - sizeX * BOUNDS_EXPANSION, centerX - cameraHalfW - buffer);
+bounds.maxX = Math.max(bounds.maxX + sizeX * BOUNDS_EXPANSION, centerX + cameraHalfW + buffer);
+// … same for Z
+```
+
+**`getContainerAspect()` method** added to `TrackScene` in `scene.ts`: returns `container.clientWidth / container.clientHeight`.
+
+**Design decisions:**
+- The 10% buffer beyond camera edge prevents visible seam when panning slightly
+- The `Math.min/max` of fixed expansion vs. camera-based expansion means the camera-aware logic only activates when the camera view is wider/taller than the track-based expansion — small layouts on matching-aspect screens use the original 30% rule unchanged
 
 ## Open Questions
 

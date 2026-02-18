@@ -460,6 +460,14 @@ export class TrackScene {
   }
 
   /**
+   * Return the container's width/height aspect ratio.
+   * Used by scenery renderer to size the grid to cover the full camera view.
+   */
+  getContainerAspect(): number {
+    return this.container.clientWidth / this.container.clientHeight;
+  }
+
+  /**
    * Fit camera to show all track pieces at 90% of window area
    */
   fitToLayout(): void {
