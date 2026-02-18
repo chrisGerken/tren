@@ -144,7 +144,7 @@ export class Simulation {
       }
     }
 
-    logger.debug('Locked points:', Array.from(locked));
+    logger.debug('lock', 'Locked points:', Array.from(locked));
     return locked;
   }
 
@@ -327,7 +327,7 @@ export class Simulation {
 
     // Check maxTrains limit before spawning
     if (!this.canSpawnTrain()) {
-      logger.debug(`Cannot spawn train - at max trains limit (${this.layout.maxTrains})`);
+      logger.debug('train', `Cannot spawn train - at max trains limit (${this.layout.maxTrains})`);
       return false;
     }
 
@@ -335,7 +335,7 @@ export class Simulation {
     const genId = generatorPiece.id;
     for (const train of this.trains) {
       if (train.cars.some(c => c.currentPieceId === genId)) {
-        logger.debug(`Cannot spawn train - generator ${genId} still occupied`);
+        logger.debug('train', `Cannot spawn train - generator ${genId} still occupied`);
         return false;
       }
     }
@@ -357,12 +357,13 @@ export class Simulation {
       travelDirection: 'forward',
       coupling: false,
       couplingSpeed: COUPLING_SPEED,
+      speedLimit: desiredSpeed,  // Initial limit = generator's speed (no restriction)
     };
 
     // Generator has an internal section - cars spawn inside it
     const genSectionLength = getSectionLength(generatorPiece, 0);
     if (genSectionLength === 0) {
-      logger.debug(`Generator ${generatorPiece.id} has no internal section`);
+      logger.debug('train', `Generator ${generatorPiece.id} has no internal section`);
       return false;
     }
 
@@ -428,7 +429,7 @@ export class Simulation {
     );
 
     if (!lockResult.success) {
-      logger.debug(`Train ${train.id} spawned but blocked at ${lockResult.blocked} by ${lockResult.blockingTrainId} - will wait`);
+      logger.debug('train', `Train ${train.id} spawned but blocked at ${lockResult.blocked} by ${lockResult.blockingTrainId} - will wait`);
     }
 
     this.trains.push(train);
@@ -454,23 +455,27 @@ export class Simulation {
         this.simulationTime
       );
 
-      // Step 2: Adjust speed based on lock acquisition and coupling mode
+      // Step 2: Adjust speed based on lock acquisition, coupling mode, and speed limit
+      const effectiveDesired = Math.min(train.desiredSpeed, train.speedLimit);
+      if (train.speedLimit < train.desiredSpeed) {
+        logger.debug('speed', `Train ${train.id}: desired=${train.desiredSpeed}, limit=${train.speedLimit}, effective=${effectiveDesired}, current=${train.currentSpeed.toFixed(1)}`);
+      }
       if (train.coupling) {
         // Coupling mode: move at coupling speed, ignore lock failures
         train.currentSpeed = train.couplingSpeed;
       } else if (!lockResult.success) {
         // Can't acquire locks - emergency braking
         train.currentSpeed = Math.max(0, train.currentSpeed - EMERGENCY_BRAKING * deltaTime);
-      } else if (train.currentSpeed > train.desiredSpeed) {
-        // Locks acquired but going too fast - normal braking to desired speed
+      } else if (train.currentSpeed > effectiveDesired) {
+        // Locks acquired but going too fast - normal braking to effective desired speed
         train.currentSpeed = Math.max(
-          train.desiredSpeed,
+          effectiveDesired,
           train.currentSpeed - NORMAL_BRAKING * deltaTime
         );
-      } else if (train.currentSpeed < train.desiredSpeed) {
-        // Locks acquired - accelerate toward desired speed
+      } else if (train.currentSpeed < effectiveDesired) {
+        // Locks acquired - accelerate toward effective desired speed
         train.currentSpeed = Math.min(
-          train.desiredSpeed,
+          effectiveDesired,
           train.currentSpeed + ACCELERATION * deltaTime
         );
       }
@@ -483,10 +488,12 @@ export class Simulation {
       const routesToClear = new Set<string>();
 
       // Move each car, passing the clear set only to the tail car
+      // Capture traversed zero-length pieces from lead car for speed limit detection
+      const leadCarIdx = train.travelDirection === 'forward' ? 0 : train.cars.length - 1;
       const tailCarIdx = getTailCarIndex(train);
       for (let i = 0; i < train.cars.length; i++) {
         const isLastCar = i === tailCarIdx;
-        moveCar(
+        const traversed = moveCar(
           train.cars[i],
           distance,
           this.layout,
@@ -494,13 +501,48 @@ export class Simulation {
           train.routesTaken,
           isLastCar ? routesToClear : undefined
         );
+
+        // Check lead car's traversed pieces for speed limit signs
+        if (i === leadCarIdx) {
+          const leadCar = train.cars[leadCarIdx];
+          // Helper to format piece ID with source line number
+          const pieceName = (id: string) => {
+            const p = this.layout.pieces.find(p => p.id === id);
+            return p?.sourceLine ? `${id}(L:${p.sourceLine})` : id;
+          };
+          // Log lead car state only when piece changes or zero-length pieces traversed
+          if (traversed.length > 0) {
+            logger.debug('speed', `Train ${train.id} lead: piece=${pieceName(leadCar.currentPieceId)}, dist=${leadCar.distanceAlongSection.toFixed(2)}, dir=${leadCar.sectionDirection}, traversed=[${traversed.map(pieceName).join(', ')}]`);
+          }
+
+          for (const pieceId of traversed) {
+            const piece = this.layout.pieces.find(p => p.id === pieceId);
+            if (piece?.speedLimitConfig) {
+              const oldLimit = train.speedLimit;
+              train.speedLimit = piece.speedLimitConfig.limit;
+              if (train.speedLimit !== oldLimit) {
+                logger.debug('speed', `Train ${train.id} passed speed sign on ${pieceName(pieceId)}: limit ${oldLimit} → ${train.speedLimit}`);
+              }
+            }
+          }
+          // Also check lead car's current piece (it may be sitting on a spd piece
+          // without having traversed it this frame)
+          const currentPiece = this.layout.pieces.find(p => p.id === leadCar.currentPieceId);
+          if (currentPiece?.speedLimitConfig) {
+            const oldLimit = train.speedLimit;
+            train.speedLimit = currentPiece.speedLimitConfig.limit;
+            if (train.speedLimit !== oldLimit) {
+              logger.debug('speed', `Train ${train.id} lead car on speed sign ${pieceName(leadCar.currentPieceId)}: limit ${oldLimit} → ${train.speedLimit}`);
+            }
+          }
+        }
       }
 
       // Clear routes that the last car has now passed
       // This ensures all cars use the same route, then it's forgotten for the next lap
       for (const routeKey of routesToClear) {
         train.routesTaken.delete(routeKey);
-        logger.debug(`Cleared route memory: ${routeKey} for train ${train.id}`);
+        logger.debug('train', `Cleared route memory: ${routeKey} for train ${train.id}`);
       }
 
       // Step 3b: Check for coupling contact if in coupling mode
@@ -815,6 +857,7 @@ export class Simulation {
       travelDirection: train.travelDirection,
       coupling: false,
       couplingSpeed: COUPLING_SPEED,
+      speedLimit: train.speedLimit,
     };
 
     // Update original train to only have front cars

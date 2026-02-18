@@ -12,6 +12,7 @@
 # METADATA:
 #   title TEXT             Layout title for UI display (max one, default: "Simulador de Tren")
 #   description TEXT       Layout description (multiple allowed, concatenated)
+#   assign LABEL to TARGET +/- N   Assign label to piece N steps from target
 #
 # CASE INSENSITIVITY:
 #   All keywords, archetype names, and connection point names are case-insensitive.
@@ -35,6 +36,7 @@
 #   gen, generator                  Train source (see GENERATOR SYNTAX below)
 #   bin                             Train sink (removes trains)
 #   tun, tunnel                     Visibility toggle (hides track/trains)
+#   spd N, speedlimit N             Speed limit sign (N = inches/sec, default 12)
 #   flex                            Flex track
 #
 # GENERATOR SYNTAX:
@@ -65,6 +67,9 @@
 #   $label.point           Reference specific connection point
 #   $label.in / $label.out Default connection points
 #   $label.in1 / $label.out1 / $label.in2 / $label.out2  Crossing points
+#   $label+N.point         Traverse N pieces forward, then use connection point
+#   $label-N.point         Traverse N pieces backward, then use connection point
+#   point.$label+N         Same using point.$label syntax
 #
 # DIRECTION CONTROL:
 #   piece                  Attach piece.in to previous, continue from piece.out
@@ -74,6 +79,11 @@
 # LOOP CLOSURE:
 #   > point.$label         Connect current output to labeled piece's input
 #   > in.$label            Common form: close loop to label's input
+#
+# FLEX CONNECT (bridging gaps with custom pieces):
+#   flex connect $label1.point $label2.point   Bridge gap between two points
+#   flex connect @ $label2.point               Use current piece for first point
+#   flex connect @.point $label2.point         Use current piece with explicit point
 #
 # SPLICE (for creating passing tracks):
 #   splice                 Split track at current connection point

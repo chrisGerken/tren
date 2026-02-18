@@ -56,6 +56,8 @@ export interface TrackPiece {
   genConfig?: GeneratorConfig;  // Generator configuration (only for 'gen' pieces)
   semaphoreConfig?: SemaphoreConfig;  // Semaphore configuration (only for 'sem' pieces)
   decouplerConfig?: DecouplerConfig;  // Decoupler configuration (only for 'dec' pieces)
+  speedLimitConfig?: SpeedLimitConfig;  // Speed limit configuration (only for 'spd' pieces)
+  sourceLine?: number;    // DSL source line number for debug logging
   inTunnel?: boolean;     // True if piece is inside a tunnel (between tunnel pieces)
   internalConnectionPoints?: InternalConnectionPoint[];  // Connection points along the track (not at endpoints)
 }
@@ -69,6 +71,7 @@ export interface Layout {
   randomSwitches?: boolean;  // If true, switches randomly change when trains pass
   maxTrains?: number;    // Maximum number of trains allowed on the layout at once
   logLevel?: string;     // Log level from DSL: 'debug', 'info', 'warn', 'error'
+  logCategories?: string[];  // Debug category filter (e.g., ['speed', 'lock'])
   treesEnabled?: boolean;       // Whether trees are enabled (default: false)
   treesClearance?: number;      // Min grid score for tree placement (default: 2)
   treesDensity?: number;        // Max trees per cell (default: 3)
@@ -79,6 +82,7 @@ export interface Layout {
   pondScore?: number;           // Score to assign pond cells before BFS re-calc (default: min original - 1)
   gridSize?: number;            // Grid cell size in inches for scenery scoring (default: 8)
   pieces: TrackPiece[];
+  warnings?: string[];          // Layout validation warnings (populated by builder)
 }
 
 // =============================================================================
@@ -116,6 +120,7 @@ export interface Train {
   travelDirection: 'forward' | 'backward'; // Current direction of travel
   coupling: boolean;               // True when in coupling mode (moving to connect with another train)
   couplingSpeed: number;           // Speed during coupling (inches/sec, default 3)
+  speedLimit: number;              // Current speed limit from last spd piece passed
 }
 
 /** Range value for randomized parameters */
@@ -146,6 +151,11 @@ export interface SemaphoreConfig {
 /** Decoupler configuration - splits a stopped train */
 export interface DecouplerConfig {
   activated: boolean;              // True when decoupler has been triggered (briefly)
+}
+
+/** Speed limit configuration - sets speed cap for passing trains */
+export interface SpeedLimitConfig {
+  limit: number;                   // Speed limit in inches/second
 }
 
 /** Helper to create a Vec3 */

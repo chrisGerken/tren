@@ -142,7 +142,7 @@ export class LockManager {
     for (const point of points) {
       // Check if blocked by a locked semaphore
       if (layout && this.isBlockedBySemaphore(point, layout)) {
-        logger.debug(`Train ${trainId} blocked at ${point} by locked semaphore`);
+        logger.debug('lock',`Train ${trainId} blocked at ${point} by locked semaphore`);
         return {
           success: false,
           acquired,
@@ -156,7 +156,7 @@ export class LockManager {
       const existingLock = this.locks.get(point);
       if (existingLock && existingLock.trainId !== trainId) {
         // Blocked - don't rollback, keep what we already had
-        logger.debug(`Train ${trainId} blocked at ${point} by ${existingLock.trainId}`);
+        logger.debug('lock',`Train ${trainId} blocked at ${point} by ${existingLock.trainId}`);
         return {
           success: false,
           acquired,
@@ -174,7 +174,7 @@ export class LockManager {
         });
         trainState.heldLocks.add(point);
         acquired.push(point);
-        logger.debug(`Train ${trainId} acquired lock on ${point}`);
+        logger.debug('lock',`Train ${trainId} acquired lock on ${point}`);
       }
     }
 
@@ -192,7 +192,7 @@ export class LockManager {
       if (trainState) {
         trainState.heldLocks.delete(point);
       }
-      logger.debug(`Train ${trainId} released lock on ${point}`);
+      logger.debug('lock',`Train ${trainId} released lock on ${point}`);
       return true;
     }
     return false;
@@ -208,7 +208,7 @@ export class LockManager {
         this.locks.delete(point);
       }
       trainState.heldLocks.clear();
-      logger.debug(`Train ${trainId} released all locks`);
+      logger.debug('lock',`Train ${trainId} released all locks`);
     }
   }
 
@@ -225,7 +225,7 @@ export class LockManager {
     const leadCar = getLeadCar(train);
     const piece = layout.pieces.find(p => p.id === leadCar.currentPieceId);
     if (!piece) {
-      logger.debug(`acquireLeadingLocks: No piece found for ${leadCar.currentPieceId}`);
+      logger.debug('lock',`acquireLeadingLocks: No piece found for ${leadCar.currentPieceId}`);
       return { success: false, acquired: [], requested: [] };
     }
 
@@ -259,7 +259,7 @@ export class LockManager {
       distanceOnCurrent = Math.max(0, leadCar.distanceAlongSection);
     }
 
-    logger.debug(`acquireLeadingLocks: train=${train.id}, leadCar on ${currentPieceId}, ` +
+    logger.debug('lock',`acquireLeadingLocks: train=${train.id}, leadCar on ${currentPieceId}, ` +
       `entryPoint=${leadCar.entryPoint}, travelDir=${travelDirection}, exitPoint=${exitPoint}, ` +
       `sectionLen=${sectionLength.toFixed(1)}, distAlong=${leadCar.distanceAlongSection.toFixed(1)}, ` +
       `distOnCurrent=${distanceOnCurrent.toFixed(1)}`);
@@ -272,7 +272,7 @@ export class LockManager {
           : icp.distance < leadCar.distanceAlongSection;
         if (isAhead) {
           pointsToLock.push(icp.id);
-          logger.debug(`  Adding internal point ${icp.id} at distance ${icp.distance.toFixed(1)}`);
+          logger.debug('lock',`  Adding internal point ${icp.id} at distance ${icp.distance.toFixed(1)}`);
         }
       }
     }
@@ -282,7 +282,7 @@ export class LockManager {
 
     // Scan ahead
     let safetyCounter = 0;
-    logger.debug(`  Scan ahead: minDist=${this.minLockDistance}, minCount=${this.minLockCount}`);
+    logger.debug('lock',`  Scan ahead: minDist=${this.minLockDistance}, minCount=${this.minLockCount}`);
     while (
       (distanceCovered < this.minLockDistance || pointsToLock.length < this.minLockCount) &&
       safetyCounter < 30
@@ -303,13 +303,13 @@ export class LockManager {
         travelDirection
       );
 
-      logger.debug(`  Loop ${safetyCounter}: from ${currentPieceId}.${exitPoint}, ` +
+      logger.debug('lock',`  Loop ${safetyCounter}: from ${currentPieceId}.${exitPoint}, ` +
         `nextSection=${nextSection ? `${nextSection.pieceId}.${nextSection.entryPoint}` : 'null'}, ` +
         `distCovered=${distanceCovered.toFixed(1)}, points=${pointsToLock.length}`);
 
       if (!nextSection) {
         // Dead end - we've collected what we can
-        logger.debug(`  Dead end at ${currentPieceId}.${exitPoint}`);
+        logger.debug('lock',`  Dead end at ${currentPieceId}.${exitPoint}`);
         break;
       }
 
@@ -354,7 +354,7 @@ export class LockManager {
         );
         for (const icp of sortedIcps) {
           pointsToLock.push(icp.id);
-          logger.debug(`  Adding internal point ${icp.id} on piece ${currentPieceId}`);
+          logger.debug('lock',`  Adding internal point ${icp.id} on piece ${currentPieceId}`);
         }
       }
 
@@ -364,13 +364,13 @@ export class LockManager {
       distanceOnCurrent = getSectionLength(nextPiece, 0);
     }
 
-    logger.debug(`  Final pointsToLock (${pointsToLock.length}): ${pointsToLock.join(', ')}`);
+    logger.debug('lock',`  Final pointsToLock (${pointsToLock.length}): ${pointsToLock.join(', ')}`);
 
     // Try to acquire all locks in order (pass layout for semaphore checks)
     const result = this.tryAcquireLocks(train.id, pointsToLock, simulationTime, layout);
     // Add the full requested list so releaseTrailingLocks knows what to keep
     result.requested = pointsToLock;
-    logger.debug(`  Lock result: success=${result.success}, acquired=${result.acquired.length}, ` +
+    logger.debug('lock',`  Lock result: success=${result.success}, acquired=${result.acquired.length}, ` +
       `blocked=${result.blocked || 'none'}`);
     return result;
   }

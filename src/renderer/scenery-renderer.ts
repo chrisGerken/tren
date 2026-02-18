@@ -84,15 +84,37 @@ export function renderScenery(scene: TrackScene, layout: Layout): void {
   const bounds = computeTrackBounds(layout.pieces);
   if (!bounds) return;
 
-  // Expand bounds by 30%
-  const sizeX = bounds.maxX - bounds.minX;
-  const sizeZ = bounds.maxZ - bounds.minZ;
-  const expandX = sizeX * BOUNDS_EXPANSION;
-  const expandZ = sizeZ * BOUNDS_EXPANSION;
-  bounds.minX -= expandX;
-  bounds.maxX += expandX;
-  bounds.minZ -= expandZ;
-  bounds.maxZ += expandZ;
+  // Expand bounds to cover the full camera view.
+  // fitToLayout() fits the track to 90% of the window, so on a widescreen
+  // monitor a tall/narrow layout leaves wide empty strips on the sides.
+  // We replicate the same aspect-ratio math here so the scenery grid
+  // always covers everything the camera will show, plus a small buffer.
+  const rawSizeX = bounds.maxX - bounds.minX;
+  const rawSizeZ = bounds.maxZ - bounds.minZ;
+  const centerX = (bounds.minX + bounds.maxX) / 2;
+  const centerZ = (bounds.minZ + bounds.maxZ) / 2;
+
+  const aspect = scene.getContainerAspect();
+  const layoutAspect = rawSizeX / rawSizeZ;
+  let cameraHalfW: number, cameraHalfH: number;
+  if (layoutAspect > aspect) {
+    // Layout is wider than window — fit to width
+    cameraHalfW = rawSizeX / (2 * 0.9);
+    cameraHalfH = cameraHalfW / aspect;
+  } else {
+    // Layout is taller than window — fit to height
+    cameraHalfH = rawSizeZ / (2 * 0.9);
+    cameraHalfW = cameraHalfH * aspect;
+  }
+
+  // Add 10% of the larger dimension as a buffer beyond the camera edge
+  const buffer = Math.max(rawSizeX, rawSizeZ) * 0.10;
+  const sizeX = rawSizeX;
+  const sizeZ = rawSizeZ;
+  bounds.minX = Math.min(bounds.minX - sizeX * BOUNDS_EXPANSION, centerX - cameraHalfW - buffer);
+  bounds.maxX = Math.max(bounds.maxX + sizeX * BOUNDS_EXPANSION, centerX + cameraHalfW + buffer);
+  bounds.minZ = Math.min(bounds.minZ - sizeZ * BOUNDS_EXPANSION, centerZ - cameraHalfH - buffer);
+  bounds.maxZ = Math.max(bounds.maxZ + sizeZ * BOUNDS_EXPANSION, centerZ + cameraHalfH + buffer);
 
   // Create grid
   const gridWidth = Math.max(1, Math.ceil((bounds.maxX - bounds.minX) / cellSize));

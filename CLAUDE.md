@@ -33,7 +33,7 @@ Track pieces are instances of archetypes (templates). Archetypes define:
 
 **Coordinate System:** X = primary direction (positive = forward), Z = lateral (positive = left), Y = vertical (0 for 2D). Units are inches.
 
-**Key archetype codes:** `str` (straight), `crv`/`crvl`/`crvr` (curves), `x90`/`x45` (crossings), `bump` (buffer), `gen` (generator - train source, click to toggle), `bin` (train sink), `flex`, `ph` (placeholder - zero-length junction point), `tun` (tunnel - visibility toggle), `sem` (semaphore - manual signal, click to lock/unlock), `dec` (decoupler - splits stopped trains, click to activate).
+**Key archetype codes:** `str` (straight), `crv`/`crvl`/`crvr` (curves), `x90`/`x45` (crossings), `bump` (buffer), `gen` (generator - train source, click to toggle), `bin` (train sink), `flex`, `ph` (placeholder - zero-length junction point), `tun` (tunnel - visibility toggle), `sem` (semaphore - manual signal, click to lock/unlock), `dec` (decoupler - splits stopped trains, click to activate), `spd` (speed limit - sets speed cap for passing trains).
 
 **Connection point naming:** `in`/`out` for default input/output, `in1`/`out1`/`in2`/`out2` for crossings.
 
@@ -76,6 +76,8 @@ Trains are ordered car lists (consists). The primary cab (first cab in train) co
 
 **Collision prevention:** Trains use connection point locking. Each train locks connection points ahead before proceeding. If a point is already locked by another train, the approaching train stops and waits. Configure via `lockahead distance N count M` DSL statement (default: 10 inches, 2 points).
 
+**Speed limits:** The `spd N` track piece sets a speed limit. Trains passing the sign slow to `min(desiredSpeed, N)`. Place a higher `spd` value later to let trains speed back up. Rendered as a white circle with the speed number. Default limit if N is omitted: 12.
+
 **Train limits:** The `max trains N` DSL statement limits the number of trains that can exist simultaneously (default: 5). Generators will not spawn new trains when the layout already has N trains. Once a train is destroyed (e.g., enters a bin), generators can spawn again.
 
 ## Layout DSL
@@ -89,6 +91,8 @@ Layouts are defined in text files. All keywords, archetype names, and connection
 - `label: piece` — place and label a piece for later reference
 - `$label.point` — reference a labeled piece's connection point (creates branch)
 - `> point.$label` — close loop: connect current output to labeled piece's input
+- `assign label1 to label2 +/- N` — assign a label to a piece N steps forward (+) or backward (-) from an already-labeled piece
+- `$label+N.point` / `$label-N.point` — inline label offset: traverse N pieces forward/backward without creating a new label (works in all `$label` contexts)
 
 **Auto-connect:** After layout parsing, all connection points are scanned. Any two connection points at approximately the same position with approximately opposite directions are automatically connected (configurable tolerances). This automatically creates virtual switches where tracks meet—e.g., `gen ; str ; crvl x 16 ; str ; bin` creates a circle with generator and bin sidetracks. Auto-connected points are marked with a small yellow circle when displayed.
 

@@ -25,7 +25,8 @@ export type Statement =
   | UseStatement
   | TreesStatement
   | PondStatement
-  | GridStatement;
+  | GridStatement
+  | AssignStatement;
 
 export interface NewStatement {
   type: 'new';
@@ -33,6 +34,7 @@ export interface NewStatement {
   offset: number;       // Offset distance along direction (default 0)
   baseLabel?: string;   // Optional: start from this labeled piece
   basePoint?: string;   // Optional: which connection point (default 'out')
+  baseOffset?: LabelOffset; // Optional: inline traversal offset ($label+N / $label-N)
   line: number;
 }
 
@@ -56,12 +58,15 @@ export interface PieceStatement {
   genSpeed?: number | RangeValue;     // Train speed in inches/second (default 12)
   genEvery?: number | RangeValue;     // Spawn frequency in seconds (undefined = one-shot)
   genColorMode?: 'colorful' | 'gray' | 'black'; // Car color mode ('colorful', 'gray', or 'black', default 'gray')
+  // Speed limit parameter (only for 'spd' archetype)
+  spdLimit?: number;               // Speed limit in inches/second
 }
 
 export interface ReferenceStatement {
   type: 'reference';
   label: string;
   point?: string;  // Connection point, default 'out'
+  offset?: LabelOffset; // Optional: inline traversal offset ($label+N / $label-N)
   line: number;
 }
 
@@ -69,6 +74,7 @@ export interface LoopCloseStatement {
   type: 'loopClose';
   point: string;
   label: string;
+  offset?: LabelOffset; // Optional: inline traversal offset ($label+N / $label-N)
   line: number;
 }
 
@@ -95,6 +101,7 @@ export interface SpliceStatement {
   type: 'splice';
   label?: string;   // Optional: if not provided, use current piece
   point?: string;   // Connection point, default 'out'
+  offset?: LabelOffset; // Optional: inline traversal offset ($label+N / $label-N)
   line: number;
 }
 
@@ -113,8 +120,10 @@ export interface FlexConnectStatement {
   type: 'flexConnect';
   point1Label: string;
   point1Name?: string;  // Connection point name, default 'out'
+  point1Offset?: LabelOffset; // Optional: inline traversal offset
   point2Label: string;
   point2Name?: string;  // Connection point name, default 'in'
+  point2Offset?: LabelOffset; // Optional: inline traversal offset
   line: number;
 }
 
@@ -122,6 +131,8 @@ export interface CrossConnectStatement {
   type: 'crossConnect';
   label1: string;
   label2: string;
+  offset1?: LabelOffset; // Optional: inline traversal offset
+  offset2?: LabelOffset; // Optional: inline traversal offset
   line: number;
 }
 
@@ -141,6 +152,7 @@ export interface DefineStatement {
 export interface LogStatement {
   type: 'log';
   level: 'debug' | 'info' | 'warn' | 'error';
+  categories?: string[];  // Optional debug category filter (e.g., ['speed', 'lock'])
   line: number;
 }
 
@@ -188,6 +200,22 @@ export interface GridStatement {
   type: 'grid';
   size?: number;
   line: number;
+}
+
+export interface AssignStatement {
+  type: 'assign';
+  label: string;        // New label to create
+  targetLabel: string;  // Existing label to start from
+  targetOffset?: LabelOffset; // Optional: inline traversal offset on the target
+  direction: '+' | '-'; // Forward (+) or backward (-)
+  count: number;        // Number of pieces to traverse
+  line: number;
+}
+
+/** Inline label offset for $label+N / $label-N syntax */
+export interface LabelOffset {
+  direction: '+' | '-';
+  count: number;
 }
 
 /**
@@ -275,11 +303,17 @@ class Parser {
       case TokenType.GRID:
         return this.parseGridStatement();
 
+      case TokenType.ASSIGN:
+        return this.parseAssignStatement();
+
       case TokenType.LABEL_DEF:
         return this.parseLabeledPiece();
 
       case TokenType.LABEL_REF:
         return this.parseReference();
+
+      case TokenType.CURRENT_REF:
+        return this.parseCurrentRefAsReference();
 
       case TokenType.LOOP_CLOSE:
         return this.parseLoopClose();
@@ -311,6 +345,7 @@ class Parser {
     let offset = 0;
     let baseLabel: string | undefined;
     let basePoint: string | undefined;
+    let baseOffset: LabelOffset | undefined;
 
     // Parse modifiers in any order
     while (this.isNewModifier()) {
@@ -330,6 +365,7 @@ class Parser {
         if (ref) {
           baseLabel = ref.label;
           basePoint = ref.point;
+          baseOffset = ref.offset;
         }
       } else if (this.check(TokenType.NUMBER)) {
         // Legacy: bare number is degrees
@@ -341,6 +377,7 @@ class Parser {
         if (ref) {
           baseLabel = ref.label;
           basePoint = ref.point;
+          baseOffset = ref.offset;
         }
       } else if (this.check(TokenType.LABEL_REF)) {
         // Legacy: '$label.point' without 'base'
@@ -348,13 +385,22 @@ class Parser {
         if (ref) {
           baseLabel = ref.label;
           basePoint = ref.point;
+          baseOffset = ref.offset;
+        }
+      } else if (this.check(TokenType.CURRENT_REF)) {
+        // '@' or '@-N.point' without 'base'
+        const ref = this.parseConnectionPointRef();
+        if (ref) {
+          baseLabel = ref.label;
+          basePoint = ref.point;
+          baseOffset = ref.offset;
         }
       } else {
         break;
       }
     }
 
-    return { type: 'new', degrees, offset, baseLabel, basePoint, line: token.line };
+    return { type: 'new', degrees, offset, baseLabel, basePoint, baseOffset, line: token.line };
   }
 
   private isNewModifier(): boolean {
@@ -366,15 +412,46 @@ class Parser {
       type === TokenType.BASE ||
       type === TokenType.NUMBER ||
       type === TokenType.LABEL_REF ||
+      type === TokenType.CURRENT_REF ||
       (type === TokenType.IDENTIFIER && value.toLowerCase() === 'from') ||
       (type === TokenType.IDENTIFIER && this.peekNext()?.type === TokenType.DOT)
     );
   }
 
-  private parseConnectionPointRef(): { label: string; point?: string } | null {
-    // Handle: $label, $label.point, point.$label
-    if (this.check(TokenType.LABEL_REF)) {
-      const label = this.advance().value;
+  /**
+   * Parse optional +N/-N offset after a LABEL_REF token.
+   * Handles: $label+3, $label - 3, $label-3 (negative number token)
+   */
+  private parseLabelOffset(): LabelOffset | undefined {
+    if (this.check(TokenType.PLUS)) {
+      this.advance(); // consume '+'
+      if (this.check(TokenType.NUMBER)) {
+        const count = parseInt(this.advance().value, 10);
+        if (count > 0) return { direction: '+', count };
+      }
+    } else if (this.check(TokenType.MINUS)) {
+      this.advance(); // consume '-'
+      if (this.check(TokenType.NUMBER)) {
+        const count = parseInt(this.advance().value, 10);
+        if (count > 0) return { direction: '-', count };
+      }
+    } else if (this.check(TokenType.NUMBER)) {
+      // Handle case where lexer parsed "-N" as a single negative number token
+      const numStr = this.peek().value;
+      const numVal = parseInt(numStr, 10);
+      if (numVal < 0) {
+        this.advance(); // consume the negative number
+        return { direction: '-', count: Math.abs(numVal) };
+      }
+    }
+    return undefined;
+  }
+
+  private parseConnectionPointRef(): { label: string; point?: string; offset?: LabelOffset } | null {
+    // Handle: @, @-N, @.point, @-N.point (current piece shorthand)
+    if (this.check(TokenType.CURRENT_REF)) {
+      this.advance(); // consume '@'
+      const offset = this.parseLabelOffset();
       let point: string | undefined;
       if (this.check(TokenType.DOT)) {
         this.advance(); // consume dot
@@ -382,14 +459,29 @@ class Parser {
           point = this.advance().value.toLowerCase();
         }
       }
-      return { label, point };
+      return { label: '@', point, offset };
+    }
+
+    // Handle: $label, $label+N, $label.point, $label+N.point, point.$label, point.$label+N
+    if (this.check(TokenType.LABEL_REF)) {
+      const label = this.advance().value;
+      const offset = this.parseLabelOffset();
+      let point: string | undefined;
+      if (this.check(TokenType.DOT)) {
+        this.advance(); // consume dot
+        if (this.check(TokenType.IDENTIFIER)) {
+          point = this.advance().value.toLowerCase();
+        }
+      }
+      return { label, point, offset };
     } else if (this.check(TokenType.IDENTIFIER) && this.peekNext()?.type === TokenType.DOT) {
       // point.$label syntax
       const point = this.advance().value.toLowerCase();
       this.advance(); // consume dot
       if (this.check(TokenType.LABEL_REF)) {
         const label = this.advance().value;
-        return { label, point };
+        const offset = this.parseLabelOffset();
+        return { label, point, offset };
       }
     }
     return null;
@@ -485,8 +577,10 @@ class Parser {
       type: 'flexConnect',
       point1Label: ref1.label,
       point1Name: ref1.point,
+      point1Offset: ref1.offset,
       point2Label: ref2.label,
       point2Name: ref2.point,
+      point2Offset: ref2.offset,
       line: token.line,
     };
   }
@@ -499,22 +593,40 @@ class Parser {
       this.advance(); // consume 'connect'
     }
 
-    // Parse first label reference: $label
-    if (!this.check(TokenType.LABEL_REF)) {
-      throw new Error(`Expected $label after 'cross connect' at line ${token.line}`);
+    // Parse first label reference: $label, $label+N, @, or @-N
+    let label1: string;
+    let offset1: LabelOffset | undefined;
+    if (this.check(TokenType.LABEL_REF)) {
+      label1 = this.advance().value;
+      offset1 = this.parseLabelOffset();
+    } else if (this.check(TokenType.CURRENT_REF)) {
+      this.advance(); // consume '@'
+      label1 = '@';
+      offset1 = this.parseLabelOffset();
+    } else {
+      throw new Error(`Expected $label or @ after 'cross connect' at line ${token.line}`);
     }
-    const label1 = this.advance().value;
 
-    // Parse second label reference: $label
-    if (!this.check(TokenType.LABEL_REF)) {
-      throw new Error(`Expected second $label in 'cross connect' at line ${token.line}`);
+    // Parse second label reference: $label, $label+N, @, or @-N
+    let label2: string;
+    let offset2: LabelOffset | undefined;
+    if (this.check(TokenType.LABEL_REF)) {
+      label2 = this.advance().value;
+      offset2 = this.parseLabelOffset();
+    } else if (this.check(TokenType.CURRENT_REF)) {
+      this.advance(); // consume '@'
+      label2 = '@';
+      offset2 = this.parseLabelOffset();
+    } else {
+      throw new Error(`Expected second $label or @ in 'cross connect' at line ${token.line}`);
     }
-    const label2 = this.advance().value;
 
     return {
       type: 'crossConnect',
       label1,
       label2,
+      offset1,
+      offset2,
       line: token.line,
     };
   }
@@ -536,9 +648,20 @@ class Parser {
       throw new Error(`Invalid log level '${levelToken.value}' at line ${token.line}. Expected: debug, info, warn, or error`);
     }
 
+    // Parse optional category names after 'debug' level
+    // Category names may coincide with keyword tokens (e.g., 'speed', 'flex', 'cross'),
+    // so accept any non-structural token type that carries a word value.
+    const categories: string[] = [];
+    if (levelStr === 'debug') {
+      while (this.isDebugCategory()) {
+        categories.push(this.advance().value.toLowerCase());
+      }
+    }
+
     return {
       type: 'log',
       level: levelStr as 'debug' | 'info' | 'warn' | 'error',
+      categories: categories.length > 0 ? categories : undefined,
       line: token.line,
     };
   }
@@ -645,6 +768,7 @@ class Parser {
       type: 'splice',
       label: ref?.label,
       point: ref?.point,
+      offset: ref?.offset,
       line: token.line,
     };
   }
@@ -826,6 +950,75 @@ class Parser {
     return { type: 'grid', size, line: token.line };
   }
 
+  private parseAssignStatement(): AssignStatement {
+    const token = this.advance(); // consume 'assign'
+
+    // Expect IDENTIFIER for the new label name
+    if (!this.check(TokenType.IDENTIFIER)) {
+      throw new Error(`Expected label name after 'assign' at line ${token.line}`);
+    }
+    const label = this.advance().value;
+
+    // Expect TO keyword
+    if (!this.check(TokenType.TO)) {
+      throw new Error(`Expected 'to' after 'assign ${label}' at line ${token.line}`);
+    }
+    this.advance(); // consume 'to'
+
+    // Expect target label: $label, @, or bare identifier
+    // Note: Do NOT parse label offsets here. The +/- after the target
+    // is the assign's own traversal direction, not an inline label offset.
+    // Use a separate $label reference with offset if needed: assign foo to $bar+2 - 1
+    let targetLabel: string;
+    let targetOffset: LabelOffset | undefined;
+    if (this.check(TokenType.CURRENT_REF)) {
+      this.advance(); // consume '@'
+      targetLabel = '@';
+    } else if (this.check(TokenType.LABEL_REF)) {
+      targetLabel = this.advance().value;
+    } else if (this.check(TokenType.IDENTIFIER)) {
+      targetLabel = this.advance().value;
+    } else {
+      throw new Error(`Expected target label after 'to' in assign statement at line ${token.line}`);
+    }
+
+    // Optional direction (+ or -) and count
+    // If omitted, assigns the label directly to the target piece (count 0)
+    let direction: '+' | '-' = '+';
+    let count: number = 0;
+
+    if (this.check(TokenType.PLUS)) {
+      this.advance(); // consume '+'
+      direction = '+';
+      if (!this.check(TokenType.NUMBER)) {
+        throw new Error(`Expected number after '+' in assign statement at line ${token.line}`);
+      }
+      count = parseInt(this.advance().value, 10);
+    } else if (this.check(TokenType.MINUS)) {
+      this.advance(); // consume '-'
+      direction = '-';
+      if (!this.check(TokenType.NUMBER)) {
+        throw new Error(`Expected number after '-' in assign statement at line ${token.line}`);
+      }
+      count = parseInt(this.advance().value, 10);
+    } else if (this.check(TokenType.NUMBER)) {
+      // Handle case where lexer parsed "-N" as a single negative number token
+      const numStr = this.advance().value;
+      const numVal = parseInt(numStr, 10);
+      if (numVal < 0) {
+        direction = '-';
+        count = Math.abs(numVal);
+      } else {
+        // Positive number without explicit + sign — treat as forward
+        direction = '+';
+        count = numVal;
+      }
+    }
+    // else: no direction/count — assign directly to target (count stays 0)
+
+    return { type: 'assign', label, targetLabel, targetOffset, direction, count, line: token.line };
+  }
+
   private parseLabeledPiece(): PieceStatement {
     const labelToken = this.advance(); // consume label definition
     const label = labelToken.value;
@@ -844,6 +1037,8 @@ class Parser {
     const refToken = this.advance(); // consume $label
     const label = refToken.value;
 
+    const offset = this.parseLabelOffset();
+
     let point: string | undefined;
     if (this.check(TokenType.DOT)) {
       this.advance(); // consume dot
@@ -852,11 +1047,29 @@ class Parser {
       }
     }
 
-    return { type: 'reference', label, point, line: refToken.line };
+    return { type: 'reference', label, point, offset, line: refToken.line };
   }
 
   /**
-   * Parse point.$label reference syntax (e.g., out.$sw1)
+   * Parse @ as a reference statement (e.g., @.out, @-2.in)
+   */
+  private parseCurrentRefAsReference(): ReferenceStatement {
+    const refToken = this.advance(); // consume '@'
+    const offset = this.parseLabelOffset();
+
+    let point: string | undefined;
+    if (this.check(TokenType.DOT)) {
+      this.advance(); // consume dot
+      if (this.check(TokenType.IDENTIFIER)) {
+        point = this.advance().value.toLowerCase();
+      }
+    }
+
+    return { type: 'reference', label: '@', point, offset, line: refToken.line };
+  }
+
+  /**
+   * Parse point.$label reference syntax (e.g., out.$sw1, out.$sw1+3)
    * This is an alternative to $label.point syntax
    */
   private parsePointLabelReference(): ReferenceStatement {
@@ -869,22 +1082,24 @@ class Parser {
       throw new Error(`Expected $label after '${point}.' at line ${pointToken.line}`);
     }
     const label = this.advance().value;
+    const offset = this.parseLabelOffset();
 
-    return { type: 'reference', label, point, line: pointToken.line };
+    return { type: 'reference', label, point, offset, line: pointToken.line };
   }
 
   private parseLoopClose(): LoopCloseStatement {
     const startToken = this.advance(); // consume '>'
 
     // Support two formats:
-    // 1. > point.$label  (e.g., > in.$start)
-    // 2. > $label.point  (e.g., > $in1.in)
+    // 1. > point.$label  (e.g., > in.$start, > in.$start+3)
+    // 2. > $label.point  (e.g., > $in1.in, > $in1+3.in)
 
     let point: string;
     let label: string;
+    let offset: LabelOffset | undefined;
 
     if (this.check(TokenType.IDENTIFIER)) {
-      // Format 1: > point.$label
+      // Format 1: > point.$label[+N]
       point = this.advance().value.toLowerCase();
 
       if (!this.check(TokenType.DOT)) {
@@ -896,9 +1111,11 @@ class Parser {
         throw new Error(`Expected $label after "." in loop close at line ${startToken.line}`);
       }
       label = this.advance().value;
+      offset = this.parseLabelOffset();
     } else if (this.check(TokenType.LABEL_REF)) {
-      // Format 2: > $label.point
+      // Format 2: > $label[+N].point
       label = this.advance().value;
+      offset = this.parseLabelOffset();
 
       if (!this.check(TokenType.DOT)) {
         throw new Error(`Expected "." after $${label} in loop close at line ${startToken.line}`);
@@ -909,11 +1126,26 @@ class Parser {
         throw new Error(`Expected connection point after "$${label}." in loop close at line ${startToken.line}`);
       }
       point = this.advance().value.toLowerCase();
+    } else if (this.check(TokenType.CURRENT_REF)) {
+      // Format 3: > @[-N].point
+      this.advance(); // consume '@'
+      label = '@';
+      offset = this.parseLabelOffset();
+
+      if (!this.check(TokenType.DOT)) {
+        throw new Error(`Expected "." after @ in loop close at line ${startToken.line}`);
+      }
+      this.advance(); // consume dot
+
+      if (!this.check(TokenType.IDENTIFIER)) {
+        throw new Error(`Expected connection point after "@." in loop close at line ${startToken.line}`);
+      }
+      point = this.advance().value.toLowerCase();
     } else {
       throw new Error(`Expected connection point reference after ">" at line ${startToken.line}`);
     }
 
-    return { type: 'loopClose', point, label, line: startToken.line };
+    return { type: 'loopClose', point, label, offset, line: startToken.line };
   }
 
   private parsePieceOrExplicitConnection(): PieceStatement {
@@ -972,6 +1204,14 @@ class Parser {
       }
     }
 
+    // Parse speed limit value: spd N (e.g., spd 6)
+    let spdLimit: number | undefined;
+    if (archetypeCode === 'spd' || archetypeCode === 'speedlimit') {
+      if (this.check(TokenType.NUMBER)) {
+        spdLimit = parseFloat(this.advance().value);
+      }
+    }
+
     // Check for repetition: x N or * N
     let count = 1;
     if (this.check(TokenType.REPETITION)) {
@@ -992,6 +1232,7 @@ class Parser {
       genSpeed,
       genEvery,
       genColorMode,
+      spdLimit,
     };
   }
 
@@ -1041,5 +1282,19 @@ class Parser {
 
   private isAtEnd(): boolean {
     return this.peek().type === TokenType.EOF;
+  }
+
+  /**
+   * Check if current token is a word that can serve as a debug category name.
+   * Only accept IDENTIFIER plus the specific keywords that are valid category
+   * names (speed, flex, cross). Do NOT accept other keywords (max, trains, etc.)
+   * as that would consume tokens from subsequent statements.
+   */
+  private isDebugCategory(): boolean {
+    const type = this.peek().type;
+    return type === TokenType.IDENTIFIER ||
+      type === TokenType.SPEED ||
+      type === TokenType.FLEX ||
+      type === TokenType.CROSS;
   }
 }

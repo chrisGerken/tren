@@ -11,6 +11,7 @@ export enum LogLevel {
 }
 
 let currentLevel: LogLevel = LogLevel.WARNING;
+let debugCategories: Set<string> | null = null; // null = show all, Set = filter
 
 export function setLogLevel(level: LogLevel): void {
   currentLevel = level;
@@ -20,10 +21,25 @@ export function getLogLevel(): LogLevel {
   return currentLevel;
 }
 
+export function setDebugCategories(categories: string[] | null): void {
+  debugCategories = categories ? new Set(categories.map(c => c.toUpperCase())) : null;
+}
+
 export const logger = {
-  debug(message: string, ...args: unknown[]): void {
+  isEnabled(level: 'debug' | 'info' | 'warn' | 'error', category?: string): boolean {
+    const levelMap = { debug: LogLevel.DEBUG, info: LogLevel.INFO, warn: LogLevel.WARNING, error: LogLevel.ERROR };
+    if (currentLevel > levelMap[level]) return false;
+    if (level === 'debug' && category) {
+      return debugCategories === null || debugCategories.has(category.toUpperCase());
+    }
+    return true;
+  },
+  debug(category: string, message: string, ...args: unknown[]): void {
     if (currentLevel <= LogLevel.DEBUG) {
-      console.log(`[DEBUG] ${message}`, ...args);
+      const cat = category.toUpperCase();
+      if (debugCategories === null || debugCategories.has(cat)) {
+        console.log(`[DEBUG:${cat}] ${message}`, ...args);
+      }
     }
   },
   info(message: string, ...args: unknown[]): void {

@@ -2,15 +2,16 @@
  * Layout Builder - transforms AST into placed track pieces
  */
 
-import { parse, Statement, PieceStatement, NewStatement, ReferenceStatement, LoopCloseStatement, TitleStatement, DescriptionStatement, LockAheadStatement, SpliceStatement, RandomStatement, MaxTrainsStatement, FlexConnectStatement, CrossConnectStatement, DefineStatement, LogStatement, ArrayStatement, PrefabStatement, UseStatement, TreesStatement, PondStatement, GridStatement } from './parser';
+import { parse, Statement, PieceStatement, NewStatement, ReferenceStatement, LoopCloseStatement, TitleStatement, DescriptionStatement, LockAheadStatement, SpliceStatement, RandomStatement, MaxTrainsStatement, FlexConnectStatement, CrossConnectStatement, DefineStatement, LogStatement, ArrayStatement, PrefabStatement, UseStatement, TreesStatement, PondStatement, GridStatement, AssignStatement, LabelOffset } from './parser';
 import { Layout, TrackPiece, Vec3, vec2, ConnectionPointDef, RangeValue as TypeRangeValue } from '../core/types';
 import { getArchetype, registerRuntimeArchetype } from '../core/archetypes';
 import type { TrackArchetype } from '../core/archetypes';
-import { setLogLevel, LogLevel, logger } from '../core/logger';
+import { setLogLevel, setDebugCategories, LogLevel, logger } from '../core/logger';
 
 interface SpliceInfo {
   label?: string;
   point?: string;
+  offset?: LabelOffset;
   // If no label, use these (captured at parse time)
   currentPieceId?: string;
   currentPointName?: string;
@@ -20,8 +21,14 @@ interface SpliceInfo {
 interface FlexConnectInfo {
   point1Label: string;
   point1Name: string;
+  point1Offset?: LabelOffset;
+  point1CurrentPieceId?: string;
+  point1CurrentPointName?: string;
   point2Label: string;
   point2Name: string;
+  point2Offset?: LabelOffset;
+  point2CurrentPieceId?: string;
+  point2CurrentPointName?: string;
   line: number;
 }
 
@@ -41,6 +48,10 @@ interface FlexSolution {
 interface CrossConnectInfo {
   label1: string;
   label2: string;
+  offset1?: LabelOffset;
+  offset2?: LabelOffset;
+  currentPieceId1?: string;  // Captured for '@' at queue time
+  currentPieceId2?: string;  // Captured for '@' at queue time
   line: number;
 }
 
@@ -67,6 +78,7 @@ interface BuilderState {
   randomSwitches?: boolean;
   maxTrains?: number;
   logLevel?: string;
+  logCategories?: string[];
   pendingSplices: SpliceInfo[];
   pendingFlexConnects: FlexConnectInfo[];
   pendingCrossConnects: CrossConnectInfo[];
@@ -146,8 +158,17 @@ class LayoutBuilder {
     // Detect auto-connections
     this.detectAutoConnections();
 
+    // Dump connection graph for debugging
+    this.dumpConnectionGraph();
+
     // Mark pieces that are inside tunnels
     this.markTunnelSections();
+
+    // Validate layout and report warnings
+    const warnings = this.validateLayout();
+    for (const w of warnings) {
+      logger.warn(`Layout: ${w}`);
+    }
 
     return {
       title: this.state.title || 'Simulador de Tren',
@@ -159,6 +180,7 @@ class LayoutBuilder {
       randomSwitches: this.state.randomSwitches,
       maxTrains: this.state.maxTrains,
       logLevel: this.state.logLevel,
+      logCategories: this.state.logCategories,
       treesEnabled: this.state.treesEnabled,
       treesClearance: this.state.treesClearance,
       treesDensity: this.state.treesDensity,
@@ -169,6 +191,7 @@ class LayoutBuilder {
       pondScore: this.state.pondScore,
       gridSize: this.state.gridSize,
       pieces: this.state.pieces,
+      warnings: warnings.length > 0 ? warnings : undefined,
     };
   }
 
@@ -234,11 +257,15 @@ class LayoutBuilder {
       case 'grid':
         this.processGrid(stmt);
         break;
+      case 'assign':
+        this.processAssign(stmt);
+        break;
     }
   }
 
   private processLog(stmt: LogStatement): void {
     this.state.logLevel = stmt.level;
+    this.state.logCategories = stmt.categories;
     const levelMap: Record<string, LogLevel> = {
       'debug': LogLevel.DEBUG,
       'info': LogLevel.INFO,
@@ -246,6 +273,7 @@ class LayoutBuilder {
       'error': LogLevel.ERROR,
     };
     setLogLevel(levelMap[stmt.level]);
+    setDebugCategories(stmt.categories ?? null);
   }
 
   private processTrees(stmt: TreesStatement): void {
@@ -334,7 +362,7 @@ class LayoutBuilder {
       this.state.pieces.push(piece);
       this.state.currentSegment.pieces.push(piece);
 
-      logger.debug(`Line ${stmt.line}: Array placed ph "${label}" at (${position.x.toFixed(2)}, ${position.z.toFixed(2)})`);
+      logger.debug('layout', `Line ${stmt.line}: Array placed ph "${label}" at (${position.x.toFixed(2)}, ${position.z.toFixed(2)})`);
     }
 
     // Builder state continues from first placeholder (already set by placePiece)
@@ -443,7 +471,7 @@ class LayoutBuilder {
     // Register the custom archetype
     registerRuntimeArchetype(archetype);
 
-    logger.debug(`Defined custom archetype '${stmt.name}': ${stmt.direction}, ` +
+    logger.debug('layout', `Defined custom archetype '${stmt.name}': ${stmt.direction}, ` +
       (stmt.direction === 'straight'
         ? `length=${stmt.length}`
         : `radius=${stmt.radius}, arc=${stmt.arc}°`));
@@ -455,6 +483,7 @@ class LayoutBuilder {
     this.state.pendingSplices.push({
       label: stmt.label,
       point: stmt.point,
+      offset: stmt.offset,
       currentPieceId: this.state.currentPiece?.id,
       currentPointName: this.state.currentPointName,
       line: stmt.line,
@@ -463,22 +492,130 @@ class LayoutBuilder {
 
   private processFlexConnect(stmt: FlexConnectStatement): void {
     // Collect for post-processing (after all pieces are placed)
+    // When label is '@', capture current piece state (like splice does)
+    const isAt1 = stmt.point1Label === '@';
+    const isAt2 = stmt.point2Label === '@';
     this.state.pendingFlexConnects.push({
       point1Label: stmt.point1Label,
-      point1Name: stmt.point1Name || 'out',
+      point1Name: isAt1 ? (stmt.point1Name || this.state.currentPointName) : (stmt.point1Name || 'out'),
+      point1Offset: stmt.point1Offset,
+      point1CurrentPieceId: isAt1 ? this.state.currentPiece?.id : undefined,
+      point1CurrentPointName: isAt1 ? (stmt.point1Name || this.state.currentPointName) : undefined,
       point2Label: stmt.point2Label,
-      point2Name: stmt.point2Name || 'in',
+      point2Name: isAt2 ? (stmt.point2Name || this.state.currentPointName) : (stmt.point2Name || 'in'),
+      point2Offset: stmt.point2Offset,
+      point2CurrentPieceId: isAt2 ? this.state.currentPiece?.id : undefined,
+      point2CurrentPointName: isAt2 ? (stmt.point2Name || this.state.currentPointName) : undefined,
       line: stmt.line,
     });
   }
 
   private processCrossConnect(stmt: CrossConnectStatement): void {
     // Collect for post-processing (after all pieces are placed)
+    // When label is '@', capture current piece state at queue time
+    const isAt1 = stmt.label1 === '@';
+    const isAt2 = stmt.label2 === '@';
     this.state.pendingCrossConnects.push({
       label1: stmt.label1,
       label2: stmt.label2,
+      offset1: stmt.offset1,
+      offset2: stmt.offset2,
+      currentPieceId1: isAt1 ? this.state.currentPiece?.id : undefined,
+      currentPieceId2: isAt2 ? this.state.currentPiece?.id : undefined,
       line: stmt.line,
     });
+  }
+
+  /**
+   * Resolve a label with an optional inline offset ($label+N / $label-N).
+   * If no offset, returns the piece directly from labeledPieces.
+   * If offset is present, traverses N pieces forward/backward using findNextPieceAlongTrack().
+   */
+  private resolveLabelWithOffset(label: string, offset: LabelOffset | undefined, line: number): TrackPiece {
+    let basePiece: TrackPiece | undefined;
+
+    if (label === '@') {
+      // '@' refers to the current piece at time of resolution
+      basePiece = this.state.currentPiece || undefined;
+      if (!basePiece) {
+        throw new Error(`No current piece for '@' at line ${line}`);
+      }
+      // Validate: @ only supports negative offsets
+      if (offset && offset.direction === '+') {
+        throw new Error(`@ only supports negative offsets (@-N), not @+N, at line ${line}`);
+      }
+    } else {
+      basePiece = this.state.labeledPieces.get(label);
+      if (!basePiece) {
+        throw new Error(`Unknown label '${label}' at line ${line}`);
+      }
+    }
+
+    if (!offset) {
+      return basePiece;
+    }
+
+    const labelDisplay = label === '@' ? '@' : `$${label}`;
+    let currentPiece = basePiece;
+    let exitPointName = offset.direction === '+' ? 'out' : 'in';
+
+    for (let step = 0; step < offset.count; step++) {
+      const result = this.findNextPieceAlongTrack(currentPiece, exitPointName);
+      if (!result) {
+        throw new Error(
+          `Label offset ${labelDisplay}${offset.direction}${offset.count} failed at step ${step + 1}: ` +
+          `no adjacent piece found at '${exitPointName}' of piece ${currentPiece.id} (${currentPiece.archetypeCode}) at line ${line}`
+        );
+      }
+
+      currentPiece = result.piece;
+      // Continue in the same direction: exit from the opposite point of where we entered
+      const archetype = getArchetype(currentPiece.archetypeCode);
+      const oppositePoint = this.getOppositePoint(archetype, result.entryPointName);
+      if (oppositePoint) {
+        exitPointName = oppositePoint;
+      } else if (step < offset.count - 1) {
+        throw new Error(
+          `Label offset ${labelDisplay}${offset.direction}${offset.count} failed at step ${step + 1}: ` +
+          `piece ${currentPiece.id} (${currentPiece.archetypeCode}) has no opposite point for '${result.entryPointName}' at line ${line}`
+        );
+      }
+    }
+
+    return currentPiece;
+  }
+
+  /**
+   * Resolve an offset from a known base piece (used for deferred '@' resolution
+   * where the base piece was captured by ID at queue time).
+   */
+  private resolveOffsetFromPiece(basePiece: TrackPiece, offset: LabelOffset, labelDisplay: string, line: number): TrackPiece {
+    let currentPiece = basePiece;
+    let exitPointName = offset.direction === '+' ? 'out' : 'in';
+
+    for (let step = 0; step < offset.count; step++) {
+      const result = this.findNextPieceAlongTrack(currentPiece, exitPointName);
+      if (!result) {
+        throw new Error(
+          `Label offset ${labelDisplay}${offset.direction}${offset.count} failed at step ${step + 1}: ` +
+          `no adjacent piece found at '${exitPointName}' of piece ${currentPiece.id} (${currentPiece.archetypeCode}) at line ${line}`
+        );
+      }
+
+      currentPiece = result.piece;
+      const archetype = getArchetype(currentPiece.archetypeCode);
+      const oppositePoint = this.getOppositePoint(archetype, result.entryPointName);
+      if (oppositePoint) {
+        exitPointName = oppositePoint;
+      } else if (step < offset.count - 1) {
+        throw new Error(
+          `Label offset ${labelDisplay}${offset.direction}${offset.count} failed at step ${step + 1}: ` +
+          `piece ${currentPiece.id} (${currentPiece.archetypeCode}) has no opposite point for '${result.entryPointName}' at line ${line}`
+        );
+      }
+    }
+
+    return currentPiece;
   }
 
   private processNew(stmt: NewStatement): void {
@@ -492,10 +629,7 @@ class LayoutBuilder {
 
     // Check if starting from a labeled piece
     if (stmt.baseLabel) {
-      const labeledPiece = this.state.labeledPieces.get(stmt.baseLabel);
-      if (!labeledPiece) {
-        throw new Error(`Unknown label '${stmt.baseLabel}' in 'new' at line ${stmt.line}`);
-      }
+      const labeledPiece = this.resolveLabelWithOffset(stmt.baseLabel, stmt.baseOffset, stmt.line);
 
       const archetype = getArchetype(labeledPiece.archetypeCode);
       const pointName = stmt.basePoint || 'out';
@@ -537,11 +671,11 @@ class LayoutBuilder {
       this.state.currentPiece = labeledPiece;
       this.state.currentPointName = pointName;
 
-      logger.debug(`Line ${stmt.line}: New segment from $${stmt.baseLabel}.${pointName}:`);
-      logger.debug(`Line ${stmt.line}:   baseAngle: ${(baseAngle * 180 / Math.PI).toFixed(1)}°`);
-      logger.debug(`Line ${stmt.line}:   degrees offset: ${stmt.degrees}°`);
-      logger.debug(`Line ${stmt.line}:   currentRotation: ${(worldRotation * 180 / Math.PI).toFixed(1)}°`);
-      logger.debug(`Line ${stmt.line}:   position: (${offsetPos.x.toFixed(2)}, ${offsetPos.z.toFixed(2)})`);
+      logger.debug('layout', `Line ${stmt.line}: New segment from $${stmt.baseLabel}.${pointName}:`);
+      logger.debug('layout', `Line ${stmt.line}:   baseAngle: ${(baseAngle * 180 / Math.PI).toFixed(1)}°`);
+      logger.debug('layout', `Line ${stmt.line}:   degrees offset: ${stmt.degrees}°`);
+      logger.debug('layout', `Line ${stmt.line}:   currentRotation: ${(worldRotation * 180 / Math.PI).toFixed(1)}°`);
+      logger.debug('layout', `Line ${stmt.line}:   position: (${offsetPos.x.toFixed(2)}, ${offsetPos.z.toFixed(2)})`);
     } else {
       // Start at origin with specified rotation and offset
       const worldRotation = degreesRadians;
@@ -561,10 +695,10 @@ class LayoutBuilder {
       this.state.currentPiece = null;
       this.state.currentPointName = 'out';
 
-      logger.debug(`Line ${stmt.line}: New segment at origin:`);
-      logger.debug(`Line ${stmt.line}:   degrees: ${stmt.degrees}°`);
-      logger.debug(`Line ${stmt.line}:   currentRotation: ${(worldRotation * 180 / Math.PI).toFixed(1)}°`);
-      logger.debug(`Line ${stmt.line}:   position: (${startPos.x.toFixed(2)}, ${startPos.z.toFixed(2)})`);
+      logger.debug('layout', `Line ${stmt.line}: New segment at origin:`);
+      logger.debug('layout', `Line ${stmt.line}:   degrees: ${stmt.degrees}°`);
+      logger.debug('layout', `Line ${stmt.line}:   currentRotation: ${(worldRotation * 180 / Math.PI).toFixed(1)}°`);
+      logger.debug('layout', `Line ${stmt.line}:   position: (${startPos.x.toFixed(2)}, ${startPos.z.toFixed(2)})`);
     }
   }
 
@@ -604,6 +738,13 @@ class LayoutBuilder {
       if (archetype.code === 'dec' && i === 0) {
         piece.decouplerConfig = {
           activated: false,
+        };
+      }
+
+      // Apply speed limit config for 'spd' pieces
+      if (archetype.code === 'spd' && i === 0) {
+        piece.speedLimitConfig = {
+          limit: stmt.spdLimit ?? 12,
         };
       }
 
@@ -660,15 +801,16 @@ class LayoutBuilder {
       position: piecePosition,
       rotation: pieceRotation,
       connections: new Map(),
+      sourceLine: line,
     };
 
     {
       const labelStr = label ? ` "${label}"` : '';
       const lineStr = line !== undefined ? `Line ${line}` : 'Line ?';
-      logger.debug(`${lineStr}: Placed ${archetype.code}${labelStr} (${piece.id}):`);
-      logger.debug(`${lineStr}:   incomingRotation: ${(this.state.currentRotation * 180 / Math.PI).toFixed(1)}°`);
-      logger.debug(`${lineStr}:   pieceRotation: ${(pieceRotation * 180 / Math.PI).toFixed(1)}°`);
-      logger.debug(`${lineStr}:   position: (${piecePosition.x.toFixed(2)}, ${piecePosition.z.toFixed(2)})`);
+      logger.debug('layout', `${lineStr}: Placed ${archetype.code}${labelStr} (${piece.id}):`);
+      logger.debug('layout', `${lineStr}:   incomingRotation: ${(this.state.currentRotation * 180 / Math.PI).toFixed(1)}°`);
+      logger.debug('layout', `${lineStr}:   pieceRotation: ${(pieceRotation * 180 / Math.PI).toFixed(1)}°`);
+      logger.debug('layout', `${lineStr}:   position: (${piecePosition.x.toFixed(2)}, ${piecePosition.z.toFixed(2)})`);
     }
 
     // Update current position and rotation for next piece
@@ -686,7 +828,7 @@ class LayoutBuilder {
 
       {
         const lineStr = line !== undefined ? `Line ${line}` : 'Line ?';
-        logger.debug(`${lineStr}:   outgoingRotation: ${(this.state.currentRotation * 180 / Math.PI).toFixed(1)}°`);
+        logger.debug('layout', `${lineStr}:   outgoingRotation: ${(this.state.currentRotation * 180 / Math.PI).toFixed(1)}°`);
       }
     }
 
@@ -694,10 +836,7 @@ class LayoutBuilder {
   }
 
   private processReference(stmt: ReferenceStatement): void {
-    const labeledPiece = this.state.labeledPieces.get(stmt.label);
-    if (!labeledPiece) {
-      throw new Error(`Unknown label reference: $${stmt.label} at line ${stmt.line}`);
-    }
+    const labeledPiece = this.resolveLabelWithOffset(stmt.label, stmt.offset, stmt.line);
 
     const archetype = getArchetype(labeledPiece.archetypeCode);
     const pointName = stmt.point || 'out';
@@ -720,20 +859,17 @@ class LayoutBuilder {
     this.state.currentPiece = labeledPiece;
     this.state.currentPointName = pointName;
 
-    logger.debug(`Line ${stmt.line}: Reference $${stmt.label}.${pointName}:`);
-    logger.debug(`Line ${stmt.line}:   labeledPiece (${labeledPiece.archetypeCode}) rotation: ${(labeledPiece.rotation * 180 / Math.PI).toFixed(1)}°`);
-    logger.debug(`Line ${stmt.line}:   point.direction (local): (${point.direction.x.toFixed(3)}, ${point.direction.z.toFixed(3)})`);
-    logger.debug(`Line ${stmt.line}:   rotatedDir (world): (${rotatedDir.x.toFixed(3)}, ${rotatedDir.z.toFixed(3)})`);
-    logger.debug(`Line ${stmt.line}:   new currentRotation: ${(this.state.currentRotation * 180 / Math.PI).toFixed(1)}°`);
+    logger.debug('layout', `Line ${stmt.line}: Reference $${stmt.label}.${pointName}:`);
+    logger.debug('layout', `Line ${stmt.line}:   labeledPiece (${labeledPiece.archetypeCode}) rotation: ${(labeledPiece.rotation * 180 / Math.PI).toFixed(1)}°`);
+    logger.debug('layout', `Line ${stmt.line}:   point.direction (local): (${point.direction.x.toFixed(3)}, ${point.direction.z.toFixed(3)})`);
+    logger.debug('layout', `Line ${stmt.line}:   rotatedDir (world): (${rotatedDir.x.toFixed(3)}, ${rotatedDir.z.toFixed(3)})`);
+    logger.debug('layout', `Line ${stmt.line}:   new currentRotation: ${(this.state.currentRotation * 180 / Math.PI).toFixed(1)}°`);
   }
 
   private processLoopClose(stmt: LoopCloseStatement): void {
     // Connect current segment's output to the labeled piece's specified point
     // This repositions all pieces in the current segment to align the connection
-    const labeledPiece = this.state.labeledPieces.get(stmt.label);
-    if (!labeledPiece) {
-      throw new Error(`Unknown label reference in loop close: $${stmt.label} at line ${stmt.line}`);
-    }
+    const labeledPiece = this.resolveLabelWithOffset(stmt.label, stmt.offset, stmt.line);
 
     const targetArchetype = getArchetype(labeledPiece.archetypeCode);
     const targetPoint = this.getConnectionPoint(targetArchetype, stmt.point);
@@ -807,10 +943,10 @@ class LayoutBuilder {
     };
     this.state.currentRotation = desiredAngle;
 
-    logger.debug(`Line ${stmt.line}: Loop close to $${stmt.label}.${stmt.point}:`);
-    logger.debug(`Line ${stmt.line}:   rotationDelta: ${(rotationDelta * 180 / Math.PI).toFixed(1)}°`);
-    logger.debug(`Line ${stmt.line}:   new currentPosition: (${targetPos.x.toFixed(2)}, ${targetPos.z.toFixed(2)})`);
-    logger.debug(`Line ${stmt.line}:   new currentRotation: ${(desiredAngle * 180 / Math.PI).toFixed(1)}°`);
+    logger.debug('layout', `Line ${stmt.line}: Loop close to $${stmt.label}.${stmt.point}:`);
+    logger.debug('layout', `Line ${stmt.line}:   rotationDelta: ${(rotationDelta * 180 / Math.PI).toFixed(1)}°`);
+    logger.debug('layout', `Line ${stmt.line}:   new currentPosition: (${targetPos.x.toFixed(2)}, ${targetPos.z.toFixed(2)})`);
+    logger.debug('layout', `Line ${stmt.line}:   new currentRotation: ${(desiredAngle * 180 / Math.PI).toFixed(1)}°`);
 
     // Create connection records
     if (this.state.currentPiece) {
@@ -860,6 +996,121 @@ class LayoutBuilder {
   }
 
   /**
+   * Process an assign statement: assign a label to a piece found by traversing
+   * forward or backward from an already-labeled piece.
+   */
+  private processAssign(stmt: AssignStatement): void {
+    // Check that the new label is not already defined
+    if (this.state.labeledPieces.has(stmt.label)) {
+      throw new Error(`Label '${stmt.label}' is already defined (assign at line ${stmt.line})`);
+    }
+
+    // Look up the target label (with optional offset)
+    const startPiece = this.resolveLabelWithOffset(stmt.targetLabel, stmt.targetOffset, stmt.line);
+
+    // Determine exit point for traversal direction
+    // + (forward) means we leave via 'out', - (backward) means we leave via 'in'
+    let currentPiece = startPiece;
+    let exitPointName = stmt.direction === '+' ? 'out' : 'in';
+
+    for (let step = 0; step < stmt.count; step++) {
+      const result = this.findNextPieceAlongTrack(currentPiece, exitPointName);
+      if (!result) {
+        throw new Error(
+          `Assign traversal from '${stmt.targetLabel}' ${stmt.direction}${stmt.count} failed at step ${step + 1}: ` +
+          `no adjacent piece found at '${exitPointName}' of piece ${currentPiece.id} (${currentPiece.archetypeCode}) at line ${stmt.line}`
+        );
+      }
+
+      currentPiece = result.piece;
+      // The entry point is where we arrived; to continue in the same direction,
+      // exit from the opposite point
+      const archetype = getArchetype(currentPiece.archetypeCode);
+      const oppositePoint = this.getOppositePoint(archetype, result.entryPointName);
+      if (!oppositePoint && step < stmt.count - 1) {
+        throw new Error(
+          `Assign traversal from '${stmt.targetLabel}' ${stmt.direction}${stmt.count} failed at step ${step + 1}: ` +
+          `piece ${currentPiece.id} (${currentPiece.archetypeCode}) has no opposite point for '${result.entryPointName}' at line ${stmt.line}`
+        );
+      }
+      if (oppositePoint) {
+        exitPointName = oppositePoint;
+      }
+    }
+
+    // Assign the label to the found piece
+    this.state.labeledPieces.set(stmt.label, currentPiece);
+    if (!currentPiece.label) {
+      currentPiece.label = stmt.label;
+    }
+
+    logger.debug('layout', `Line ${stmt.line}: Assigned label '${stmt.label}' to piece ${currentPiece.id} (${currentPiece.archetypeCode}) via ${stmt.targetLabel} ${stmt.direction}${stmt.count}`);
+  }
+
+  /**
+   * Find the adjacent piece at a given connection point by matching world positions
+   * and opposite directions — the same logic as detectAutoConnections but applied
+   * on-demand during the build loop (before connections are established).
+   */
+  private findNextPieceAlongTrack(piece: TrackPiece, exitPointName: string): { piece: TrackPiece; entryPointName: string } | null {
+    const POSITION_TOLERANCE = 0.5;  // Same as detectAutoConnections
+    const DIRECTION_TOLERANCE = 0.1; // Same as detectAutoConnections
+
+    const archetype = getArchetype(piece.archetypeCode);
+    const exitPoint = this.getConnectionPoint(archetype, exitPointName);
+    if (!exitPoint) return null;
+
+    // Compute world position and direction of the exit point
+    const rotatedPos = this.rotatePoint(exitPoint.position, piece.rotation);
+    const worldPos = {
+      x: piece.position.x + rotatedPos.x,
+      y: 0,
+      z: piece.position.z + rotatedPos.z,
+    };
+    const worldDir = this.rotatePoint(exitPoint.direction, piece.rotation);
+
+    // Scan all pieces for a matching connection point
+    let match: { piece: TrackPiece; entryPointName: string } | null = null;
+
+    for (const candidatePiece of this.state.pieces) {
+      if (candidatePiece.id === piece.id) continue;
+
+      const candidateArch = getArchetype(candidatePiece.archetypeCode);
+      for (const cp of candidateArch.connectionPoints) {
+        const cpRotatedPos = this.rotatePoint(cp.position, candidatePiece.rotation);
+        const cpWorldPos = {
+          x: candidatePiece.position.x + cpRotatedPos.x,
+          y: 0,
+          z: candidatePiece.position.z + cpRotatedPos.z,
+        };
+
+        const dx = worldPos.x - cpWorldPos.x;
+        const dz = worldPos.z - cpWorldPos.z;
+        const distance = Math.sqrt(dx * dx + dz * dz);
+        if (distance > POSITION_TOLERANCE) continue;
+
+        // Check directions are opposite (dot product close to -1)
+        const cpWorldDir = this.rotatePoint(cp.direction, candidatePiece.rotation);
+        const dot = worldDir.x * cpWorldDir.x + worldDir.z * cpWorldDir.z;
+        if (dot > -1 + DIRECTION_TOLERANCE) continue;
+
+        if (match !== null) {
+          // Ambiguous — multiple pieces match. This is fine for auto-connect but
+          // problematic for assign traversal where we need a single path.
+          throw new Error(
+            `Assign traversal: ambiguous junction at '${exitPointName}' of piece ${piece.id} — ` +
+            `multiple adjacent pieces found at the same position`
+          );
+        }
+
+        match = { piece: candidatePiece, entryPointName: cp.name };
+      }
+    }
+
+    return match;
+  }
+
+  /**
    * Process all pending splice statements.
    * Splices are processed after all pieces are placed but before auto-connect.
    */
@@ -874,7 +1125,7 @@ class LayoutBuilder {
    * Creates custom curve+straight or straight+curve pieces to bridge gaps.
    */
   private processPendingFlexConnects(): void {
-    logger.debug(`Processing ${this.state.pendingFlexConnects.length} flex connects`);
+    logger.debug('flex', `Processing ${this.state.pendingFlexConnects.length} flex connects`);
     for (const flexConnect of this.state.pendingFlexConnects) {
       this.performFlexConnect(flexConnect);
     }
@@ -886,7 +1137,7 @@ class LayoutBuilder {
    */
   private processPendingCrossConnects(): void {
     if (this.state.pendingCrossConnects.length > 0) {
-      logger.debug(`Processing ${this.state.pendingCrossConnects.length} cross connects`);
+      logger.debug('cross', `Processing ${this.state.pendingCrossConnects.length} cross connects`);
     }
     for (const crossConnect of this.state.pendingCrossConnects) {
       this.performCrossConnect(crossConnect);
@@ -899,20 +1150,53 @@ class LayoutBuilder {
    * Only one train can occupy the intersection at a time.
    */
   private performCrossConnect(info: CrossConnectInfo): void {
-    // Validate: labels must be different
-    if (info.label1 === info.label2) {
+    // Validate: labels must be different (unless offsets make them resolve to different pieces)
+    if (info.label1 === info.label2 && !info.offset1 && !info.offset2 &&
+        info.label1 !== '@') {
       throw new Error(`Cross connect requires two different tracks at line ${info.line}`);
     }
 
-    // Get the two labeled pieces
-    const piece1 = this.state.labeledPieces.get(info.label1);
-    const piece2 = this.state.labeledPieces.get(info.label2);
-
-    if (!piece1) {
-      throw new Error(`Unknown label '${info.label1}' in cross connect at line ${info.line}`);
+    // Get the two labeled pieces — resolve '@' via captured piece ID, others via label lookup
+    let piece1: TrackPiece;
+    if (info.label1 === '@') {
+      if (!info.currentPieceId1) {
+        throw new Error(`No current piece for '@' in cross connect at line ${info.line}`);
+      }
+      const found = this.state.pieces.find(p => p.id === info.currentPieceId1);
+      if (!found) {
+        throw new Error(`Current piece not found for '@' in cross connect at line ${info.line}`);
+      }
+      piece1 = found;
+      // Apply offset if present
+      if (info.offset1) {
+        if (info.offset1.direction === '+') {
+          throw new Error(`@ only supports negative offsets (@-N), not @+N, at line ${info.line}`);
+        }
+        piece1 = this.resolveOffsetFromPiece(piece1, info.offset1, '@', info.line);
+      }
+    } else {
+      piece1 = this.resolveLabelWithOffset(info.label1, info.offset1, info.line);
     }
-    if (!piece2) {
-      throw new Error(`Unknown label '${info.label2}' in cross connect at line ${info.line}`);
+
+    let piece2: TrackPiece;
+    if (info.label2 === '@') {
+      if (!info.currentPieceId2) {
+        throw new Error(`No current piece for '@' in cross connect at line ${info.line}`);
+      }
+      const found = this.state.pieces.find(p => p.id === info.currentPieceId2);
+      if (!found) {
+        throw new Error(`Current piece not found for '@' in cross connect at line ${info.line}`);
+      }
+      piece2 = found;
+      // Apply offset if present
+      if (info.offset2) {
+        if (info.offset2.direction === '+') {
+          throw new Error(`@ only supports negative offsets (@-N), not @+N, at line ${info.line}`);
+        }
+        piece2 = this.resolveOffsetFromPiece(piece2, info.offset2, '@', info.line);
+      }
+    } else {
+      piece2 = this.resolveLabelWithOffset(info.label2, info.offset2, info.line);
     }
 
     // Find intersection point
@@ -929,10 +1213,10 @@ class LayoutBuilder {
     const distance1 = intersection.t1 * length1;
     const distance2 = intersection.t2 * length2;
 
-    logger.debug(`Cross connect at line ${info.line}:`);
-    logger.debug(`  Intersection at (${intersection.worldPos.x.toFixed(2)}, ${intersection.worldPos.z.toFixed(2)})`);
-    logger.debug(`  piece1: t=${intersection.t1.toFixed(3)}, length=${length1.toFixed(1)}, distance=${distance1.toFixed(1)}`);
-    logger.debug(`  piece2: t=${intersection.t2.toFixed(3)}, length=${length2.toFixed(1)}, distance=${distance2.toFixed(1)}`);
+    logger.debug('cross', `Cross connect at line ${info.line}:`);
+    logger.debug('cross', `  Intersection at (${intersection.worldPos.x.toFixed(2)}, ${intersection.worldPos.z.toFixed(2)})`);
+    logger.debug('cross', `  piece1: t=${intersection.t1.toFixed(3)}, length=${length1.toFixed(1)}, distance=${distance1.toFixed(1)}`);
+    logger.debug('cross', `  piece2: t=${intersection.t2.toFixed(3)}, length=${length2.toFixed(1)}, distance=${distance2.toFixed(1)}`);
 
     // Create shared connection point ID for this intersection
     const sharedPointId = `cross_${piece1.id}_${piece2.id}`;
@@ -959,7 +1243,7 @@ class LayoutBuilder {
       worldPosition: { ...intersection.worldPos },
     });
 
-    logger.debug(`  Created shared internal connection point: ${sharedPointId}`);
+    logger.debug('cross', `  Created shared internal connection point: ${sharedPointId}`);
   }
 
   /**
@@ -1206,15 +1490,53 @@ class LayoutBuilder {
    * Uses geometric calculation to find curve+straight or straight+curve combination.
    */
   private performFlexConnect(info: FlexConnectInfo): void {
-    // Get the two labeled pieces
-    const piece1 = this.state.labeledPieces.get(info.point1Label);
-    const piece2 = this.state.labeledPieces.get(info.point2Label);
-
-    if (!piece1) {
-      throw new Error(`Unknown label '${info.point1Label}' in flex connect at line ${info.line}`);
+    // Get the two pieces — resolve '@' via captured piece ID, others via label lookup
+    let piece1: TrackPiece;
+    let label1ForNaming: string;
+    if (info.point1Label === '@') {
+      if (!info.point1CurrentPieceId) {
+        throw new Error(`No current piece for '@' in flex connect at line ${info.line}`);
+      }
+      const found = this.state.pieces.find(p => p.id === info.point1CurrentPieceId);
+      if (!found) {
+        throw new Error(`Current piece not found for '@' in flex connect at line ${info.line}`);
+      }
+      piece1 = found;
+      // Apply offset if present
+      if (info.point1Offset) {
+        if (info.point1Offset.direction === '+') {
+          throw new Error(`@ only supports negative offsets (@-N), not @+N, at line ${info.line}`);
+        }
+        piece1 = this.resolveOffsetFromPiece(piece1, info.point1Offset, '@', info.line);
+      }
+      label1ForNaming = piece1.label || piece1.id;
+    } else {
+      piece1 = this.resolveLabelWithOffset(info.point1Label, info.point1Offset, info.line);
+      label1ForNaming = info.point1Label;
     }
-    if (!piece2) {
-      throw new Error(`Unknown label '${info.point2Label}' in flex connect at line ${info.line}`);
+
+    let piece2: TrackPiece;
+    let label2ForNaming: string;
+    if (info.point2Label === '@') {
+      if (!info.point2CurrentPieceId) {
+        throw new Error(`No current piece for '@' in flex connect at line ${info.line}`);
+      }
+      const found = this.state.pieces.find(p => p.id === info.point2CurrentPieceId);
+      if (!found) {
+        throw new Error(`Current piece not found for '@' in flex connect at line ${info.line}`);
+      }
+      piece2 = found;
+      // Apply offset if present
+      if (info.point2Offset) {
+        if (info.point2Offset.direction === '+') {
+          throw new Error(`@ only supports negative offsets (@-N), not @+N, at line ${info.line}`);
+        }
+        piece2 = this.resolveOffsetFromPiece(piece2, info.point2Offset, '@', info.line);
+      }
+      label2ForNaming = piece2.label || piece2.id;
+    } else {
+      piece2 = this.resolveLabelWithOffset(info.point2Label, info.point2Offset, info.line);
+      label2ForNaming = info.point2Label;
     }
 
     // Get archetypes and connection points
@@ -1252,10 +1574,10 @@ class LayoutBuilder {
     // D2 is the incoming direction (opposite of connection point direction)
     const D2: Vec3 = { x: -dir2World.x, y: 0, z: -dir2World.z };
 
-    logger.debug(`Flex connect at line ${info.line}:`);
-    logger.debug(`  P1: (${P1.x.toFixed(2)}, ${P1.z.toFixed(2)}), D1: (${D1.x.toFixed(3)}, ${D1.z.toFixed(3)}) angle=${(Math.atan2(D1.z, D1.x) * 180 / Math.PI).toFixed(1)}°`);
-    logger.debug(`  P2: (${P2.x.toFixed(2)}, ${P2.z.toFixed(2)}), D2: (${D2.x.toFixed(3)}, ${D2.z.toFixed(3)}) angle=${(Math.atan2(D2.z, D2.x) * 180 / Math.PI).toFixed(1)}°`);
-    logger.debug(`  Distance: ${Math.sqrt((P2.x-P1.x)**2 + (P2.z-P1.z)**2).toFixed(2)}`);
+    logger.debug('flex', `Flex connect at line ${info.line}:`);
+    logger.debug('flex', `  P1: (${P1.x.toFixed(2)}, ${P1.z.toFixed(2)}), D1: (${D1.x.toFixed(3)}, ${D1.z.toFixed(3)}) angle=${(Math.atan2(D1.z, D1.x) * 180 / Math.PI).toFixed(1)}°`);
+    logger.debug('flex', `  P2: (${P2.x.toFixed(2)}, ${P2.z.toFixed(2)}), D2: (${D2.x.toFixed(3)}, ${D2.z.toFixed(3)}) angle=${(Math.atan2(D2.z, D2.x) * 180 / Math.PI).toFixed(1)}°`);
+    logger.debug('flex', `  Distance: ${Math.sqrt((P2.x-P1.x)**2 + (P2.z-P1.z)**2).toFixed(2)}`);
 
     // Try to find a valid straight+curve or curve+straight solution
     const solution = this.solveFlexConnect(P1, D1, P2, D2, info.line);
@@ -1266,13 +1588,13 @@ class LayoutBuilder {
     }
 
     if (solution.type === 'curve-curve') {
-      logger.debug(`  Solution: ${solution.type}, radius=${solution.radius.toFixed(2)}", arcAngle=${(solution.arcAngle! * 180 / Math.PI).toFixed(1)}°, dir1=${solution.curveDirection}, dir2=${solution.curveDirection2}`);
+      logger.debug('flex', `  Solution: ${solution.type}, radius=${solution.radius.toFixed(2)}", arcAngle=${(solution.arcAngle! * 180 / Math.PI).toFixed(1)}°, dir1=${solution.curveDirection}, dir2=${solution.curveDirection2}`);
     } else {
-      logger.debug(`  Solution: ${solution.type}, straight=${solution.straightLength.toFixed(2)}", radius=${solution.radius.toFixed(2)}", direction=${solution.curveDirection}`);
+      logger.debug('flex', `  Solution: ${solution.type}, straight=${solution.straightLength.toFixed(2)}", radius=${solution.radius.toFixed(2)}", direction=${solution.curveDirection}`);
     }
 
     // Create the flex track pieces (labels are derived from endpoint labels)
-    this.createFlexPieces(solution, piece1, info.point1Name, piece2, info.point2Name, info.point1Label, info.point2Label, info.line);
+    this.createFlexPieces(solution, piece1, info.point1Name, piece2, info.point2Name, label1ForNaming, label2ForNaming, info.line);
   }
 
   /**
@@ -1302,7 +1624,7 @@ class LayoutBuilder {
     const DIRECTION_TOLERANCE = 0.02; // Tolerance for direction alignment (cos should be > 0.98)
     const COLLINEAR_SIN_TOLERANCE = 0.02; // Tolerance for collinearity (sin of angle < 0.02 ≈ 1.1°)
 
-    logger.debug(`  Solving with delta=(${delta.x.toFixed(2)}, ${delta.z.toFixed(2)}), length=${deltaLength.toFixed(2)}`);
+    logger.debug('flex', `  Solving with delta=(${delta.x.toFixed(2)}, ${delta.z.toFixed(2)}), length=${deltaLength.toFixed(2)}`);
 
     // Check for straight-only case: D1 ≈ D2 and delta is parallel to D1 (same direction)
     const directionDot = D1.x * D2.x + D1.z * D2.z;  // cos(angle between D1 and D2)
@@ -1320,11 +1642,11 @@ class LayoutBuilder {
       deltaAlongD1 = cosAngle > 0.98;  // delta points in same direction as D1
     }
 
-    logger.debug(`  Direction dot=${directionDot.toFixed(4)}, aligned=${isDirectionAligned}, collinear=${isCollinear}, deltaAlongD1=${deltaAlongD1}`);
+    logger.debug('flex', `  Direction dot=${directionDot.toFixed(4)}, aligned=${isDirectionAligned}, collinear=${isCollinear}, deltaAlongD1=${deltaAlongD1}`);
 
     if (isDirectionAligned && isCollinear && deltaAlongD1 && deltaLength > 0.1) {
       // Straight-only solution
-      logger.debug(`  [straight-only] length=${deltaLength.toFixed(2)}"`);
+      logger.debug('flex', `  [straight-only] length=${deltaLength.toFixed(2)}"`);
       return {
         type: 'straight-only',
         straightLength: deltaLength,
@@ -1345,7 +1667,7 @@ class LayoutBuilder {
     const MAX_ARC_DEGREES = 270; // Reject curves greater than 270 degrees
     const maxArcRadians = MAX_ARC_DEGREES * Math.PI / 180;
 
-    logger.debug(`  Arc angle between D1 and D2: ${(arcAngle * 180 / Math.PI).toFixed(1)}°`);
+    logger.debug('flex', `  Arc angle between D1 and D2: ${(arcAngle * 180 / Math.PI).toFixed(1)}°`);
 
     // Try curve+straight and straight+curve combinations
     const solutions: FlexSolution[] = [];
@@ -1358,7 +1680,7 @@ class LayoutBuilder {
       if (result && result.L >= 0 && Math.abs(result.R) >= MIN_RADIUS) {
         // Reject if arc angle is too large (> 270 degrees)
         if (Math.abs(arcAngle) <= maxArcRadians) {
-          logger.debug(`  [str+curve] L=${result.L.toFixed(2)}, R=${result.R.toFixed(2)}`);
+          logger.debug('flex', `  [str+curve] L=${result.L.toFixed(2)}, R=${result.R.toFixed(2)}`);
           if (result.L < MIN_STRAIGHT) {
             // Curve-only solution
             solutions.push({
@@ -1378,7 +1700,7 @@ class LayoutBuilder {
             });
           }
         } else {
-          logger.debug(`  [str+curve] rejected: arc angle ${(arcAngle * 180 / Math.PI).toFixed(1)}° exceeds ${MAX_ARC_DEGREES}°`);
+          logger.debug('flex', `  [str+curve] rejected: arc angle ${(arcAngle * 180 / Math.PI).toFixed(1)}° exceeds ${MAX_ARC_DEGREES}°`);
         }
       }
     }
@@ -1391,7 +1713,7 @@ class LayoutBuilder {
       if (result && result.L >= 0 && Math.abs(result.R) >= MIN_RADIUS) {
         // Reject if arc angle is too large (> 270 degrees)
         if (Math.abs(arcAngle) <= maxArcRadians) {
-          logger.debug(`  [curve+str] L=${result.L.toFixed(2)}, R=${result.R.toFixed(2)}`);
+          logger.debug('flex', `  [curve+str] L=${result.L.toFixed(2)}, R=${result.R.toFixed(2)}`);
           if (result.L < MIN_STRAIGHT) {
             // Curve-only solution (avoid duplicates)
             const hasCurveOnly = solutions.some(s => s.type === 'curve-only');
@@ -1414,7 +1736,7 @@ class LayoutBuilder {
             });
           }
         } else {
-          logger.debug(`  [curve+str] rejected: arc angle ${(arcAngle * 180 / Math.PI).toFixed(1)}° exceeds ${MAX_ARC_DEGREES}°`);
+          logger.debug('flex', `  [curve+str] rejected: arc angle ${(arcAngle * 180 / Math.PI).toFixed(1)}° exceeds ${MAX_ARC_DEGREES}°`);
         }
       }
     }
@@ -1423,7 +1745,7 @@ class LayoutBuilder {
     if (isDirectionAligned && !isCollinear && deltaLength > 0.1) {
       const result = this.solveCurveCurve(D1, delta);
       if (result) {
-        logger.debug(`  [curve+curve] R=${result.radius.toFixed(2)}, θ=${(result.arcAngle * 180 / Math.PI).toFixed(1)}°, dir1=${result.dir1}, dir2=${result.dir2}`);
+        logger.debug('flex', `  [curve+curve] R=${result.radius.toFixed(2)}, θ=${(result.arcAngle * 180 / Math.PI).toFixed(1)}°, dir1=${result.dir1}, dir2=${result.dir2}`);
         solutions.push({
           type: 'curve-curve',
           straightLength: 0,
@@ -1437,9 +1759,9 @@ class LayoutBuilder {
     }
 
     if (solutions.length === 0) {
-      logger.debug(`No valid flex connect solution found at line ${line}`);
-      logger.debug(`  P1: (${P1.x.toFixed(2)}, ${P1.z.toFixed(2)}), D1: (${D1.x.toFixed(3)}, ${D1.z.toFixed(3)})`);
-      logger.debug(`  P2: (${P2.x.toFixed(2)}, ${P2.z.toFixed(2)}), D2: (${D2.x.toFixed(3)}, ${D2.z.toFixed(3)})`);
+      logger.debug('flex', `No valid flex connect solution found at line ${line}`);
+      logger.debug('flex', `  P1: (${P1.x.toFixed(2)}, ${P1.z.toFixed(2)}), D1: (${D1.x.toFixed(3)}, ${D1.z.toFixed(3)})`);
+      logger.debug('flex', `  P2: (${P2.x.toFixed(2)}, ${P2.z.toFixed(2)}), D2: (${D2.x.toFixed(3)}, ${D2.z.toFixed(3)})`);
       return null;
     }
 
@@ -1532,17 +1854,17 @@ class LayoutBuilder {
     const pr = this.perpRight(D1);
     const h = delta.x * pr.x + delta.z * pr.z;           // lateral distance (positive = right)
 
-    logger.debug(`  [curve-curve] f=${f.toFixed(2)}, h=${h.toFixed(2)}`);
+    logger.debug('flex', `  [curve-curve] f=${f.toFixed(2)}, h=${h.toFixed(2)}`);
 
     // P2 must be ahead of P1 along D1
     if (f <= 0.1) {
-      logger.debug(`  [curve-curve] rejected: f=${f.toFixed(2)} <= 0.1 (P2 not ahead of P1)`);
+      logger.debug('flex', `  [curve-curve] rejected: f=${f.toFixed(2)} <= 0.1 (P2 not ahead of P1)`);
       return null;
     }
 
     // Must have lateral offset
     if (Math.abs(h) < 0.1) {
-      logger.debug(`  [curve-curve] rejected: |h|=${Math.abs(h).toFixed(2)} < 0.1 (no lateral offset)`);
+      logger.debug('flex', `  [curve-curve] rejected: |h|=${Math.abs(h).toFixed(2)} < 0.1 (no lateral offset)`);
       return null;
     }
 
@@ -1552,20 +1874,20 @@ class LayoutBuilder {
     // R = f / (2 * sin(θ))
     const sinTheta = Math.sin(theta);
     if (Math.abs(sinTheta) < 0.0001) {
-      logger.debug(`  [curve-curve] rejected: sin(θ) ≈ 0`);
+      logger.debug('flex', `  [curve-curve] rejected: sin(θ) ≈ 0`);
       return null;
     }
     const R = f / (2 * sinTheta);
 
-    logger.debug(`  [curve-curve] θ=${(theta * 180 / Math.PI).toFixed(1)}°, R=${R.toFixed(2)}"`);
+    logger.debug('flex', `  [curve-curve] θ=${(theta * 180 / Math.PI).toFixed(1)}°, R=${R.toFixed(2)}"`);
 
     // Validity checks
     if (R < MIN_RADIUS) {
-      logger.debug(`  [curve-curve] rejected: R=${R.toFixed(2)} < ${MIN_RADIUS}`);
+      logger.debug('flex', `  [curve-curve] rejected: R=${R.toFixed(2)} < ${MIN_RADIUS}`);
       return null;
     }
     if (theta > maxArcRadians) {
-      logger.debug(`  [curve-curve] rejected: θ=${(theta * 180 / Math.PI).toFixed(1)}° > ${MAX_ARC_DEGREES}°`);
+      logger.debug('flex', `  [curve-curve] rejected: θ=${(theta * 180 / Math.PI).toFixed(1)}° > ${MAX_ARC_DEGREES}°`);
       return null;
     }
 
@@ -1613,6 +1935,7 @@ class LayoutBuilder {
         rotation: Math.atan2(solution.D1.z, solution.D1.x),
         connections: new Map(),
         label: straightLabel,
+        sourceLine: line,
       };
 
       // Register label for later reference
@@ -1624,7 +1947,7 @@ class LayoutBuilder {
 
       this.state.pieces.push(straightPiece);
 
-      logger.debug(`Flex connect at line ${line}: straight-only(${solution.straightLength.toFixed(2)}") labeled "${straightLabel}"`);
+      logger.debug('flex', `Flex connect at line ${line}: straight-only(${solution.straightLength.toFixed(2)}") labeled "${straightLabel}"`);
     } else if (solution.type === 'curve-only') {
       // Create only a curve piece
       // curveDirection is always 'left' or 'right' for curve-only solutions
@@ -1645,6 +1968,7 @@ class LayoutBuilder {
         rotation: Math.atan2(solution.D1.z, solution.D1.x),
         connections: new Map(),
         label: curveLabel,
+        sourceLine: line,
       };
 
       // Register label for later reference
@@ -1656,7 +1980,7 @@ class LayoutBuilder {
 
       this.state.pieces.push(curvePiece);
 
-      logger.debug(`Flex connect at line ${line}: curve-only(R=${solution.radius.toFixed(2)}", ${solution.curveDirection}) labeled "${curveLabel}"`);
+      logger.debug('flex', `Flex connect at line ${line}: curve-only(R=${solution.radius.toFixed(2)}", ${solution.curveDirection}) labeled "${curveLabel}"`);
     } else if (solution.type === 'straight-curve') {
       // Create straight piece first, then curve
       const straightArch = this.createFlexStraightArchetype(
@@ -1683,6 +2007,7 @@ class LayoutBuilder {
         rotation: Math.atan2(solution.D1.z, solution.D1.x),
         connections: new Map(),
         label: straightLabel,
+        sourceLine: line,
       };
 
       // Curve starts where straight ends
@@ -1699,6 +2024,7 @@ class LayoutBuilder {
         rotation: Math.atan2(solution.D1.z, solution.D1.x),
         connections: new Map(),
         label: curveLabel,
+        sourceLine: line,
       };
 
       // Register labels for later reference
@@ -1714,7 +2040,7 @@ class LayoutBuilder {
 
       this.state.pieces.push(straightPiece, curvePiece);
 
-      logger.debug(`Flex connect at line ${line}: straight(${solution.straightLength.toFixed(2)}") labeled "${straightLabel}" + ${solution.curveDirection} curve(R=${solution.radius.toFixed(2)}") labeled "${curveLabel}"`);
+      logger.debug('flex', `Flex connect at line ${line}: straight(${solution.straightLength.toFixed(2)}") labeled "${straightLabel}" + ${solution.curveDirection} curve(R=${solution.radius.toFixed(2)}") labeled "${curveLabel}"`);
     } else if (solution.type === 'curve-straight') {
       // Create curve piece first, then straight (curve-straight case)
       // curveDirection is always 'left' or 'right' for curve-straight solutions
@@ -1740,6 +2066,7 @@ class LayoutBuilder {
         rotation: Math.atan2(solution.D1.z, solution.D1.x),
         connections: new Map(),
         label: curveLabel,
+        sourceLine: line,
       };
 
       // Straight starts where curve ends (P2 - L * D2)
@@ -1756,6 +2083,7 @@ class LayoutBuilder {
         rotation: Math.atan2(solution.D2.z, solution.D2.x),
         connections: new Map(),
         label: straightLabel,
+        sourceLine: line,
       };
 
       // Register labels for later reference
@@ -1771,7 +2099,7 @@ class LayoutBuilder {
 
       this.state.pieces.push(curvePiece, straightPiece);
 
-      logger.debug(`Flex connect at line ${line}: ${solution.curveDirection} curve(R=${solution.radius.toFixed(2)}") labeled "${curveLabel}" + straight(${solution.straightLength.toFixed(2)}") labeled "${straightLabel}"`);
+      logger.debug('flex', `Flex connect at line ${line}: ${solution.curveDirection} curve(R=${solution.radius.toFixed(2)}") labeled "${curveLabel}" + straight(${solution.straightLength.toFixed(2)}") labeled "${straightLabel}"`);
     } else {
       // curve-curve (S-curve): two symmetric curves of equal radius
       const curve1Label = `${label1}_${label2}_crv1`;
@@ -1828,6 +2156,7 @@ class LayoutBuilder {
         rotation: Math.atan2(solution.D1.z, solution.D1.x),
         connections: new Map(),
         label: curve1Label,
+        sourceLine: line,
       };
 
       const curve2Piece: TrackPiece = {
@@ -1837,6 +2166,7 @@ class LayoutBuilder {
         rotation: Math.atan2(Dm.z, Dm.x),
         connections: new Map(),
         label: curve2Label,
+        sourceLine: line,
       };
 
       // Register labels
@@ -1850,7 +2180,7 @@ class LayoutBuilder {
 
       this.state.pieces.push(curve1Piece, curve2Piece);
 
-      logger.debug(`Flex connect at line ${line}: S-curve ${dir1} curve(R=${solution.radius.toFixed(2)}", θ=${(theta * 180 / Math.PI).toFixed(1)}°) labeled "${curve1Label}" + ${dir2} curve labeled "${curve2Label}"`);
+      logger.debug('flex', `Flex connect at line ${line}: S-curve ${dir1} curve(R=${solution.radius.toFixed(2)}", θ=${(theta * 180 / Math.PI).toFixed(1)}°) labeled "${curve1Label}" + ${dir2} curve labeled "${curve2Label}"`);
     }
   }
 
@@ -1981,11 +2311,8 @@ class LayoutBuilder {
     let pointName: string;
 
     if (splice.label) {
-      // Use labeled piece
-      splicePiece = this.state.labeledPieces.get(splice.label);
-      if (!splicePiece) {
-        throw new Error(`Unknown label '${splice.label}' in splice at line ${splice.line}`);
-      }
+      // Use labeled piece (with optional offset traversal)
+      splicePiece = this.resolveLabelWithOffset(splice.label, splice.offset, splice.line);
       pointName = splice.point || 'out';
     } else {
       // Use current piece (captured when splice statement was processed)
@@ -2205,6 +2532,7 @@ class LayoutBuilder {
       position: { ...piece.position },
       rotation: piece.rotation,
       connections: new Map(),
+      sourceLine: piece.sourceLine,
     };
 
     const pieceB: TrackPiece = {
@@ -2213,6 +2541,7 @@ class LayoutBuilder {
       position: { ...piece.position },
       rotation: piece.rotation,
       connections: new Map(),
+      sourceLine: piece.sourceLine,
     };
 
     // Transfer connections from original piece
@@ -2377,38 +2706,272 @@ class LayoutBuilder {
     for (const group of groups) {
       if (group.length < 2) continue;
 
+      // Build a transitive connectivity graph within this group to avoid
+      // creating spurious bypass connections through zero-length pieces.
+      // Zero-length pieces (spd, sem, dec, tun, ph, bin) have both connection
+      // points at the same position, so all 4 points (e.g., str.out, spd.in,
+      // spd.out, str.in) end up in the same group. Without this check, the
+      // algorithm would auto-connect str.out↔str.in, bypassing the spd piece.
+      const pointKeys = new Set<string>();
+      const adj = new Map<string, Set<string>>();
+      const keyOf = (p: { piece: { id: string }, pointName: string }) =>
+        `${p.piece.id}.${p.pointName}`;
+
+      for (const p of group) {
+        const k = keyOf(p);
+        pointKeys.add(k);
+        if (!adj.has(k)) adj.set(k, new Set());
+      }
+
+      // Internal edges: two connection points on the same piece both in group
+      const byPiece = new Map<string, string[]>();
+      for (const p of group) {
+        const arr = byPiece.get(p.piece.id) || [];
+        arr.push(keyOf(p));
+        byPiece.set(p.piece.id, arr);
+      }
+      for (const keys of byPiece.values()) {
+        for (let i = 0; i < keys.length; i++) {
+          for (let j = i + 1; j < keys.length; j++) {
+            adj.get(keys[i])!.add(keys[j]);
+            adj.get(keys[j])!.add(keys[i]);
+          }
+        }
+      }
+
+      // External edges: existing explicit connections between points in group
+      for (const p of group) {
+        const conns = p.piece.connections.get(p.pointName) || [];
+        for (const c of conns) {
+          const targetKey = `${c.pieceId}.${c.pointName}`;
+          if (pointKeys.has(targetKey)) {
+            const pk = keyOf(p);
+            adj.get(pk)!.add(targetKey);
+            adj.get(targetKey)!.add(pk);
+          }
+        }
+      }
+
+      // BFS reachability check
+      const isReachable = (startKey: string, endKey: string): boolean => {
+        if (startKey === endKey) return true;
+        const visited = new Set<string>([startKey]);
+        const queue = [startKey];
+        while (queue.length > 0) {
+          const cur = queue.shift()!;
+          for (const nb of adj.get(cur) || []) {
+            if (nb === endKey) return true;
+            if (!visited.has(nb)) {
+              visited.add(nb);
+              queue.push(nb);
+            }
+          }
+        }
+        return false;
+      };
+
+      // Generate all pairs sorted by index distance (j-i) ascending so that
+      // adjacent sequential pieces are connected before longer-range pairs.
+      // This ensures that when we later check whether piece_A.out→piece_B.in
+      // is reachable through a zero-length piece between them, the intermediate
+      // connections have already been established in adj.
+      const pairs: [number, number][] = [];
       for (let i = 0; i < group.length; i++) {
         for (let j = i + 1; j < group.length; j++) {
-          const a = group[i];
-          const b = group[j];
+          pairs.push([i, j]);
+        }
+      }
+      pairs.sort((pa, pb) => (pa[1] - pa[0]) - (pb[1] - pb[0]));
 
-          // Skip if same piece
-          if (a.piece.id === b.piece.id) continue;
+      for (const [i, j] of pairs) {
+        const a = group[i];
+        const b = group[j];
 
-          // Get existing connections for point a
-          const aConnections = a.piece.connections.get(a.pointName) || [];
+        // Skip if same piece
+        if (a.piece.id === b.piece.id) continue;
 
-          // Skip if already connected to each other
-          const alreadyConnected = aConnections.some(
-            c => c.pieceId === b.piece.id && c.pointName === b.pointName
+        // Get existing connections for point a
+        const aConnections = a.piece.connections.get(a.pointName) || [];
+
+        // Skip if already connected to each other
+        const alreadyConnected = aConnections.some(
+          c => c.pieceId === b.piece.id && c.pointName === b.pointName
+        );
+        if (alreadyConnected) continue;
+
+        // Check directions are opposite (dot product close to -1)
+        const dot = a.worldDir.x * b.worldDir.x + a.worldDir.z * b.worldDir.z;
+        if (dot > -1 + DIRECTION_TOLERANCE) continue;
+
+        // Skip if already transitively connected through zero-length pieces.
+        // Uses the adj graph which is updated incrementally as connections are
+        // made, so earlier (closer) pairs' connections are visible here.
+        if (isReachable(keyOf(a), keyOf(b))) continue;
+
+        // Auto-connect!
+        const aConns = a.piece.connections.get(a.pointName) || [];
+        aConns.push({ pieceId: b.piece.id, pointName: b.pointName, isAutoConnect: true });
+        a.piece.connections.set(a.pointName, aConns);
+
+        const bConns = b.piece.connections.get(b.pointName) || [];
+        bConns.push({ pieceId: a.piece.id, pointName: a.pointName, isAutoConnect: true });
+        b.piece.connections.set(b.pointName, bConns);
+
+        // Update adj so future pairs in this group see this connection
+        const ak = keyOf(a);
+        const bk = keyOf(b);
+        adj.get(ak)!.add(bk);
+        adj.get(bk)!.add(ak);
+      }
+    }
+  }
+
+  /**
+   * Validate the layout after auto-connect and report structural problems.
+   * Checks:
+   *   1. Zero-length pieces that appear as a branch of a switch
+   *   2. Pieces not reachable from any other piece (disconnected island)
+   *   3. Pieces with connection points that have no connections
+   * Returns array of warning strings; also logs each at WARN level.
+   */
+  private validateLayout(): string[] {
+    const warnings: string[] = [];
+
+    const pieceDesc = (p: { id: string; label?: string; archetypeCode: string; sourceLine?: number }) => {
+      const label = p.label ? ` [${p.label}]` : '';
+      const line = p.sourceLine ? ` (L:${p.sourceLine})` : '';
+      return `${p.id}${label}${line} (${p.archetypeCode})`;
+    };
+
+    // -----------------------------------------------------------------------
+    // Check 1: Zero-length pieces as switch branch targets
+    //   A switch exists wherever a connection point has >1 connections.
+    //   If any target piece has no sections (zero physical length), flag it.
+    //   Exception: the ph archetype is designed as a zero-length junction
+    //   marker, but even ph shouldn't appear as a switch branch target.
+    // -----------------------------------------------------------------------
+    const reportedZeroLengthPairs = new Set<string>(); // avoid duplicate reports
+    for (const piece of this.state.pieces) {
+      for (const [pointName, conns] of piece.connections.entries()) {
+        if (conns.length <= 1) continue; // single connection → not a switch
+
+        for (const conn of conns) {
+          const target = this.state.pieces.find(p => p.id === conn.pieceId);
+          if (!target) continue;
+          const targetArch = getArchetype(target.archetypeCode);
+          if (!targetArch || targetArch.sections.length > 0) continue; // non-zero-length → ok
+
+          // Deduplicate: report each (switch-point, zero-length-target) pair once
+          const pairKey = `${piece.id}.${pointName}→${target.id}`;
+          if (reportedZeroLengthPairs.has(pairKey)) continue;
+          reportedZeroLengthPairs.add(pairKey);
+
+          warnings.push(
+            `Zero-length piece ${pieceDesc(target)} is a branch of switch at ${piece.id}.${pointName}`
           );
-          if (alreadyConnected) continue;
-
-          // Check directions are opposite (dot product close to -1)
-          const dot = a.worldDir.x * b.worldDir.x + a.worldDir.z * b.worldDir.z;
-          if (dot > -1 + DIRECTION_TOLERANCE) continue;
-
-          // Auto-connect!
-          const aConns = a.piece.connections.get(a.pointName) || [];
-          aConns.push({ pieceId: b.piece.id, pointName: b.pointName, isAutoConnect: true });
-          a.piece.connections.set(a.pointName, aConns);
-
-          const bConns = b.piece.connections.get(b.pointName) || [];
-          bConns.push({ pieceId: a.piece.id, pointName: a.pointName, isAutoConnect: true });
-          b.piece.connections.set(b.pointName, bConns);
         }
       }
     }
+
+    // -----------------------------------------------------------------------
+    // Check 2: Unreachable pieces
+    //   BFS from the first piece through all connections. Any piece not
+    //   reached is isolated (either a disconnected island or floating).
+    // -----------------------------------------------------------------------
+    if (this.state.pieces.length > 0) {
+      const visited = new Set<string>();
+      const queue: string[] = [this.state.pieces[0].id];
+      visited.add(this.state.pieces[0].id);
+
+      while (queue.length > 0) {
+        const pieceId = queue.shift()!;
+        const piece = this.state.pieces.find(p => p.id === pieceId);
+        if (!piece) continue;
+        for (const conns of piece.connections.values()) {
+          for (const conn of conns) {
+            if (!visited.has(conn.pieceId)) {
+              visited.add(conn.pieceId);
+              queue.push(conn.pieceId);
+            }
+          }
+        }
+      }
+
+      for (const piece of this.state.pieces) {
+        if (!visited.has(piece.id)) {
+          warnings.push(`Piece ${pieceDesc(piece)} is not reachable from any other piece`);
+        }
+      }
+    }
+
+    // -----------------------------------------------------------------------
+    // Check 3: Unconnected endpoints
+    //   Every connection point should have at least one connection, except
+    //   for intentionally terminal points:
+    //     bump.out  — buffer-stop dead end
+    //     gen.in    — hidden back end of generator housing
+    //     bin.out   — for placement alignment only
+    // -----------------------------------------------------------------------
+    // Map from archetype code → set of point names exempt from this check
+    const exemptTerminals: Record<string, Set<string>> = {
+      bump: new Set(['out']),
+      gen:  new Set(['in']),
+      bin:  new Set(['out']),
+    };
+
+    for (const piece of this.state.pieces) {
+      const arch = getArchetype(piece.archetypeCode);
+      if (!arch) continue;
+      const exempt = exemptTerminals[piece.archetypeCode];
+
+      for (const cp of arch.connectionPoints) {
+        if (exempt?.has(cp.name)) continue;
+        const conns = piece.connections.get(cp.name);
+        if (!conns || conns.length === 0) {
+          warnings.push(
+            `Piece ${pieceDesc(piece)} has unconnected endpoint '${cp.name}'`
+          );
+        }
+      }
+    }
+
+    return warnings;
+  }
+
+  /**
+   * Dump the connection graph to the console for debugging.
+   * Enable with `log debug graph` in the layout DSL.
+   * Output format per piece:
+   *   piece_id (archetype, L:line) [label] pos=(x, z) rot=deg°
+   *     pointName: → target_id.pointName (explicit|auto)
+   */
+  private dumpConnectionGraph(): void {
+    if (!logger.isEnabled('debug', 'graph')) return;
+
+    const lines: string[] = ['=== CONNECTION GRAPH ==='];
+    for (const piece of this.state.pieces) {
+      const labelStr = piece.label ? ` [${piece.label}]` : '';
+      const lineStr = piece.sourceLine ? `, L:${piece.sourceLine}` : '';
+      const speedStr = piece.speedLimitConfig ? ` spd=${piece.speedLimitConfig.limit}` : '';
+      const header = `${piece.id} (${piece.archetypeCode}${lineStr})${labelStr} pos=(${piece.position.x.toFixed(1)}, ${piece.position.z.toFixed(1)}) rot=${(piece.rotation * 180 / Math.PI).toFixed(1)}°${speedStr}`;
+      lines.push(header);
+
+      for (const [pointName, conns] of piece.connections.entries()) {
+        if (conns.length === 0) {
+          lines.push(`  ${pointName}: (unconnected)`);
+        } else {
+          for (const c of conns) {
+            const targetPiece = this.state.pieces.find(p => p.id === c.pieceId);
+            const targetLabel = targetPiece?.label ? ` [${targetPiece.label}]` : '';
+            const targetLine = targetPiece?.sourceLine ? `(L:${targetPiece.sourceLine})` : '';
+            const connType = c.isAutoConnect ? 'auto' : 'explicit';
+            lines.push(`  ${pointName}: → ${c.pieceId}.${c.pointName} ${targetLine}${targetLabel} (${connType})`);
+          }
+        }
+      }
+    }
+    lines.push('=== END CONNECTION GRAPH ===');
+    logger.debug('graph', lines.join('\n'));
   }
 
   /**

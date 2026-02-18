@@ -360,9 +360,11 @@ Track is rendered with realistic components visible from the top-down view:
 - The angle is negated when applied to `mesh.rotation.y` because Three.js Y rotation convention (clockwise from above) is opposite to our coordinate system (counter-clockwise)
 
 **Generator/Bin/Tunnel visuals:**
-- Generator: green circle, radius 1.5 inches
-- Bin: red circle, radius 1.5 inches
-- Tunnel: Two dark gray bracket shapes ([ ]) facing opposite directions, 3" wide × 0.8" deep × 1.5" tall. Each bracket opens toward the visible track (outside the tunnel). Uses ExtrudeGeometry with a custom Shape.
+- Generator: Two green bracket shapes ([ ]) facing opposite directions (same geometry as tunnel portals), plus an invisible click-target circle (radius 1.5") for double-click detection
+- Bin: Two red bracket shapes ([ ]) facing opposite directions
+- Tunnel: Two dark gray bracket shapes ([ ]) facing opposite directions, 4.2" wide × 0.8" deep × 1.5" tall. Each bracket opens toward the visible track (outside the tunnel). Uses ExtrudeGeometry with a custom Shape.
+- All three share `renderPortalBrackets(piece, color): THREE.Mesh[]` — extracts bracket geometry into one helper called by generator, bin, and tunnel renderers.
+- Generator's invisible click target: `CircleGeometry(1.5)` with `opacity: 0`, `visible: true`, carrying `userData.isGenerator` — raycasting detects transparent objects with `visible=true`, so click handling is preserved while showing the bracket visual.
 
 **Generator internal track:**
 - Generator has a 50" internal track section (invisible, like a tunnel)
@@ -665,6 +667,14 @@ The `flex connect` statement creates custom track pieces to bridge gaps between 
 - Also check that delta points same direction as D1 (dot > 0.98)
 - Tolerance: sin(angle) < 0.02 ≈ 1.1° deviation
 
+**`@` shorthand for current piece:**
+- `@` or `@.point` can be used in place of `$label.point` in flex connect arguments
+- Follows the same pattern as splice (which also supports omitting the label to use the current piece)
+- The current piece and connection point are captured at statement time in `processFlexConnect()`, stored as `currentPieceId`/`currentPointName` on `FlexConnectInfo`
+- Resolved in `performFlexConnect()` by looking up the piece by ID from `this.state.pieces`
+- The sentinel label `'@'` is safe from collisions — real labels must match `[a-zA-Z_][a-zA-Z0-9_]*`
+- Auto-generated flex piece labels use the resolved piece's `.label` property if it has one, otherwise the piece's `.id`
+
 **Runtime archetypes:**
 - Flex pieces use dynamically created archetypes registered at runtime
 - Straight: Simple two-point spline with calculated length
@@ -691,6 +701,18 @@ After all pieces and flex connects are processed, auto-connect scans for connect
 - Flex connect creates explicit connections between its pieces and the endpoints
 - Auto-connect then adds connections between adjacent pieces (like s2→f2) even if one endpoint is also a flex endpoint
 - This creates proper virtual switches where trains can arrive from multiple paths
+
+**Zero-length piece bypass prevention:**
+- Zero-length pieces (`spd`, `sem`, `dec`, `tun`, `ph`, `bin`) have both connection points at the same world position
+- When placed between two regular pieces (e.g., `str → spd → str`), all 4 points end up in the same position group
+- Without protection, auto-connect would create `str.out → str.in` directly, bypassing the zero-length piece
+- Fix: Before auto-connecting a pair (A, B), build a transitive connectivity graph within the group using internal edges (same-piece points) and external edges (existing explicit connections), then BFS to check if A and B are already reachable — if so, skip
+- This preserves intentional virtual switches (ph junctions with multiple branches) because separate branches are not transitively connected
+
+**Connection graph debugging:**
+- `log debug graph` dumps the full connection graph after layout building
+- Output shows each piece with its ID, archetype, source line, label, position, rotation, speed limit config, and all connections (explicit vs auto)
+- Uses `logger.isEnabled('debug', 'graph')` to avoid building the dump string when not needed
 
 ## UI: Labels Toggle
 
@@ -1558,6 +1580,153 @@ Toolbar buttons use context-sensitive labels:
 The Design/Clean button also toggles the scenery grid overlay visibility alongside track labels and connection points.
 
 Both HTML defaults and JavaScript toggle functions update `textContent` accordingly.
+
+## Assign Statement
+
+The `assign` statement assigns a label to an existing track piece by counting forward or backward from an already-labeled piece. This enables adding branches to compact track definitions (like `str * 8`) without restructuring them into individual labeled pieces.
+
+**DSL syntax:**
+```
+assign <label> to <target> +/- N
+```
+
+**Design decisions:**
+
+- **Position-matching traversal (not connection-graph traversal):** ASSIGN must be processed during the main build loop so that labels it creates are immediately available for subsequent `$label` references. However, sequential connections between pieces are only established by auto-connect at the END of building. The solution traverses by physical position/direction matching — the same logic auto-connect uses (position tolerance 0.5", direction dot product < -0.9) — but applied on-demand for each step.
+
+- **Forward = out, backward = in:** The traversal direction maps to connection point names. Forward (+) exits via the piece's `out` point, backward (-) exits via `in`. At each step, after arriving at a piece through its entry point, the builder uses `getOppositePoint()` to determine the exit point for the next step.
+
+- **Ambiguity rejection:** If multiple pieces match at any traversal step (e.g., at a virtual switch), the builder throws an error rather than guessing which path to follow. Users should use explicit labels for pieces at branch points.
+
+- **Label immutability:** The assigned label is stored in `labeledPieces` and optionally set on the piece's `label` field (only if the piece doesn't already have one). This prevents overwriting labels assigned by inline `label: piece` syntax.
+
+**Implementation:**
+1. **Lexer:** Four new token types: `ASSIGN`, `TO`, `PLUS`, `MINUS`. The `+` and `-` characters are tokenized as operators; standalone `-` (not followed by a digit) becomes MINUS while `-digit` remains a negative NUMBER.
+2. **Parser:** `AssignStatement` interface with label, targetLabel, direction, count fields. Handles both `+ N` (separate tokens) and `-N` (single negative number token) forms.
+3. **Builder:** `processAssign()` validates labels and calls `findNextPieceAlongTrack()` for each step. The helper computes world position/direction of exit points and scans all placed pieces for a matching connection point with opposite direction.
+
+**Why not deferred processing (like splice/flex):**
+- Splice and flex connect are deferred to after all pieces are placed because they only create connections, not labels.
+- ASSIGN creates labels that subsequent build statements may reference (`$label`), so it must execute during the main build loop.
+
+## Label Offset Syntax
+
+The `$label+N` / `$label-N` syntax provides inline traversal offsets for label references, working anywhere `$label` references are used (references, new-from, loop close, flex connect, cross connect, splice).
+
+**Design decisions:**
+
+- **Inline traversal, no label creation:** Unlike `assign`, which creates a persistent named label, `$label+N` is a temporary traversal resolved at the point of use. This keeps the labeled piece map clean and avoids namespace pollution for one-off references.
+
+- **Reuses `findNextPieceAlongTrack()`:** The same position-matching traversal logic used by `assign` is shared via a common `resolveLabelWithOffset()` helper in the builder. Forward (+) exits via `out`, backward (-) exits via `in`, with the same 0.5" position tolerance and direction-opposite matching.
+
+- **Parser approach:** A `parseLabelOffset()` helper is called after every LABEL_REF token consumption. It handles `PLUS NUMBER`, `MINUS NUMBER`, and negative `NUMBER` (for `$label-3` where the lexer may produce a single negative number token). The offset is stored as an optional `LabelOffset` field on the AST node.
+
+- **Works in all label contexts:** The offset is propagated through `parseConnectionPointRef()` (used by `new`, `flex connect`, `splice`) and standalone parse methods (`parseReference`, `parsePointLabelReference`, `parseLoopClose`, `parseCrossConnectStatement`). In the builder, all label resolution call sites use `resolveLabelWithOffset()`.
+
+## Speed Limit Archetype
+
+A zero-length track piece (`spd N`) that sets a speed cap for passing trains. Follows the same zero-length pattern as `sem`, `dec`, `ph`, `tun`.
+
+**Design decisions:**
+- Per-train `speedLimit` field tracks the current limit, initialized to the generator's resolved speed at spawn
+- Effective target speed = `min(desiredSpeed, speedLimit)` — trains use normal braking/acceleration to reach it, no emergency stop
+- `moveCar()` returns `string[]` of zero-length piece IDs traversed during the move, enabling the simulation to detect when the lead car passes through a `spd` piece
+- Only the lead car's traversals update the train's speed limit — trailing cars passing the sign don't re-trigger it
+- Split trains inherit the parent's speed limit; coupled trains keep their own
+- Default limit if N is omitted: 12 inches/second
+
+**Zero-length piece detection robustness:**
+The initial zero-length loop in `moveCar()` only fires when the car STARTS a frame on a zero-length piece. When the overflow handler transitions a car onto a zero-length piece mid-frame, the piece isn't recorded until the next frame — a one-frame delay. Additionally, the underflow handler explicitly refuses to enter zero-length pieces (`nextSectionLength === 0 → break`), blocking cars with `sectionDirection === -1` from ever reaching the piece. To fix both cases, `moveCar()` performs a final check after all overflow/underflow handling:
+1. If the car ended up on a zero-length piece (from overflow), record it immediately
+2. If the car is at `distanceAlongSection === 0` on a normal piece (underflow blocked), check the adjacent piece via 'in' and record it if zero-length
+
+**Rendering:**
+- Uses `CanvasTexture` on a `PlaneGeometry(5.0, 5.0)` laid flat in the X-Z plane
+- 128x128 canvas draws a white filled circle with dark gray border and bold black speed number
+- Font size adapts for 3+ digit numbers (48px vs 64px)
+- Positioned at Y=0.7 (same elevation as semaphore dots) for consistent visual layer
+
+## Tauri Native Window Title
+
+In Tauri v1, `document.title` changes are NOT reflected in the native OS window title bar. The WebView renders `document.title` in its own tab-style chrome, but the native window title is independent.
+
+**Fix:** Use `appWindow.setTitle()` from `@tauri-apps/api/window`:
+```typescript
+import { appWindow } from '@tauri-apps/api/window';
+
+appWindow.setTitle(title).catch(() => { /* silently ignore in browser mode */ });
+```
+
+**Required allowlist entry (`src-tauri/tauri.conf.json`):**
+```json
+"allowlist": {
+  "window": { "setTitle": true }
+}
+```
+
+**Design decisions:**
+- `.catch(() => {})` suppresses the error when running in browser (non-Tauri) mode — the browser doesn't have `appWindow`, so the call fails silently
+- Both `document.title` and `appWindow.setTitle()` are set for compatibility: browser tab vs. native window
+- The allowlist addition requires a full restart of `npm run tauri dev`; HMR does not pick up `tauri.conf.json` changes
+
+**Used in:** `applyLayoutWarnings()` in `src/main.ts` to surface layout validation warnings in the OS window title bar (e.g., "⚠ 3 layout warnings - Tren").
+
+## Flex Connect Ordering Constraint
+
+`flex connect` statements are deferred: `processFlexConnect()` queues them for execution after all pieces are placed, and does NOT advance `this.state.currentPiece`. This means any piece placed AFTER a `flex connect` statement on the same chain connects to the same piece that `@` captured — creating an unintended branch.
+
+**Consequence:** `speedlimit` (or any other piece) placed after `flex connect` becomes a dead-end branch at the captured piece, generating two layout warnings:
+1. "is a branch of switch at piece_NNN.out"
+2. "has unconnected endpoint 'out'"
+
+**Rule:** DSL statements that place track pieces must come BEFORE `flex connect` on the same chain, not after.
+
+**Example (incorrect):**
+```
+crvr * 2
+flex connect @ $crv3 - 14
+speedlimit 20          # BUG: connects to crvr, becomes dead-end
+```
+
+**Example (correct):**
+```
+crvr * 2
+speedlimit 20          # OK: connects to crvr as intended
+flex connect @ $crv3 - 14
+```
+
+This is documented as a constraint rather than a fix in the parser/builder because deferring flex connect is intentional (it needs world positions of all pieces to compute the geometry).
+
+## Camera-View-Aware Scenery Bounds
+
+`renderScenery()` originally computed tree/pond placement bounds as track bounding box expanded by a fixed 30% (`BOUNDS_EXPANSION = 0.30`). For tall layouts on widescreen monitors, `fitToLayout()` computes a much wider camera view (using the window aspect ratio), leaving uncovered strips on screen edges.
+
+**Root cause:** `fitToLayout()` derives camera view width as `rawSizeZ * aspect / 0.9` when the layout is taller than it is wide on the screen. This can be 2–3× wider than `rawSizeX * 1.3`.
+
+**Fix:** Compute the same camera half-extents as `fitToLayout()` using `scene.getContainerAspect()`, then take the max of (original 30% expansion, camera view + 10% buffer):
+
+```typescript
+const aspect = scene.getContainerAspect();
+const layoutAspect = rawSizeX / rawSizeZ;
+let cameraHalfW: number, cameraHalfH: number;
+if (layoutAspect > aspect) {
+  cameraHalfW = rawSizeX / (2 * 0.9);
+  cameraHalfH = cameraHalfW / aspect;
+} else {
+  cameraHalfH = rawSizeZ / (2 * 0.9);
+  cameraHalfW = cameraHalfH * aspect;
+}
+const buffer = Math.max(rawSizeX, rawSizeZ) * 0.10;
+bounds.minX = Math.min(bounds.minX - sizeX * BOUNDS_EXPANSION, centerX - cameraHalfW - buffer);
+bounds.maxX = Math.max(bounds.maxX + sizeX * BOUNDS_EXPANSION, centerX + cameraHalfW + buffer);
+// … same for Z
+```
+
+**`getContainerAspect()` method** added to `TrackScene` in `scene.ts`: returns `container.clientWidth / container.clientHeight`.
+
+**Design decisions:**
+- The 10% buffer beyond camera edge prevents visible seam when panning slightly
+- The `Math.min/max` of fixed expansion vs. camera-based expansion means the camera-aware logic only activates when the camera view is wider/taller than the track-based expansion — small layouts on matching-aspect screens use the original 30% rule unchanged
 
 ## Open Questions
 

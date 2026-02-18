@@ -1,0 +1,133 @@
+title Layout: Iteratively Built
+description   We''ll see what happens
+
+#log debug speed graph 
+random
+
+max trains 8
+
+lockahead distance 10 count 4
+
+grid 20
+trees clearance 5 density 1 
+pond size 10 clearance 2 score 0
+
+
+#
+# Main loop
+#
+
+generator black cabs 1-3 cars 4-12 speed 16 every 15 
+str * 2
+crvr * 2
+crvl * 2
+
+str1: str * 30
+crv1: crvl * 4
+str2: str * 30
+crv2: crvl * 4
+str3: str * 30
+crv3: crvl * 4
+str4: str * 30
+crv4: crvl * 4
+
+# 
+# Track to Bin
+#
+
+new from $str1+25
+
+crvl * 2
+speedlimit 10
+fred: crvl 
+str * 5
+assign yard to @ - 3
+bin1: crvr
+speedlimit 25
+str
+tunnel
+str * 3
+tunnel
+str * 7
+bin 
+
+#
+# Yard Main
+#
+
+new from $bin1-1
+crvl
+str * 27
+tunnel
+crvl * 2
+tunnel
+crvl * 3
+speedlimit 20
+flex connect @  $str3+7.in
+
+#
+# Yard
+#
+
+new from $yard
+crvl * 3
+speedlimit 5
+str * 2
+crvr * 2
+root1: str
+crvr * 2
+crvl * 2
+crvr
+crvl
+assign half1 to @
+
+new from $root1
+crvl * 2
+crvr * 2
+crvl
+crvr
+assign half2 to @
+
+new from $half1
+crvl * 2
+crvr * 2
+str * 9
+crvr * 2
+crvl * 2
+ehalf1: crvl * 4
+str * 8
+crvr * 2
+speedlimit 20
+flex connect @ $crv3 - 14
+
+new from $half1
+crvr * 2
+crvl * 2
+str * 9
+crvl * 2
+crvr * 2
+
+new from $half1
+str * 14
+flex connect @ $ehalf1
+
+new from $half2
+crvr * 2
+crvl * 2
+str * 9
+crvl * 2
+crvr * 2
+ehalf2: crvl * 4
+splice
+
+new from $half2
+crvl * 2
+crvr * 2
+str * 9
+crvr * 2
+crvl * 2
+
+new from $half2
+str * 14
+flex connect @ $ehalf2
+

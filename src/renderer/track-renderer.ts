@@ -65,7 +65,7 @@ function getSelectedRouteByKey(key: string): number {
     selectedRoutes.set(key, 0); // Default to first connection
   }
   const value = selectedRoutes.get(key)!;
-  logger.debug(`getSelectedRouteByKey: key="${key}" → ${value}`);
+  logger.debug('switch', `getSelectedRouteByKey: key="${key}" → ${value}`);
   return value;
 }
 
@@ -74,7 +74,7 @@ function getSelectedRouteByKey(key: string): number {
  */
 export function setSelectedRouteByKey(key: string, connectionIndex: number): void {
   const oldValue = selectedRoutes.get(key);
-  logger.debug(`setSelectedRouteByKey: key="${key}" ${oldValue} → ${connectionIndex}`);
+  logger.debug('switch', `setSelectedRouteByKey: key="${key}" ${oldValue} → ${connectionIndex}`);
   selectedRoutes.set(key, connectionIndex);
 }
 
@@ -236,11 +236,11 @@ function renderTrackPieceDebug(piece: TrackPiece, archetype: TrackArchetype): TH
     sphere.position.set(world.x, 0.5, world.z);
     group.add(sphere);
 
-    logger.debug(`  ${piece.id}.${cp.name}: world=(${world.x.toFixed(3)}, ${world.z.toFixed(3)})`);
+    logger.debug('render', `  ${piece.id}.${cp.name}: world=(${world.x.toFixed(3)}, ${world.z.toFixed(3)})`);
   }
 
   // Log piece position for debugging
-  logger.debug(`Piece ${piece.id} (${archetype.code}): pos=(${piece.position.x.toFixed(2)}, ${piece.position.z.toFixed(2)}), rot=${(piece.rotation * 180 / Math.PI).toFixed(1)}°`);
+  logger.debug('render', `Piece ${piece.id} (${archetype.code}): pos=(${piece.position.x.toFixed(2)}, ${piece.position.z.toFixed(2)}), rot=${(piece.rotation * 180 / Math.PI).toFixed(1)}°`);
 
   return group;
 }
@@ -298,7 +298,7 @@ function renderTrackPiece(
 
       // Render switch indicators if this is a virtual switch (multiple connections)
       // Skip if random mode is on (hideIndicators)
-      logger.debug(`  ${piece.id}.${cp.name}: ${connections.length} connections`);
+      logger.debug('render', `  ${piece.id}.${cp.name}: ${connections.length} connections`);
       if (connections.length > 1 && !hideIndicators) {
       const switchIndicators = renderSwitchIndicators(
         piece,
@@ -324,21 +324,18 @@ function renderTrackPiece(
         );
         const icpMesh = renderConnectionPointWorld(screenPos, icp.id);
         group.add(icpMesh);
-        logger.debug(`  Internal connection point ${icp.id} at (${icp.worldPosition.x.toFixed(1)}, ${icp.worldPosition.z.toFixed(1)})`);
+        logger.debug('render', `  Internal connection point ${icp.id} at (${icp.worldPosition.x.toFixed(1)}, ${icp.worldPosition.z.toFixed(1)})`);
       }
     }
   }
 
   // Special rendering for generator/bin
   if (archetype.code === 'gen') {
-    const worldPos = toWorld({ x: 0, y: 0, z: 0 });
-    const genMesh = renderGeneratorWorld(worldPos);
-    genMesh.userData = { isGenerator: true, pieceId: piece.id };
-    group.add(genMesh);
+    const genGroup = renderGeneratorWorld(piece);
+    group.add(genGroup);
   } else if (archetype.code === 'bin') {
-    const worldPos = toWorld({ x: 0, y: 0, z: 0 });
-    const binMesh = renderBinWorld(worldPos);
-    group.add(binMesh);
+    const binGroup = renderBinWorld(piece);
+    group.add(binGroup);
   } else if (archetype.code === 'bump' || archetype.code === 'bumper') {
     const bumperMesh = renderBumperStopWorld(piece, archetype, toWorld);
     group.add(bumperMesh);
@@ -357,6 +354,11 @@ function renderTrackPiece(
     const activated = piece.decouplerConfig?.activated ?? false;
     const decouplerGroup = renderDecouplerWorld(worldPos, piece.id, piece.rotation, activated);
     group.add(decouplerGroup);
+  } else if (archetype.code === 'spd' || archetype.code === 'speedlimit') {
+    const worldPos = toWorld({ x: 0, y: 0, z: 0 });
+    const limit = piece.speedLimitConfig?.limit ?? 0;
+    const spdMesh = renderSpeedLimitWorld(worldPos, limit);
+    group.add(spdMesh);
   }
 
   return group;
@@ -585,37 +587,98 @@ function renderConnectionPointWorld(worldPos: THREE.Vector3, connectionPointId: 
 }
 
 /**
- * Render generator as a green circle at world position
+ * Render two bracket portals at a piece's position with the given color.
+ * Shared by generator, bin, and tunnel rendering.
  */
-function renderGeneratorWorld(worldPos: THREE.Vector3): THREE.Mesh {
-  const geometry = new THREE.CircleGeometry(1.5, 32);  // Same size as bin
-  const material = new THREE.MeshBasicMaterial({
-    color: GENERATOR_COLOR,
-    side: THREE.DoubleSide,
+function renderPortalBrackets(piece: TrackPiece, color: number): THREE.Mesh[] {
+  const meshes: THREE.Mesh[] = [];
+
+  const bracketWidth = 4.2;
+  const bracketDepth = 0.8;
+  const bracketThickness = 0.3;
+  const bracketHeight = 1.5;
+
+  const material = new THREE.MeshStandardMaterial({
+    color,
+    roughness: 0.7,
+    metalness: 0.2,
   });
 
-  const mesh = new THREE.Mesh(geometry, material);
-  mesh.rotation.x = -Math.PI / 2; // Lay flat
-  mesh.position.set(worldPos.x, 0.6, worldPos.z);
+  const createBracketGeometry = (): THREE.ExtrudeGeometry => {
+    const shape = new THREE.Shape();
+    const halfWidth = bracketWidth / 2;
+    const t = bracketThickness;
 
-  return mesh;
+    shape.moveTo(-halfWidth, 0);
+    shape.lineTo(-halfWidth, bracketDepth);
+    shape.lineTo(-halfWidth + t, bracketDepth);
+    shape.lineTo(-halfWidth + t, t);
+    shape.lineTo(halfWidth - t, t);
+    shape.lineTo(halfWidth - t, bracketDepth);
+    shape.lineTo(halfWidth, bracketDepth);
+    shape.lineTo(halfWidth, 0);
+    shape.lineTo(-halfWidth, 0);
+
+    return new THREE.ExtrudeGeometry(shape, { depth: bracketHeight, bevelEnabled: false });
+  };
+
+  const geometry = createBracketGeometry();
+
+  const bracket1 = new THREE.Mesh(geometry, material);
+  bracket1.rotation.order = 'YXZ';
+  bracket1.rotation.y = Math.PI / 2;
+  bracket1.rotation.x = -Math.PI / 2;
+  bracket1.rotation.z = Math.PI + piece.rotation;
+  bracket1.position.set(piece.position.x, 0, -piece.position.z);
+  meshes.push(bracket1);
+
+  const bracket2 = new THREE.Mesh(geometry, material);
+  bracket2.rotation.order = 'YXZ';
+  bracket2.rotation.y = Math.PI / 2;
+  bracket2.rotation.x = -Math.PI / 2;
+  bracket2.rotation.z = piece.rotation;
+  bracket2.position.set(piece.position.x, 0, -piece.position.z);
+  meshes.push(bracket2);
+
+  return meshes;
 }
 
 /**
- * Render bin as a red circle at world position
+ * Render generator as green portal brackets with an invisible click-target circle.
+ * The click circle preserves the same clickable area as the original filled circle.
  */
-function renderBinWorld(worldPos: THREE.Vector3): THREE.Mesh {
-  const geometry = new THREE.CircleGeometry(1.5, 32);
-  const material = new THREE.MeshBasicMaterial({
-    color: BIN_COLOR,
+function renderGeneratorWorld(piece: TrackPiece): THREE.Group {
+  const group = new THREE.Group();
+
+  for (const mesh of renderPortalBrackets(piece, GENERATOR_COLOR)) {
+    group.add(mesh);
+  }
+
+  // Invisible click target — same radius as original circle, raycasted but not drawn
+  const clickGeometry = new THREE.CircleGeometry(1.5, 32);
+  const clickMaterial = new THREE.MeshBasicMaterial({
+    transparent: true,
+    opacity: 0,
     side: THREE.DoubleSide,
   });
+  const clickMesh = new THREE.Mesh(clickGeometry, clickMaterial);
+  clickMesh.rotation.x = -Math.PI / 2;
+  clickMesh.position.set(piece.position.x, 0.6, -piece.position.z);
+  clickMesh.userData = { isGenerator: true, pieceId: piece.id };
+  group.add(clickMesh);
 
-  const mesh = new THREE.Mesh(geometry, material);
-  mesh.rotation.x = -Math.PI / 2;
-  mesh.position.set(worldPos.x, 0.5, worldPos.z);
+  return group;
+}
 
-  return mesh;
+/**
+ * Render bin as red portal brackets.
+ */
+function renderBinWorld(piece: TrackPiece): THREE.Group {
+  const group = new THREE.Group();
+  for (const mesh of renderPortalBrackets(piece, BIN_COLOR)) {
+    group.add(mesh);
+  }
+  return group;
 }
 
 /**
@@ -731,77 +794,57 @@ function renderDecouplerWorld(
 }
 
 /**
- * Render tunnel portal as two bracket shapes facing opposite directions
- * Each bracket is open toward the visible track (outside the tunnel)
+ * Render speed limit sign as a white circle with the speed number
+ * Uses CanvasTexture to draw text on a flat plane
+ * @param worldPos - Position in world coordinates
+ * @param limit - Speed limit value to display
+ */
+function renderSpeedLimitWorld(worldPos: THREE.Vector3, limit: number): THREE.Mesh {
+  const size = 128;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+
+  // White filled circle
+  ctx.beginPath();
+  ctx.arc(size / 2, size / 2, size / 2 - 4, 0, Math.PI * 2);
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+
+  // Dark gray border
+  ctx.lineWidth = 6;
+  ctx.strokeStyle = '#333333';
+  ctx.stroke();
+
+  // Speed limit number in bold black, centered
+  const text = String(Math.round(limit));
+  ctx.fillStyle = '#000000';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = `bold ${text.length > 2 ? 48 : 64}px sans-serif`;
+  ctx.fillText(text, size / 2, size / 2);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  const geometry = new THREE.PlaneGeometry(5.0, 5.0);
+  const material = new THREE.MeshBasicMaterial({
+    map: texture,
+    transparent: true,
+    side: THREE.DoubleSide,
+  });
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.rotation.x = -Math.PI / 2;  // Lay flat in X-Z plane
+  mesh.position.set(worldPos.x, 0.7, worldPos.z);
+
+  return mesh;
+}
+
+/**
+ * Render tunnel portal as two bracket shapes facing opposite directions.
+ * Each bracket is open toward the visible track (outside the tunnel).
  */
 function renderTunnelWorld(piece: TrackPiece): THREE.Mesh[] {
-  const meshes: THREE.Mesh[] = [];
-
-  // Bracket dimensions
-  const bracketWidth = 4.2;       // Width of the bracket (perpendicular to track) - ~40% wider than track
-  const bracketDepth = 0.8;       // How far the arms extend along the track
-  const bracketThickness = 0.3;  // Thickness of the bracket lines
-  const bracketHeight = 1.5;     // Height above ground
-
-  const material = new THREE.MeshStandardMaterial({
-    color: TUNNEL_COLOR,
-    roughness: 0.7,
-    metalness: 0.2,
-  });
-
-  // Create bracket shape (like [ when viewed from above)
-  // The shape is drawn in the XY plane, then extruded in Z
-  const createBracketGeometry = (): THREE.ExtrudeGeometry => {
-    const shape = new THREE.Shape();
-    const halfWidth = bracketWidth / 2;
-    const t = bracketThickness;
-
-    // Draw the bracket outline (counterclockwise for front face)
-    // Start at bottom-left outer corner
-    shape.moveTo(-halfWidth, 0);
-    shape.lineTo(-halfWidth, bracketDepth);           // Left arm outer
-    shape.lineTo(-halfWidth + t, bracketDepth);       // Left arm inner top
-    shape.lineTo(-halfWidth + t, t);                  // Left arm inner
-    shape.lineTo(halfWidth - t, t);                   // Bottom inner
-    shape.lineTo(halfWidth - t, bracketDepth);        // Right arm inner
-    shape.lineTo(halfWidth, bracketDepth);            // Right arm outer top
-    shape.lineTo(halfWidth, 0);                       // Right arm outer
-    shape.lineTo(-halfWidth, 0);                      // Bottom outer (close)
-
-    const extrudeSettings = {
-      depth: bracketHeight,
-      bevelEnabled: false,
-    };
-
-    return new THREE.ExtrudeGeometry(shape, extrudeSettings);
-  };
-
-  const geometry = createBracketGeometry();
-
-  // Create two brackets - one for each tunnel entrance
-  // Brackets span across the track (perpendicular to track direction)
-  // and open toward the visible track on each side
-
-  // Bracket 1: Opens toward -X (the 'in' side, toward visible track before tunnel)
-  // Note: piece.rotation is negated to account for Z-flip in screen coordinates
-  const bracket1 = new THREE.Mesh(geometry, material);
-  bracket1.rotation.order = 'YXZ';  // Apply Y rotation first
-  bracket1.rotation.y = Math.PI / 2;   // Rotate 90° so bracket spans across track
-  bracket1.rotation.x = -Math.PI / 2;  // Lay flat (extrusion goes up)
-  bracket1.rotation.z = Math.PI + piece.rotation;  // Open toward -X, apply piece rotation (negated for Z-flip)
-  bracket1.position.set(piece.position.x, 0, -piece.position.z);
-  meshes.push(bracket1);
-
-  // Bracket 2: Opens toward +X (the 'out' side, toward visible track after tunnel)
-  const bracket2 = new THREE.Mesh(geometry, material);
-  bracket2.rotation.order = 'YXZ';
-  bracket2.rotation.y = Math.PI / 2;   // Rotate 90° so bracket spans across track
-  bracket2.rotation.x = -Math.PI / 2;  // Lay flat
-  bracket2.rotation.z = piece.rotation;  // Open toward +X, apply piece rotation (negated for Z-flip)
-  bracket2.position.set(piece.position.x, 0, -piece.position.z);
-  meshes.push(bracket2);
-
-  return meshes;
+  return renderPortalBrackets(piece, TUNNEL_COLOR);
 }
 
 /**
@@ -985,8 +1028,8 @@ function renderDirectionalSwitchIndicators(
   const routeKey = `junction.${canonicalJunctionId}.${direction}`;
   const selectedIndex = getSelectedRouteByKey(routeKey);
 
-  logger.debug(`renderSwitchIndicators: ${routeKey}, ${connections.length} connections, selectedIndex=${selectedIndex}`);
-  connections.forEach((c, i) => logger.debug(`  route[${i}]: ${c.pieceId}.${c.pointName} ${c.isAutoConnect ? '(auto)' : ''}`));
+  logger.debug('switch', `renderSwitchIndicators: ${routeKey}, ${connections.length} connections, selectedIndex=${selectedIndex}`);
+  connections.forEach((c, i) => logger.debug('switch', `  route[${i}]: ${c.pieceId}.${c.pointName} ${c.isAutoConnect ? '(auto)' : ''}`));
 
   // Build curve info for each connection
   const curveInfos: (CurveInfo | null)[] = [];
@@ -1012,7 +1055,7 @@ function renderDirectionalSwitchIndicators(
   // Create indicator meshes
   for (let i = 0; i < connections.length; i++) {
     const pos = positions[i];
-    logger.debug(`  Indicator ${i}: pos=${pos ? `(${pos.x.toFixed(2)}, ${pos.z.toFixed(2)})` : 'null'}, curveInfo=${curveInfos[i] ? 'valid' : 'null'}`);
+    logger.debug('switch', `  Indicator ${i}: pos=${pos ? `(${pos.x.toFixed(2)}, ${pos.z.toFixed(2)})` : 'null'}, curveInfo=${curveInfos[i] ? 'valid' : 'null'}`);
     if (!pos) continue;
 
     const isSelected = i === selectedIndex;
@@ -1030,7 +1073,7 @@ function renderDirectionalSwitchIndicators(
       connectionIndex: i,
     };
 
-    logger.debug(`  Created indicator ${i} at (${pos.x.toFixed(2)}, 0.7, ${pos.z.toFixed(2)}), selected=${isSelected}, color=${isSelected ? 'green' : 'red'}`);
+    logger.debug('switch', `  Created indicator ${i} at (${pos.x.toFixed(2)}, 0.7, ${pos.z.toFixed(2)}), selected=${isSelected}, color=${isSelected ? 'green' : 'red'}`);
     indicators.push(mesh);
   }
 

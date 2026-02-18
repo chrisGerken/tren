@@ -2,6 +2,63 @@
 
 This document describes the domain-specific language (DSL) for defining track layouts in text files.
 
+See also: [DSL Cheatsheet](layout-dsl-cheatsheet.md) — all statements alphabetized.
+
+## Table of Contents
+
+- [File Format](#file-format)
+- [Metadata Statements](#metadata-statements)
+  - [Title](#title)
+  - [Description](#description)
+  - [Lock Ahead](#lock-ahead)
+  - [Random Switch Mode](#random-switch-mode)
+  - [Maximum Trains](#maximum-trains)
+  - [Log Level](#log-level)
+  - [Assign](#assign)
+  - [Label Offset](#label-offset)
+  - [Current Piece Reference (@)](#current-piece-reference-)
+  - [Custom Track Pieces (Define)](#custom-track-pieces-define)
+  - [Statement Separators](#statement-separators)
+  - [Comments](#comments)
+- [Basic Syntax](#basic-syntax)
+  - [Starting a New Track Segment](#starting-a-new-track-segment)
+  - [Connecting Independent Segments](#connecting-independent-segments)
+  - [Placing Track Pieces](#placing-track-pieces)
+  - [Piece Codes](#piece-codes)
+  - [Generator Syntax](#generator-syntax)
+  - [Range Values](#range-values)
+  - [Semaphore Syntax](#semaphore-syntax)
+  - [Decoupler Syntax](#decoupler-syntax)
+  - [Speed Limit Syntax](#speed-limit-syntax)
+  - [Repetition](#repetition)
+- [Labels and References](#labels-and-references)
+  - [Defining Labels](#defining-labels)
+  - [Referencing Labels](#referencing-labels)
+  - [Connection Point References](#connection-point-references)
+- [Branching (Virtual Switches)](#branching-virtual-switches)
+  - [Placeholder as Junction](#placeholder-as-junction)
+  - [Virtual Wye](#virtual-wye)
+  - [Virtual Three-Way](#virtual-three-way)
+- [Explicit Connection Syntax](#explicit-connection-syntax)
+  - [Building Backwards](#building-backwards)
+  - [Connection Syntax Summary](#connection-syntax-summary)
+- [Closing Loops](#closing-loops)
+- [Splice](#splice)
+- [Flex Connect](#flex-connect)
+- [Cross Connect](#cross-connect)
+- [Auto-Connect](#auto-connect)
+  - [Visual Indicators](#visual-indicators)
+  - [Same-Polarity Connections (Loop Close)](#same-polarity-connections-loop-close)
+- [Prefab and Use (Reusable Templates)](#prefab-and-use-reusable-templates)
+- [Array](#array)
+- [Trees](#trees)
+- [Pond](#pond)
+- [Grid Size](#grid-size)
+- [Building Patterns](#building-patterns)
+- [Connection Point Reference](#connection-point-reference)
+
+---
+
 ## File Format
 
 Layout files are plain text. Blank lines are ignored. Comments begin with `#`.
@@ -87,7 +144,9 @@ When `max trains` is set:
 The `log` (or `logging`) statement controls the verbosity of browser console output:
 
 ```
-log debug                     # Show all messages
+log debug                     # Show all debug messages
+log debug speed               # Show only SPEED category debug messages
+log debug speed lock           # Show SPEED and LOCK categories
 log info                      # Show info, warn, and error
 log warn                      # Show warn and error (default)
 log error                     # Show only errors
@@ -99,7 +158,114 @@ log error                     # Show only errors
 - `warn` — Potential issues: no intersection for cross connect, no flex solution, no track at splice
 - `error` — Failures: NaN in rendering, file I/O errors
 
+**Debug categories:** When using `log debug`, optional category names filter which debug messages appear. Without categories, all debug messages are shown. Categories only filter debug-level output; info/warn/error are always shown regardless.
+
+| Category | What it covers |
+|----------|----------------|
+| `layout` | Piece placement, labels, rotations, positions, arrays |
+| `flex` | Flex connect geometry and math |
+| `cross` | Cross connect intersection detection |
+| `switch` | Switch indicator rendering, route selection, clicks |
+| `lock` | Lock acquisition, release, scan-ahead |
+| `train` | Spawning, removal, coupling, decoupling, route memory |
+| `speed` | Speed limit detection and application |
+| `graph` | Connection graph dump after layout build (shows all pieces, connections, auto vs explicit) |
+| `render` | Piece/connection rendering |
+
 `warning` is accepted as an alias for `warn`. Multiple `log` statements are allowed. Each changes the level from that point forward during layout building; the last one sets the runtime level. If no `log` statement is present, the default level is `warn`.
+
+### Assign
+
+The `assign` statement assigns a label to an existing track piece by counting forward or backward from an already-labeled piece. This avoids breaking up compact track definitions (like `str * 8`) with inline labels.
+
+```
+assign <label> to <target> + N    # Label the piece N steps forward from target
+assign <label> to <target> - N    # Label the piece N steps backward from target
+assign <label> to $target + N     # $target reference also accepted
+assign <label> to @               # Label the current piece
+assign <label> to @ - N           # Label piece N steps backward from current piece
+```
+
+**Example — equivalent definitions:**
+
+These two definitions produce the same result:
+```
+# Without assign: must break up str * 8 to place the label
+start: ph ; str * 2 ; entry: str ; str * 5
+
+# With assign: keep compact definition, add label afterward
+start: ph ; str * 8 ; assign entry to start + 3
+```
+
+**Traversal:** Forward (+) exits via each piece's `out` connection point, backward (-) exits via `in`. At each step, the builder locates the adjacent piece by matching world position (tolerance 0.5") and opposite direction (same logic as auto-connect). This runs during the main build loop, so assigned labels are immediately available for subsequent `$label` references.
+
+**Error conditions:**
+- Duplicate label (label already defined)
+- Unknown target label
+- Dead-end traversal (no adjacent piece at a step)
+- Ambiguous traversal (multiple pieces at the same connection point — use explicit labels instead)
+
+### Label Offset
+
+Label references support inline traversal offsets: `$label+N` traverses N pieces forward, `$label-N` traverses N backward. Unlike `assign`, this does NOT create a new label — it's a temporary, inline traversal resolved at the point of use.
+
+```
+$label+N.point           # Traverse N forward from label, use connection point
+$label-N.point           # Traverse N backward from label, use connection point
+point.$label+N           # Same using point.$label syntax
+new from $start+3.out    # Start new segment from 3rd piece after 'start'
+> in.$start+3            # Loop close to 3rd piece after 'start'
+```
+
+**Example — branching without intermediate labels:**
+```
+start: ph ; str * 8
+new from $start+3.out    # Branch from the 3rd piece after 'start'
+crvl * 3
+bump
+```
+
+The offset syntax uses the same traversal logic as `assign`: forward (+) exits via `out`, backward (-) exits via `in`, matching adjacent pieces by world position and direction.
+
+### Current Piece Reference (@)
+
+The `@` symbol references the most recently placed or referenced track piece. It can be used anywhere a `$label` reference is accepted, eliminating the need to create labels solely for referencing the current piece.
+
+```
+@                         # Current piece (default 'out' point)
+@.in                      # Current piece's 'in' connection point
+@.out                     # Current piece's 'out' connection point
+@-N                       # N pieces backward from current piece
+@-N.point                 # N pieces backward, specific connection point
+```
+
+**Offset support:** `@` only supports negative offsets (`@-N`) since `@` is the last piece placed and there are no pieces "ahead" of it. Using `@+N` produces an error.
+
+**Contexts where `@` works:**
+- **Reference position**: `@.out` or `@-2.in` to branch from the current piece
+- **New statement**: `new from @.out` or `new base @-3.in`
+- **Loop close**: `> @-5.in` to close a loop to a piece relative to the current one
+- **Assign**: `assign myLabel to @-3` to label a piece relative to the current one
+- **Flex connect**: `flex connect @ $target.in` or `flex connect @-2.out $target.in`
+- **Cross connect**: `cross connect @ $other` or `cross connect @-1 $other`
+
+**Example — branching without labels:**
+```
+gen ; str x 8
+@-3.out                   # Branch from 3rd piece before the last str
+crvl x 3
+bump
+```
+
+**Example — flex connect with @:**
+```
+str x 8
+crvr
+str
+flex connect @ $target.in  # @ captures the most recent str
+```
+
+**Deferred resolution:** For deferred statements (`flex connect`, `cross connect`, `splice`), `@` captures the current piece at the time the statement is encountered. This matters when additional pieces are placed after the deferred statement but before it executes.
 
 ### Custom Track Pieces (Define)
 
@@ -290,6 +456,7 @@ Use archetype codes to specify track pieces. See [Track Dimensions](track-dimens
 | `tun`, `tunnel` | Visibility toggle (hide track/trains) |
 | `sem`, `semaphore` | Manual signal (see Semaphore Syntax below) |
 | `dec`, `decoupler` | Train splitter (see Decoupler Syntax below) |
+| `spd`, `speedlimit` | Speed limit sign (see Speed Limit Syntax below) |
 
 ### Generator Syntax
 
@@ -402,6 +569,33 @@ split: dec                    # Labeled decoupler
 - Splitting trains for shunting/switching operations
 - Dropping off cars at sidings
 - Creating separate train consists from a single train
+
+### Speed Limit Syntax
+
+Speed limit signs set a maximum speed for passing trains:
+
+```
+spd 6                         # Speed limit of 6 inches/second
+spd 24                        # Speed limit of 24 inches/second
+speedlimit 12                 # Same as spd 12 (alias)
+slow: spd 6                   # Labeled speed limit
+```
+
+**Behavior:**
+- When a train's lead car passes a `spd` piece, the train's speed limit is set to the specified value
+- The train's effective speed becomes `min(desiredSpeed, speedLimit)`
+- If the speed limit is higher than the train's desired speed, there is no effect
+- Trains brake normally to reach the new lower speed (no emergency stop)
+- The limit persists until the train passes another `spd` piece with a different value
+- Default limit if N is omitted: 12 inches/second
+
+**Visual appearance:**
+- White circle with the speed limit number displayed in bold black text
+
+**Use cases:**
+- Slowing trains through curves, stations, or yards
+- Creating speed zones on specific stretches of track
+- Simulating realistic speed restrictions
 
 ### Repetition
 
@@ -634,11 +828,17 @@ The `flex connect` statement automatically creates custom track pieces to bridge
 
 ```
 flex connect $label1.point1 $label2.point2
+flex connect @ $label2.point2
+flex connect @.point $label2.point2
 ```
 
 Where:
 - `$label1.point1` - The first connection point (typically the "out" of the last piece before the gap)
 - `$label2.point2` - The second connection point (typically the "in" of the first piece after the gap)
+- `@` - Shorthand for the current piece's current connection point (captured at statement time)
+- `@.point` - Current piece with an explicit connection point name
+
+The `@` shorthand can be used for either or both arguments. It captures the current piece and connection point at the time the `flex connect` statement is encountered, so it refers to whatever piece was most recently placed or referenced.
 
 ### Auto-Generated Labels
 
@@ -694,6 +894,27 @@ flex connect $before.out $after.in
 # $before_after_crv - the curve piece
 ```
 
+### Using `@` Shorthand
+
+Instead of labeling the last piece before a gap just for `flex connect`, use `@` to refer to the current piece:
+
+```
+new from $yard.out
+str * 8
+crvr
+str
+flex connect @ $target.in    # @ = the str we just placed, using its current point (out)
+```
+
+This is equivalent to:
+```
+new from $yard.out
+str * 8
+crvr
+siding: str
+flex connect $siding.out $target.in
+```
+
 ### Chaining Flex Connects
 
 You can use the auto-generated labels to connect additional tracks to flex pieces:
@@ -747,13 +968,15 @@ The `cross connect` statement creates a shared lockable point where two track pi
 
 ```
 cross connect $label1 $label2
+cross connect @ $label2
+cross connect @-N $label2
 ```
 
 Where:
-- `$label1` - Label of the first track piece
-- `$label2` - Label of the second track piece
+- `$label1` - Label of the first track piece (or `@` / `@-N` for the current piece)
+- `$label2` - Label of the second track piece (or `@` / `@-N` for the current piece)
 
-Both pieces must be labeled track pieces that physically intersect in world space.
+Both pieces must physically intersect in world space. When using `@`, the current piece is captured at the time the statement is encountered (deferred resolution).
 
 ### How It Works
 
@@ -889,6 +1112,16 @@ This automatically creates two virtual switches (equivalent to a `tor` and a `to
 - A spur from the circle to the bin
 
 Trains emerge from the generator, can run continuously around the circle, and eventually exit to the bin.
+
+### Zero-Length Piece Bypass Prevention
+
+Zero-length pieces (`spd`, `sem`, `dec`, `tun`, `ph`, `bin`) have both connection points at the same world position. When placed between two regular pieces (e.g., `str → spd → str`), all four connection points (`str.out`, `spd.in`, `spd.out`, `str.in`) end up at the same position. Without protection, auto-connect would create a spurious direct connection from `str.out` to `str.in`, bypassing the zero-length piece entirely and turning the location into a virtual switch.
+
+To prevent this, auto-connect builds a transitive connectivity graph within each position group before connecting pairs. It checks:
+- **Internal edges**: Two connection points on the same piece that are both in the group (e.g., `spd.in` ↔ `spd.out`)
+- **External edges**: Existing explicit connections between points in the group (e.g., `str.out` → `spd.in`)
+
+If two points are already reachable through this graph (via BFS), the auto-connect is skipped. This preserves the chain `str.out → spd.in → spd.out → str.in` without creating a bypass. Intentional virtual switches (where a `ph` junction has multiple explicit branches) are unaffected because those branches are not transitively connected to each other.
 
 ### When Auto-Connect Does NOT Apply
 

@@ -1,6 +1,20 @@
 # Train Simulator
 
-A 2D top-down train simulator built with Three.js and Tauri for cross-platform desktop deployment.
+A 2D top-down train simulator with a layout specification language optimized for how one designs track layouts in real life.
+
+## Table of Contents
+
+- [Project Status](#project-status)
+- [Overview](#overview)
+- [Hints and Tips](#hints-and-tips)
+- [Documentation](#documentation)
+- [Technology Stack](#technology-stack)
+- [Installation](#installation)
+  - [MacOS](#macos)
+  - [Debian/Ubuntu Linux](#debianubuntu-linux)
+  - [Uninstalling](#uninstalling)
+- [Development](#development)
+- [Future Considerations](#future-considerations)
 
 ## Project Status
 
@@ -16,6 +30,13 @@ This simulator allows users to:
 - Watch trains move around the layout with automatic collision prevention
 - Control virtual switches to route trains through the layout
 - Interact via mouse clicks or layout definition files
+
+## Hints and Tips
+
+1. **Train inspector**: Double-click the first cab in a train to open a controller window for that train. You can double-click generators (the green bracket structures where trains appear) too.
+2. **Sample layouts**: Use the **Layouts** button to browse sample layouts and explore examples of different track piece types.
+3. **Switch control**: With the **Manual/Random** button you can control switches yourself or let trains make random routing decisions.
+4. **Screenshot**: Use the **Capture** button to save an image of the current simulation screen.
 
 ## Documentation
 
