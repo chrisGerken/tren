@@ -1728,6 +1728,24 @@ bounds.maxX = Math.max(bounds.maxX + sizeX * BOUNDS_EXPANSION, centerX + cameraH
 - The 10% buffer beyond camera edge prevents visible seam when panning slightly
 - The `Math.min/max` of fixed expansion vs. camera-based expansion means the camera-aware logic only activates when the camera view is wider/taller than the track-based expansion — small layouts on matching-aspect screens use the original 30% rule unchanged
 
+## Cross-Platform CI: GitHub Actions
+
+Windows and Linux release artifacts are built via GitHub Actions (`.github/workflows/build.yml`).
+
+**Design decisions:**
+- **Manual dispatch only** (`workflow_dispatch`): Builds are triggered explicitly from the GitHub Actions UI, not on every push or PR. This avoids consuming runner minutes on work-in-progress commits and keeps builds intentional.
+- **macOS excluded**: macOS builds run locally and artifacts are committed to `/publish`. GitHub Actions macOS runners cost 10× the minute multiplier vs. 1× for Linux/Windows, so they are not worth including for a project built primarily on Mac.
+- **Parallel matrix jobs**: Windows and Linux build simultaneously using a `matrix` strategy, keeping total wall-clock time low.
+- **Artifacts uploaded** with `actions/upload-artifact@v4`: Built installers are downloadable from the Actions run page without needing to clone the repo.
+
+**Windows output:** `.msi` (Windows Installer) and `.exe` (NSIS installer) in `src-tauri/target/release/bundle/`
+
+**Linux output:** `.deb` (Debian package) and `.AppImage` in `src-tauri/target/release/bundle/`
+
+**Linux build dependencies** installed via `apt-get`: `libwebkit2gtk-4.0-dev`, `libgtk-3-dev`, `libayatana-appindicator3-dev`, `librsvg2-dev`, and standard build tools. These mirror the manual build instructions in `README.md`.
+
+**To trigger a build:** GitHub → Actions → Build → "Run workflow" → select branch → Run.
+
 ## Open Questions
 
 These will be addressed in user scenario discussions:
