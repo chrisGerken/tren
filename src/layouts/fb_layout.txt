@@ -1,0 +1,146 @@
+title        Freight Basin
+description  Double-oval mainline with freight yard, engine facility, and staging tracks.
+description  Outer and inner loops share left-side yard complex. Trains circulate
+description  continuously, with generators feeding from the engine facility.
+
+log info
+trees
+pond
+max trains 10
+
+# ============================================================
+# OUTER MAIN LOOP (clockwise)
+# Start at top-left junction, run east along the top
+# ============================================================
+new 0
+
+outer_nw: ph                    # NW junction: yard and inner loop connect here
+str x 14                        # Top outer straight
+outer_ne: ph                    # NE corner marker
+crvr x 8                        # Right-end semicircle (clockwise)
+outer_se: ph                    # SE corner marker
+str x 12                        # Bottom outer straight
+outer_sw: ph                    # SW junction: yard and inner loop connect here
+crvr x 8                        # Left-end semicircle back to NW
+
+> in.$outer_nw                  # Close outer loop
+
+
+# ============================================================
+# INNER MAIN LOOP (clockwise, parallel to outer, slightly smaller)
+# ============================================================
+new 0
+
+inner_nw: ph                    # NW junction
+str x 12                        # Top inner straight
+inner_ne: ph
+crvr18 x 8                      # Right-end semicircle (tighter radius than outer)
+inner_se: ph
+str x 10                        # Bottom inner straight
+inner_sw: ph                    # SW junction
+crvr18 x 8                      # Left-end semicircle
+
+> in.$inner_nw                  # Close inner loop
+
+
+# ============================================================
+# CROSSOVERS (connect outer and inner loops for routing)
+# ============================================================
+
+# Top crossover: allows trains to switch between loops
+new from $outer_nw.out
+crvl x 1
+str x 2
+> in.$inner_nw
+
+# Bottom crossover
+new from $outer_sw.out
+crvl x 1
+str x 2
+> in.$inner_sw
+
+
+# ============================================================
+# YARD - Left side (branches from outer NW junction)
+# ============================================================
+
+new from $outer_nw.out
+crvl x 2
+yard_lead: ph               # Main yard throat
+
+# Siding 1 — longest storage track
+$yard_lead.out
+str x 10
+yard_s1_end: bump
+
+# Siding 2
+$yard_lead.out
+crvl x 2
+str x 8
+bump
+
+# Siding 3
+$yard_lead.out
+crvl x 4
+str x 8
+bump
+
+# Siding 4 — short stub (engine storage)
+$yard_lead.out
+crvl x 2
+str x 4
+bump
+
+
+# ============================================================
+# ENGINE FACILITY (top-left building) — train generator
+# ============================================================
+
+new from $yard_lead.out
+crvl x 3
+str x 3
+gen cabs 1 cars 5 speed 10 every 40
+
+
+# ============================================================
+# SECOND GENERATOR on outer loop (right side / station area)
+# ============================================================
+
+new from $outer_ne.out
+str x 2
+gen cabs 1 cars 4 speed 12 every 60
+
+
+# ============================================================
+# BOTTOM STAGING TRACKS (parallel straight tracks at bottom)
+# Branch from the outer SW junction southward
+# ============================================================
+
+new from $outer_sw.out
+crvl x 2
+stg_throat: ph              # Staging throat
+
+# Staging track 1
+stg_e1: ph
+str x 12
+bump
+
+# Staging track 2
+$stg_throat.out
+str x 12
+bump
+
+# Staging track 3
+$stg_throat.out
+crvl x 2
+str x 10
+bump
+
+
+# ============================================================
+# BIN (train sink on inner loop to control population)
+# ============================================================
+
+new from $inner_ne.out
+str x 3
+bin
